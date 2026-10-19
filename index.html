@@ -48,6 +48,22 @@
     </div>
   </div>
 </div>
+<div id="boot-error" hidden></div>
+<script>
+  // Shows any startup error on screen (and in the app console) instead of a silent blank town.
+  (function () {
+    function show(msg) {
+      var el = document.getElementById('boot-error');
+      if (!el) return;
+      el.hidden = false;
+      el.textContent += (el.textContent ? '\n' : '') + msg;
+      try { console.error('[boot] ' + msg); } catch (e) {}
+    }
+    window.__bootError = show;
+    window.addEventListener('error', function (e) { show((e.message || 'Error') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
+    window.addEventListener('unhandledrejection', function (e) { show('Promise: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)); });
+  })();
+</script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

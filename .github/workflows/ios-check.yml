@@ -43,9 +43,10 @@ jobs:
           xcrun simctl bootstatus "$DEVICE" -b
           APP=$(find build-sim -name "App.app" -path "*iphonesimulator*" | head -1)
           xcrun simctl install "$DEVICE" "$APP"
-          xcrun simctl launch "$DEVICE" com.boltworks.idlefactory
           mkdir -p shots
-          sleep 25; xcrun simctl io "$DEVICE" screenshot shots/1-after-25s.png
+          xcrun simctl launch --terminate-running-process --stdout="$PWD/shots/stdout.txt" --stderr="$PWD/shots/stderr.txt" "$DEVICE" com.boltworks.idlefactory
+          sleep 10; xcrun simctl io "$DEVICE" screenshot shots/0-after-10s.png
+          sleep 15; xcrun simctl io "$DEVICE" screenshot shots/1-after-25s.png
           sleep 20; xcrun simctl io "$DEVICE" screenshot shots/2-after-45s.png
           xcrun simctl spawn "$DEVICE" log show --last 2m --predicate 'process == "App"' --style compact > shots/app-log.txt || true
 

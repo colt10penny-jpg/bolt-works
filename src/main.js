@@ -303,11 +303,19 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+const step = s => { try { console.log('[boot] ' + s); } catch {} };
 (async function start() {
-  await game.load();
+  step('loading save');
+  await withTimeout(game.load(), 4000, 'loading the save');
+  step('building town');
   syncBuilt();
   welcomeBack();
+  step('starting loop');
   if (game.s.totalEarned > 200) $('hint').hidden = true;
   ads.init();
   requestAnimationFrame(loop);
-})();
+})().catch(e => window.__bootError?.('Start failed: ' + (e.stack || e.message || e)));
+
+function withTimeout(p, ms, what) {
+  return Promise.race([p, new Promise(r => setTimeout(() => { window.__bootError?.(`Timed out ${what}; starting fresh`); r(null); }, ms))]);
+}

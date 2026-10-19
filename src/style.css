@@ -172,3 +172,6 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .sim-card button:disabled { opacity: .4; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+#boot-error { position: absolute; left: 12px; right: 12px; bottom: calc(80px + var(--sa-b)); z-index: 60; background: #fff3f0; color: #8e2e1c;
+  border: 2px solid #c8442c; border-radius: 12px; padding: 10px 12px; font: 600 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
