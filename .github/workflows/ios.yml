@@ -1,0 +1,66 @@
+name: Build iPhone app (TestFlight)
+
+# Builds the iPhone app on a cloud Mac and uploads it to TestFlight.
+# Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   APPLE_TEAM_ID             10-character Team ID from developer.apple.com > Membership
+#   ASC_KEY_ID                App Store Connect API key ID
+#   ASC_ISSUER_ID             App Store Connect API issuer ID
+#   ASC_KEY_P8                Full text of the downloaded AuthKey_XXXX.p8 file
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+jobs:
+  ios:
+    runs-on: macos-15
+    env:
+      HAS_SECRETS: ${{ secrets.ASC_KEY_P8 != '' }}
+    steps:
+      - name: Skip if Apple keys are not set up yet
+        if: env.HAS_SECRETS != 'true'
+        run: echo "Apple secrets not added yet, skipping the iPhone build."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_SECRETS == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_SECRETS == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build the game
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          npm ci
+          npm run build
+          npx cap sync ios
+
+      - name: Archive and upload to TestFlight
+        if: env.HAS_SECRETS == 'true'
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$KEY_P8" > "$KEY_PATH"
+          AUTH="-allowProvisioningUpdates -authenticationKeyPath $KEY_PATH -authenticationKeyID $KEY_ID -authenticationKeyIssuerID $ISSUER"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            $AUTH archive
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" $AUTH
