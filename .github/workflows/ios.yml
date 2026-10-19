@@ -20,10 +20,10 @@ jobs:
         if: env.HAS_SECRETS != 'true'
         run: echo "Apple secrets not added yet, skipping the iPhone build."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: env.HAS_SECRETS == 'true'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: env.HAS_SECRETS == 'true'
         with:
           node-version: 22
