@@ -1,18 +1,17 @@
 // Save storage: Capacitor Preferences on a phone (survives app updates),
 // localStorage in a browser. Every call is wrapped so a blocked storage never crashes the game.
+//
+// Note: the Preferences plugin object must never be returned from an async function or
+// passed to resolve(). Capacitor plugin objects answer to any property name, so the
+// promise machinery treats them as "thenables" and the await never finishes.
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
-let prefs = null;
-async function native() {
-  if (!Capacitor.isNativePlatform()) return null;
-  if (!prefs) prefs = (await import('@capacitor/preferences')).Preferences;
-  return prefs;
-}
+const native = Capacitor.isNativePlatform();
 
 export async function load(key) {
   try {
-    const p = await native();
-    const raw = p ? (await p.get({ key })).value : localStorage.getItem(key);
+    const raw = native ? (await Preferences.get({ key })).value : localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
@@ -20,14 +19,12 @@ export async function load(key) {
 export async function save(key, data) {
   try {
     const raw = JSON.stringify(data);
-    const p = await native();
-    if (p) await p.set({ key, value: raw }); else localStorage.setItem(key, raw);
+    if (native) await Preferences.set({ key, value: raw }); else localStorage.setItem(key, raw);
   } catch { /* ignore */ }
 }
 
 export async function clear(key) {
   try {
-    const p = await native();
-    if (p) await p.remove({ key }); else localStorage.removeItem(key);
+    if (native) await Preferences.remove({ key }); else localStorage.removeItem(key);
   } catch { /* ignore */ }
 }

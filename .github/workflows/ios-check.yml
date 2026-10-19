@@ -48,6 +48,11 @@ jobs:
           sleep 10; xcrun simctl io "$DEVICE" screenshot shots/0-after-10s.png
           sleep 15; xcrun simctl io "$DEVICE" screenshot shots/1-after-25s.png
           sleep 20; xcrun simctl io "$DEVICE" screenshot shots/2-after-45s.png
+          # close and reopen the app to prove progress is saved
+          xcrun simctl terminate "$DEVICE" com.boltworks.idlefactory
+          sleep 3
+          xcrun simctl launch --stdout="$PWD/shots/stdout2.txt" --stderr="$PWD/shots/stderr2.txt" "$DEVICE" com.boltworks.idlefactory
+          sleep 15; xcrun simctl io "$DEVICE" screenshot shots/3-reopened.png
           xcrun simctl spawn "$DEVICE" log show --last 2m --predicate 'process == "App"' --style compact > shots/app-log.txt || true
 
       - uses: actions/upload-artifact@v4
