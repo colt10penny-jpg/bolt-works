@@ -178,7 +178,12 @@ export const BUILDERS = {
     }
     rocket.position.set(1.7, 0, -1.4);
     g.add(rocket);
-    return { group: g, top: 7.6 };
+    // scaffolding shown while no rocket is ready
+    const scaffold = new THREE.Group();
+    for (let i = 0; i < 4; i++) scaffold.add(box(1.5, 0.12, 1.5, 0xb9b4a8, 1.7, 0.6 + i * 1.3, -1.4));
+    scaffold.add(box(0.12, 5.5, 0.12, 0xb9b4a8, 1.0, 0, -0.7), box(0.12, 5.5, 0.12, 0xb9b4a8, 2.4, 0, -2.1));
+    g.add(scaffold);
+    return { group: g, top: 7.6, rocket, scaffold };
   },
 };
 
@@ -202,4 +207,49 @@ export function truck(color) {
     w.rotation.x = Math.PI / 2; w.position.set(x, 0.22, z); g.add(w);
   }
   return g;
+}
+
+// ---- scenery for each map theme ----
+export function pine(scale = 1, color = 0x2f6f3e) {
+  const g = new THREE.Group();
+  g.add(cyl(0.15, 0.2, 0.7, 0x6b4a2b, 0, 0, 0, 6));
+  for (let i = 0; i < 3; i++) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(1.0 - i * 0.25, 1.2, 7), mat(color, { flatShading: true }));
+    c.position.y = 1.0 + i * 0.6; c.castShadow = true; g.add(c);
+  }
+  g.scale.setScalar(scale);
+  return g;
+}
+export function cactus(scale = 1) {
+  const g = new THREE.Group();
+  const green = 0x4f8a3c;
+  g.add(cyl(0.28, 0.32, 2.2, green, 0, 0, 0, 8));
+  const arm = (x, y, h) => { g.add(box(Math.abs(x), 0.32, 0.32, green, x / 2, y, 0)); g.add(cyl(0.22, 0.22, h, green, x, y, 0, 7)); };
+  arm(0.6, 0.9, 0.9); arm(-0.55, 1.3, 0.7);
+  g.scale.setScalar(scale);
+  return g;
+}
+export function mesa(w, h, d) {
+  const g = new THREE.Group();
+  g.add(box(w, h, d, 0xb5603a, 0, 0, 0));
+  g.add(box(w * 0.92, 0.25, d * 0.92, 0xc97a52, 0, h, 0));
+  return g;
+}
+export function rock(scale = 1, color = 0x8f8f94) {
+  const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0), mat(color, { flatShading: true }));
+  m.scale.set(scale, scale * 0.6, scale); m.position.y = 0.2 * scale; m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+export function crater(r = 2) {
+  const g = new THREE.Group();
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.15, 0.35, 18, 1, true), mat(0x8a8a8f, { side: THREE.DoubleSide }));
+  rim.position.y = 0.17; rim.receiveShadow = true; g.add(rim);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(r, 18), mat(0x77777c));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.03; floor.receiveShadow = true; g.add(floor);
+  return g;
+}
+export function crate(color) {
+  const m = box(0.6, 0.5, 0.6, color, 0, 0, 0);
+  m.add(box(0.62, 0.08, 0.62, 0x6b4a2b, 0, 0.21 - 0.25, 0));
+  return m;
 }
