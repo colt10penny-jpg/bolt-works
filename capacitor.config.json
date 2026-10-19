@@ -1,0 +1,10 @@
+{
+  "appId": "com.boltworks.idlefactory",
+  "appName": "Bolt Works",
+  "webDir": "dist",
+  "android": { "backgroundColor": "#8cc65f" },
+  "ios": { "backgroundColor": "#8cc65f", "contentInset": "never" },
+  "plugins": {
+    "AdMob": {}
+  }
+}

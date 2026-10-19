@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#8cc65f">
+<title>Bolt Works</title>
+</head>
+<body>
+<div id="app">
+  <canvas id="world" aria-label="Factory town. Tap a building to open it. Drag to look around."></canvas>
+  <div id="labels"></div>
+
+  <header id="hud">
+    <div class="cash">
+      <span class="coin" aria-hidden="true">$</span>
+      <span class="cash-text">
+        <b id="cash">0</b>
+        <small id="rate">+0 per sec</small>
+      </span>
+    </div>
+    <button id="settings-btn" class="icon-btn" aria-label="Settings">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+    </button>
+  </header>
+
+  <button id="boost-btn" class="boost">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+    <span id="boost-text">×2</span>
+    <span class="ad-tag">AD</span>
+  </button>
+
+  <div id="hint" class="hint">Tap a factory to upgrade it</div>
+
+  <section id="sheet" class="sheet" hidden aria-live="polite"></section>
+
+  <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <div id="sim-ad" class="sim-ad" hidden role="dialog" aria-label="Test ad">
+    <div class="sim-card">
+      <div class="sim-label">Test ad · browser preview</div>
+      <h2>Your ad plays here</h2>
+      <p>On a phone, a real AdMob rewarded video plays here. Reward: <b class="sim-why"></b></p>
+      <div class="sim-bar"><i></i></div>
+      <button disabled>Reward in 5s</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
