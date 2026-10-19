@@ -4,59 +4,90 @@
 // `need` = units of the previous product used per unit made. A factory can only run as
 // fast as its supplier feeds it, so a slow supplier becomes a visible bottleneck.
 
+// The production chain, in order. Each one turns the previous product into its own.
 export const FACTORIES = [
-  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 0,       baseCost: 4,       growth: 1.07, perLevel: 2,      value: 0.5,    need: 0 },
-  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 60,      baseCost: 60,      growth: 1.15, perLevel: 1,      value: 20,     need: 2 },
-  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 3000,     baseCost: 3000,     growth: 1.15, perLevel: 0.5,    value: 180,    need: 2 },
-  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 100000,    baseCost: 100000,    growth: 1.15, perLevel: 0.25,   value: 1440,   need: 2 },
-  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 3000000,  baseCost: 3000000,  growth: 1.15, perLevel: 0.125,  value: 17280,  need: 2 },
-  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 60000000, baseCost: 60000000, growth: 1.15, perLevel: 0.0625, value: 103680, need: 2 },
+  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0,         baseCost: 4,         growth: 1.07, perLevel: 4,      value: 0.25,   need: 0 },
+  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 25,        baseCost: 25,        growth: 1.09, perLevel: 2,      value: 1.5,    need: 2 },
+  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 200,       baseCost: 200,       growth: 1.15, perLevel: 1,      value: 20,     need: 2 },
+  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 4000,      baseCost: 4000,      growth: 1.15, perLevel: 0.5,    value: 180,    need: 2 },
+  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 120000,    baseCost: 120000,    growth: 1.15, perLevel: 0.25,   value: 1440,   need: 2 },
+  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 5000000,   baseCost: 5000000,   growth: 1.15, perLevel: 0.125,  value: 17280,  need: 2 },
+  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 120000000, baseCost: 120000000, growth: 1.15, perLevel: 0.0625, value: 103680, need: 2 },
 ];
 
-// Short, true facts shown in each factory's panel.
+// Support buildings: not part of the chain, they help every factory.
+// Power Plant makes electricity (MW). Data Center turns electricity into compute,
+// and compute makes every factory run faster.
+export const SUPPORT = [
+  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 100000,  baseCost: 100000,  growth: 1.13, perLevel: 3, need: 0 },
+  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 300000,  baseCost: 300000,  growth: 1.14, perLevel: 1, need: 3, needUnit: 'MW' },
+];
+export const ALL = [...FACTORIES, ...SUPPORT];
+export const isSupport = id => SUPPORT.some(s => s.id === id);
+
+// Compute speeds up every factory, with diminishing returns:
+// 1 PFLOPS = +20%, 3 = +40%, 7 = +60%, 15 = +80%, 31 = +100% ...
+export const COMPUTE_STEP = 0.20;
+export const speedFromCompute = c => 1 + COMPUTE_STEP * Math.log2(1 + Math.max(0, c));
+
+// Short, true facts shown in each building's panel.
 export const FACTS = {
+  mine: 'Most iron ore is dug from huge open pits, then crushed and concentrated so it is rich enough to go into a furnace.',
   furnace: 'Most new steel comes from basic oxygen furnaces, which blow pure oxygen through molten iron to burn off extra carbon.',
   press: 'Most bolts are cold-headed: a machine punches the head into cut steel wire, then the threads are rolled on, which makes them stronger than cut threads.',
   gear: 'Gear teeth are shaped as involute curves, so two meshing gears keep a constant speed ratio as they turn.',
-  engine: 'In a piston engine, the crankshaft turns the pistons’ up-and-down motion into rotation.',
+  engine: 'In a piston engine, the crankshaft turns the pistons\u2019 up-and-down motion into rotation.',
   turbine: 'Jet engine turbine blades run in gas hotter than their own melting point. Cooling air through tiny internal channels and ceramic coatings keep them alive.',
   rocket: 'To stay in low Earth orbit, a rocket has to reach about 7.8 km/s, roughly 28,000 km/h.',
+  power: 'The white plume from a power plant\u2019s cooling tower is water vapor, not smoke: it is heat from the plant leaving as evaporating water.',
+  datacenter: 'Data centers spend a big share of their electricity on cooling, because nearly all the power the servers use turns into heat.',
 };
 
-// Every milestone level doubles a factory's speed.
+// Every milestone level doubles a building's speed.
 export const MILESTONES = [10, 25, 50, 100, 200, 300, 400, 500];
 export const milestoneCount = level => MILESTONES.filter(m => level >= m).length;
 export const nextMilestone = level => MILESTONES.find(m => level < m) ?? null;
 
-// Units per second a factory could make if fully supplied.
+// Units per second a building could make if fully supplied (before the compute boost).
 export function capacity(def, level) {
   if (level <= 0) return 0;
   return def.perLevel * level * Math.pow(2, milestoneCount(level));
 }
 
-// Actual flow through the chain given everyone's levels.
-// Returns per-factory { cap, made, supplied, used, util } plus total income per second.
+// Actual flow through the town given everyone's levels.
+// Returns chain entries { id, cap, made, util, starved, used, surplus }, support entries,
+// the compute speed multiplier, and total income per second.
 export function flow(levels, mult = 1) {
+  const pw = SUPPORT[0], dc = SUPPORT[1];
+  const powerMade = capacity(pw, levels.power || 0);
+  const dcCap = capacity(dc, levels.datacenter || 0);
+  const compute = Math.min(dcCap, powerMade / dc.need);
+  const powerUsed = compute * dc.need;
+  const speed = speedFromCompute(compute);
+  const support = {
+    power: { id: 'power', cap: powerMade, made: powerMade, used: powerUsed, util: powerMade ? Math.min(1, powerUsed / powerMade) : 0, starved: false },
+    datacenter: { id: 'datacenter', cap: dcCap, made: compute, util: dcCap ? compute / dcCap : 0, starved: dcCap > 0 && compute < dcCap * 0.98 },
+  };
+
   const out = [];
   let income = 0;
   let upstream = Infinity;
   for (let i = 0; i < FACTORIES.length; i++) {
     const d = FACTORIES[i];
-    const cap = capacity(d, levels[d.id] || 0);
+    const cap = capacity(d, levels[d.id] || 0) * speed;
     const canFeed = d.need ? upstream / d.need : Infinity;
     const made = Math.min(cap, canFeed);
     out.push({ id: d.id, cap, made, util: cap ? made / cap : 0, starved: cap > 0 && made < cap * 0.98 });
     income += made * d.value * mult;
     upstream = (levels[d.id] || 0) > 0 ? made : 0;
   }
-  // how much of each factory's output goes to the next factory vs. piles up as surplus
   for (let i = 0; i < out.length; i++) {
     const next = out[i + 1];
     const used = next && next.cap > 0 ? next.made * FACTORIES[i + 1].need : 0;
     out[i].used = used;
     out[i].surplus = out[i].made > 0 ? Math.max(0, 1 - used / out[i].made) : 0;
   }
-  return { per: out, income };
+  return { per: out, support, speed, compute, income };
 }
 
 // Cost of buying `n` levels starting at `level`.
@@ -75,7 +106,7 @@ export function maxAffordable(def, level, cash, cap = 1000) {
 // ---- Rocket launches (prestige) ----
 export const EP_BONUS = 0.10; // each Engineering Point = +10% income, forever
 export function epForRun(runEarned) {
-  return Math.floor(Math.sqrt(Math.max(0, runEarned) / 4e6));
+  return Math.floor(Math.sqrt(Math.max(0, runEarned) / 1e7));
 }
 export const THEMES = ['colorado', 'desert', 'moon'];
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };

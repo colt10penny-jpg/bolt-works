@@ -1,13 +1,13 @@
 // Game state: cash, factory levels, boosts, contracts, launches, and the per-frame tick.
-import { FACTORIES, flow, upgradeCost, epForRun, EP_BONUS, themeFor } from './economy.js';
+import { FACTORIES, ALL, flow, upgradeCost, epForRun, EP_BONUS, themeFor } from './economy.js';
 import { GAME } from './config.js';
 import * as storage from './storage.js';
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 function freshRun() {
   const levels = {};
-  for (const f of FACTORIES) levels[f.id] = f.unlock === 0 ? 1 : 0;
+  for (const f of ALL) levels[f.id] = f.unlock === 0 ? 1 : 0;
   return { cash: 0, runEarned: 0, levels, made: {}, rocketsBuilt: 0 };
 }
 
@@ -83,7 +83,7 @@ export class Game {
     if (!this.cache) this.cache = flow(this.levels, this.epMult());
     return this.cache;
   }
-  info(id) { return this.baseFlow().per.find(p => p.id === id); }
+  info(id) { const f = this.baseFlow(); return f.per.find(p => p.id === id) || f.support[id]; }
   baseRate() { return this.baseFlow().income; }
   rate() { return this.baseRate() * (this.boostLeft() > 0 ? 2 : 1); }
 
@@ -111,7 +111,7 @@ export class Game {
   canAfford(cost) { return this.s.run.cash >= cost - 1e-9; }
 
   buyLevels(id, n) {
-    const def = FACTORIES.find(f => f.id === id);
+    const def = ALL.find(f => f.id === id);
     const lv = this.level(id);
     if (n <= 0 || lv <= 0) return false;
     const cost = upgradeCost(def, lv, n);
@@ -126,7 +126,7 @@ export class Game {
   }
 
   build(id) {
-    const def = FACTORIES.find(f => f.id === id);
+    const def = ALL.find(f => f.id === id);
     if (this.built(id) || !this.canAfford(def.unlock)) return false;
     this.s.run.cash -= def.unlock;
     this.levels[id] = 1;
@@ -191,6 +191,7 @@ export class Game {
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
     const reward = Math.max(50, target * d.value * this.epMult() * 2.5);
     const CUSTOMERS = {
+      mine: ['Leadville Smelter', 'Pueblo Steel Mill', 'Front Range Foundry'],
       furnace: ['Pueblo Rail Yard', 'Denver Bridge Crew', 'Golden Shipyard'],
       press: ['Boulder Bike Works', 'Front Range Builders', 'Aurora Stadium'],
       gear: ['Pueblo Wind Farm', 'Clock Tower Repair', 'Rocky Mountain Rail'],

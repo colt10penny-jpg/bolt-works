@@ -1,17 +1,22 @@
 // The 3D town: fixed-angle camera, lots, factories, supply trucks, crates, smoke,
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
-import { FACTORIES } from './economy.js';
-import { BUILDERS, box, mat, tree, truck, pine, cactus, mesa, rock, crater, crate } from './models.js';
+import { FACTORIES, ALL } from './economy.js';
+import { BUILDERS, box, mat, tree, truck, pine, cactus, mesa, rock, crater, crate, powerPole } from './models.js';
 
+// 3x3 town grid. The chain snakes: mine -> furnace -> press, gear -> engine,
+// turbine -> rocket; the power plant and data center sit on the right.
 export const LOTS = {
-  furnace: [7, 14], press: [-7, 14], gear: [7, 0], engine: [-7, 0], turbine: [7, -14], rocket: [-7, -14],
+  mine: [14, 14], furnace: [0, 14], press: [-14, 14],
+  gear: [-14, 0], engine: [0, 0], power: [14, 0],
+  rocket: [-14, -14], turbine: [0, -14], datacenter: [14, -14],
 };
 const LOT = 10;
 const ROAD_W = 3.6;
-const CROSS = [-21, -7, 7, 21];
+const CROSS = [-21, -7, 7, 21];   // roads running along x
+const AVES = [-21, -7, 7, 21];    // roads running along z
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
-const BOUNDS = { minX: -12, maxX: 12, minZ: -18, maxZ: 18 };
+const BOUNDS = { minX: -20, maxX: 20, minZ: -22, maxZ: 22 };
 
 const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
@@ -32,7 +37,7 @@ export class World {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene = new THREE.Scene();
-    this.target = new THREE.Vector3(0, 0, 8);
+    this.target = new THREE.Vector3(7, 0, 12);
     this.zoom = 1;
     this.shake = 0;
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 400);
@@ -53,7 +58,8 @@ export class World {
     this.groundGroup = new THREE.Group();
     this.sceneryGroup = new THREE.Group();
     this.scene.add(this.groundGroup, this.sceneryGroup);
-    for (const f of FACTORIES) this.#lot(f);
+    for (const f of ALL) this.#lot(f);
+    this.#powerLine();
     this.#traffic();
     this.setTheme('colorado');
     this.#input();
@@ -98,15 +104,17 @@ export class World {
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
     G.add(ground);
     const line = 0xf4efe0;
-    G.add(box(ROAD_W + 1.2, 0.04, 120, T.walk, 0, 0, 0));
-    G.add(box(ROAD_W, 0.06, 120, T.road, 0, 0, 0));
+    for (const x of AVES) {
+      G.add(box(ROAD_W + 1.2, 0.04, 120, T.walk, x, 0, 0));
+      G.add(box(ROAD_W, 0.06, 120, T.road, x, 0, 0));
+    }
     for (const z of CROSS) {
       G.add(box(120, 0.04, ROAD_W + 1.2, T.walk, 0, 0, z));
       G.add(box(120, 0.07, ROAD_W, T.road, 0, 0, z));
     }
     for (let i = -58; i < 58; i += 2.4) {
-      if (!CROSS.some(z => Math.abs(i - z) < 2.6)) G.add(box(0.16, 0.08, 1.1, line, 0, 0, i));
-      if (Math.abs(i) > 2.6) for (const z of CROSS) G.add(box(1.1, 0.09, 0.16, line, i, 0, z));
+      if (!CROSS.some(z => Math.abs(i - z) < 2.6)) for (const x of AVES) G.add(box(0.16, 0.08, 1.1, line, x, 0, i));
+      if (!AVES.some(x => Math.abs(i - x) < 2.6)) for (const z of CROSS) G.add(box(1.1, 0.09, 0.16, line, i, 0, z));
     }
     G.traverse(o => { if (o.isMesh) o.castShadow = false; });
   }
@@ -115,14 +123,14 @@ export class World {
     const r = rng(name === 'colorado' ? 7 : name === 'desert' ? 11 : 13);
     const S = this.sceneryGroup;
     const blocked = (x, z, pad = 1.4) => {
-      if (Math.abs(x) < ROAD_W / 2 + pad) return true;
+      if (AVES.some(rx => Math.abs(x - rx) < ROAD_W / 2 + pad)) return true;
       if (CROSS.some(rz => Math.abs(z - rz) < ROAD_W / 2 + pad)) return true;
       return Object.values(LOTS).some(([lx, lz]) => Math.abs(x - lx) < LOT / 2 + 0.4 && Math.abs(z - lz) < LOT / 2 + 0.4);
     };
     const place = (count, make, pad) => {
       let n = 0;
       for (let i = 0; i < count * 6 && n < count; i++) {
-        const x = (r() - 0.5) * 70, z = (r() - 0.5) * 80;
+        const x = (r() - 0.5) * 84, z = (r() - 0.5) * 84;
         if (blocked(x, z, pad)) continue;
         const o = make(r);
         o.position.x = x; o.position.z = z;
@@ -145,7 +153,7 @@ export class World {
       // a little flag by the first factory, because of course
       const flag = new THREE.Group();
       flag.add(box(0.08, 2.4, 0.08, 0xdddddd, 0, 0, 0), box(1.1, 0.7, 0.04, 0xffffff, 0.55, 1.6, 0), box(0.5, 0.36, 0.05, 0x2f5fb0, 0.25, 1.94, 0));
-      flag.position.set(13.5, 0, 9.5);
+      flag.position.set(5.5, 0, 22.5);
       S.add(flag);
     }
   }
@@ -176,7 +184,7 @@ export class World {
     group.add(sale);
     // yard crates (surplus that the next factory isn't using)
     const crates = new THREE.Group();
-    const side = Math.sign(x); // the yard is on the side away from the main road
+    const side = Math.sign(x) || 1;
     for (let i = 0; i < 9; i++) {
       const c = crate(def.color === 0xe8e4da ? 0xb9b4a8 : def.color);
       const col = i % 3, row = Math.floor(i / 3) % 2, layer = i >= 6 ? 1 : 0;
@@ -216,6 +224,13 @@ export class World {
   }
 
   // milestone levels make the building a bit taller and wider
+  // fraction of the screen (from the top) that's free above an open panel
+  setFreeTop(frac) {
+    const y = Math.max(0.12, frac * 0.5);           // aim at the middle of the free area
+    this.panelShift = Math.min(0.8, Math.max(0, 1 - 2 * y));
+    if (this.selected) this.viewShiftTarget = this.panelShift;
+  }
+
   setGrowth(id, milestones) { this.lots[id].grow = 1 + Math.min(6, milestones) * 0.055; }
 
   setRocketReady(ready) {
@@ -226,7 +241,7 @@ export class World {
   }
 
   // per-frame supply-chain info from the economy: [{id, made, util, surplus, starved}]
-  setFlow(per) { this.flowInfo = per; }
+  setFlow(per, support) { this.flowInfo = per; this.supportInfo = support || {}; }
 
   bounce(id) { if (this.lots[id]) this.lots[id].bounce = 1; }
 
@@ -234,12 +249,38 @@ export class World {
     if (this.selected) this.lots[this.selected].ring.visible = false;
     this.selected = id;
     if (id) { this.lots[id].ring.visible = true; this.lots[id].bounce = Math.max(this.lots[id].bounce, 0.6); }
+    // with a panel open, raise the view so the chosen building sits above the panel
+    this.viewShiftTarget = id ? this.panelShift ?? 0.44 : 0;
     this.onPick(id);
   }
 
   focus(id) {
     const [x, z] = LOTS[id];
-    this.panTo = new THREE.Vector3(x, 0, z + 3);
+    // aim a bit in front of the lot so it sits in the top half, above the panel
+    this.panTo = new THREE.Vector3(x, 0, z);
+  }
+
+  // poles and a wire from the power plant to the data center, with pulses of power
+  #powerLine() {
+    const [px, pz] = LOTS.power, [dx, dz] = LOTS.datacenter;
+    const x = px + 4.2;
+    const g = new THREE.Group();
+    const z1 = pz - 3.4, z2 = dz + 3.4;
+    for (const z of [z1, z2]) { const p = powerPole(); p.position.set(x, 0, z); g.add(p); }
+    const len = Math.abs(z2 - z1);
+    for (const off of [-0.5, 0.5]) g.add(box(0.05, 0.05, len, 0x2a2a2e, x + off, 3.0, (z1 + z2) / 2));
+    this.pulses = [];
+    for (let i = 0; i < 3; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff27a }));
+      g.add(m); this.pulses.push({ m, u: i / 3 });
+    }
+    this.powerLineGroup = g; this.powerLine = { x, z1, z2 };
+    g.visible = false;
+    this.scene.add(g);
+  }
+  setPowerLine(on, rate) {
+    this.powerLineGroup.visible = on;
+    this.powerRate = rate;
   }
 
   // ---------- traffic ----------
@@ -261,13 +302,15 @@ export class World {
   // supply trucks drive from the supplier's yard to the next factory along the road
   #spawnDelivery(fromId, toId) {
     const [ax, az] = LOTS[fromId], [bx, bz] = LOTS[toId];
-    const lane = bz < az ? 0.9 : -0.9;
-    const pts = [
-      new THREE.Vector3(ax - Math.sign(ax) * 3.2, 0.06, az + 2.6),
-      new THREE.Vector3(lane, 0.06, az + 2.6),
-      new THREE.Vector3(lane, 0.06, bz + 2.6),
-      new THREE.Vector3(bx - Math.sign(bx) * 3.2, 0.06, bz + 2.6),
-    ];
+    const dir = bx > ax ? 1 : bx < ax ? -1 : 1;
+    const rA = ax + 7 * dir;                       // the avenue beside A, toward B
+    const rB = bx === ax ? rA : bx - 7 * dir;      // the avenue beside B, toward A
+    const lane = 0.9 * (bz <= az ? 1 : -1);
+    const y = 0.06, zA = az + 2.6, zB = bz + 2.6, hz = Math.max(az, bz) + 7; // front street
+    const P = (x, z) => new THREE.Vector3(x, y, z);
+    const pts = [P(rA - dir * 3.4, zA), P(rA + lane, zA)];
+    if (rA !== rB) pts.push(P(rA + lane, hz), P(rB + lane, hz));
+    pts.push(P(rB + lane, zB), P(rB + (bx === ax ? -dir : dir) * 3.4, zB));
     let mesh = this.truckPool.pop();
     if (!mesh) {
       mesh = truck(0xffffff);
@@ -281,7 +324,7 @@ export class World {
     mesh.getObjectByName('cargo').material = mat(color === 0xe8e4da ? 0xb9b4a8 : color);
     mesh.visible = true;
     this.scene.add(mesh);
-    this.deliveries.push({ mesh, pts, seg: 0, u: 0, to: toId, speed: 6 });
+    this.deliveries.push({ mesh, pts, seg: 0, u: 0, to: toId, speed: 7 });
   }
 
   #updateDeliveries(dt) {
@@ -429,14 +472,15 @@ export class World {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
-    const aspect = w / h;
-    const halfH = Math.max(17, 15.5 / aspect);
-    this.camera.left = -halfH * aspect; this.camera.right = halfH * aspect;
-    this.camera.top = halfH; this.camera.bottom = -halfH;
+    this.aspect = w / h;
+    this.halfH = Math.max(17, 15.5 / this.aspect);
     this.#updateCamera();
   }
 
   #updateCamera() {
+    const halfH = this.halfH || 17, a = (this.viewShift || 0) * halfH;
+    this.camera.left = -halfH * (this.aspect || 0.5); this.camera.right = halfH * (this.aspect || 0.5);
+    this.camera.top = halfH - a; this.camera.bottom = -halfH - a;
     this.camera.zoom = this.zoom;
     this.camera.position.copy(this.target).addScaledVector(CAM_DIR, 100);
     if (this.shake) this.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake, 0));
@@ -448,6 +492,7 @@ export class World {
     for (const old of this.pops) if (old.id === id) old.age = Math.max(old.age, 1.0);
     const el = document.createElement('div');
     el.className = 'pop ' + cls;
+    el.style.opacity = '0';
     el.textContent = text;
     this.labelsEl.appendChild(el);
     this.pops.push({ el, id, age: 0 });
@@ -455,16 +500,18 @@ export class World {
 
   #emitSmoke(L) {
     for (const p of L.smokeAt) {
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), new THREE.MeshLambertMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.85, flatShading: true }));
+      const big = L.def.id === 'power';
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(big ? 0.9 : 0.45, 0), new THREE.MeshLambertMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.85, flatShading: true }));
       const wp = p.clone(); L.model.localToWorld(wp);
       m.position.copy(wp);
       this.scene.add(m);
-      this.smoke.push({ m, age: 0, life: 2.4 });
+      this.smoke.push({ m, age: 0, life: big ? 3.2 : 2.4 });
     }
   }
 
   frame(dt, labelFor) {
     this.t += dt;
+    this.viewShift = (this.viewShift || 0) + ((this.viewShiftTarget || 0) - (this.viewShift || 0)) * Math.min(1, dt * 6);
     if (this.panTo) {
       this.target.lerp(this.panTo, Math.min(1, dt * 6));
       if (this.target.distanceTo(this.panTo) < 0.05) this.panTo = null;
@@ -473,6 +520,7 @@ export class World {
     this.#updateCamera();
     const info = {};
     for (const p of this.flowInfo || []) info[p.id] = p;
+    for (const [k, v] of Object.entries(this.supportInfo || {})) info[k] = v;
     for (const [id, L] of Object.entries(this.lots)) {
       const f = info[id];
       // starved factories run their machines slower; idle ones stop
@@ -486,7 +534,7 @@ export class World {
         if (L.smokeAt.length && L.speed > 0 && (L.smokeT = (L.smokeT || 0) - dt) <= 0) { L.smokeT = 0.7 / Math.max(0.3, L.speed); this.#emitSmoke(L); }
         // crates pile up when this factory makes more than the next one can use
         const i = FACTORIES.findIndex(d => d.id === id);
-        const nextBuilt = i < FACTORIES.length - 1 && (info[FACTORIES[i + 1].id]?.cap || 0) > 0;
+        const nextBuilt = i >= 0 && i < FACTORIES.length - 1 && (info[FACTORIES[i + 1].id]?.cap || 0) > 0;
         const n = f && f.made > 0 && nextBuilt ? Math.round(f.surplus * 9) : 0;
         L.crates.children.forEach((c, i) => { c.visible = i < n; });
       }
@@ -506,6 +554,14 @@ export class World {
       t.mesh.position.set(t.pos, 0.06, t.fixed); t.mesh.rotation.y = t.dir > 0 ? 0 : Math.PI;
     }
     this.#updateDeliveries(dt);
+    if (this.powerLineGroup.visible) {
+      const { x, z1, z2 } = this.powerLine;
+      for (const p of this.pulses) {
+        p.u = (p.u + dt * 0.5 * (this.powerRate || 0)) % 1;
+        p.m.position.set(x + 0.5, 3.0, z1 + (z2 - z1) * p.u);
+        p.m.visible = (this.powerRate || 0) > 0;
+      }
+    }
     this.#updateLaunch(dt);
     this.renderer.render(this.scene, this.camera);
     this.#labels(dt, labelFor);
@@ -517,6 +573,8 @@ export class World {
   }
 
   #labels(dt, labelFor) {
+    // shrink labels when zoomed out so they don't pile on top of each other
+    const labelScale = Math.min(1, Math.max(0.62, this.zoom * 0.95)).toFixed(2);
     for (const [id, L] of Object.entries(this.lots)) {
       const s = this.#project(new THREE.Vector3(L.group.position.x, L.top * L.grow + 0.15, L.group.position.z));
       const info = labelFor(id);
@@ -525,7 +583,7 @@ export class World {
       const cls = 'lot-label ' + info.cls + (this.selected === id ? ' sel' : '');
       if (L.label.className !== cls) L.label.className = cls;
       L.label.setAttribute('aria-label', info.aria);
-      L.label.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) translate(-50%, -100%)`;
+      L.label.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) scale(${labelScale}) translate(-50%, -100%)`;
     }
     for (let i = this.pops.length - 1; i >= 0; i--) {
       const p = this.pops[i];

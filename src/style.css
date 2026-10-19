@@ -72,7 +72,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 
 /* labels over buildings */
 .lot-label {
-  position: absolute; left: 0; top: 0; pointer-events: auto; border: none; border-radius: 999px;
+  position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: auto; border: none; border-radius: 999px;
   background: var(--paper); color: var(--ink); padding: 4px 12px 4px 4px; min-height: 34px;
   display: flex; align-items: center; gap: 7px; font: 800 13px var(--body); white-space: nowrap;
   box-shadow: 0 3px 0 rgba(0,0,0,.18); will-change: transform;
@@ -229,3 +229,6 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .flash { position: absolute; inset: 0; background: #fff; z-index: 40; animation: flash .9s ease-out forwards; pointer-events: none; }
 @keyframes flash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
 body.launching #hud, body.launching .boost, body.launching .contract, body.launching .ep-chip, body.launching #labels { opacity: 0; transition: opacity .4s; }
+
+.lot-label .perk { font-size: 11px; color: #2563a8; line-height: 1; }
+.lot-label.support .bar i { background: #3f7fd0; }

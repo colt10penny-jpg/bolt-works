@@ -43,6 +43,91 @@ const shade = (hex, f) => {
 
 // Each builder returns { group, anim(t, dt), top } where top is the label anchor height.
 export const BUILDERS = {
+  mine(color) {
+    const g = new THREE.Group();
+    // ore piles
+    const pile = (x, z, r, h, c) => {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 9), mat(c, { flatShading: true }));
+      m.position.set(x, h / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
+    };
+    pile(-2.4, 1.6, 1.5, 1.4, 0x8a5a3c); pile(-1.2, 2.6, 1.0, 0.9, 0x9b6a48); pile(2.6, 2.4, 1.2, 1.1, 0x7d5236);
+    // shaft house + headframe with a spinning wheel
+    g.add(box(3.2, 2.0, 2.6, color, 0.6, 0, -1.6));
+    g.add(box(3.4, 0.25, 2.8, shade(color, -0.35), 0.6, 2.0, -1.6));
+    g.add(box(0.9, 1.5, 0.08, 0x2e2620, 0.2, 0, -0.28));
+    for (const [x, z] of [[-0.1, -2.6], [1.3, -2.6], [-0.1, -0.6], [1.3, -0.6]]) g.add(box(0.18, 5.2, 0.18, 0x5b5f66, x, 0, z));
+    g.add(box(1.6, 0.18, 2.2, 0x5b5f66, 0.6, 5.2, -1.6));
+    const wheel = new THREE.Group();
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.09, 6, 16), mat(0x3a3f48));
+    wheel.add(rim);
+    for (let i = 0; i < 4; i++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.08), mat(0x3a3f48)); sp.rotation.z = i * Math.PI / 4; wheel.add(sp); }
+    wheel.position.set(0.6, 5.9, -1.6);
+    wheel.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    g.add(wheel);
+    // ore cart on rails
+    g.add(box(4.6, 0.06, 0.5, 0x5b5f66, 0.4, 0, 1.0));
+    const cart = new THREE.Group();
+    cart.add(box(0.8, 0.5, 0.55, 0x4a4f57, 0, 0.12, 0));
+    const load = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 6), mat(0x8a5a3c, { flatShading: true }));
+    load.position.y = 0.75; cart.add(load);
+    cart.position.set(0, 0, 1.0);
+    g.add(cart);
+    return {
+      group: g, top: 7,
+      anim(t, dt) { wheel.rotation.z -= dt * 2.5; cart.position.x = 0.4 + Math.sin(t * 0.9) * 1.8; },
+    };
+  },
+
+  power(color) {
+    const g = new THREE.Group();
+    // hyperbolic cooling tower
+    const pts = [];
+    for (let i = 0; i <= 10; i++) { const y = i * 0.6; const r = 1.9 - 0.9 * Math.sin((i / 10) * Math.PI * 0.85); pts.push(new THREE.Vector2(r, y)); }
+    const tower = new THREE.Mesh(new THREE.LatheGeometry(pts, 20), mat(0xe9e6df, { side: THREE.DoubleSide }));
+    tower.position.set(-1.6, 0, -1.2); tower.castShadow = true; tower.receiveShadow = true;
+    g.add(tower);
+    g.add(cyl(1.0, 1.0, 0.25, 0xcfcac0, -1.6, 5.8, -1.2, 20));
+    // turbine hall + transformer yard
+    g.add(box(3.4, 2.4, 3.4, color, 2.0, 0, -0.4));
+    g.add(box(3.6, 0.25, 3.6, shade(color, -0.35), 2.0, 2.4, -0.4));
+    for (let i = 0; i < 3; i++) g.add(box(0.7, 0.7, 0.08, 0xd8ecff, 1.0 + i * 1.0, 1.2, 1.32));
+    for (let i = 0; i < 3; i++) g.add(box(0.7, 1.0, 0.7, 0x8a8f99, -2.6 + i * 1.1, 0, 2.6));
+    for (const x of [-2.6, -1.5, -0.4]) g.add(box(0.08, 0.5, 0.08, 0xd9482b, x, 1.0, 2.6));
+    return { group: g, top: 7, smoke: [new THREE.Vector3(-1.6, 6.1, -1.2)], steam: true };
+  },
+
+  datacenter(color) {
+    const g = new THREE.Group();
+    g.add(box(6.2, 2.2, 4.6, color, 0, 0, -0.3));
+    g.add(box(6.4, 0.2, 4.8, shade(color, -0.4), 0, 2.2, -0.3));
+    // front panel stripes and blinking server lights
+    const lights = [];
+    for (let i = 0; i < 6; i++) {
+      g.add(box(0.7, 1.6, 0.08, shade(color, -0.25), -2.5 + i * 1.0, 0.2, 1.97));
+      for (let k = 0; k < 3; k++) {
+        const l = box(0.18, 0.08, 0.06, 0x5fd3ff, -2.5 + i * 1.0, 0.5 + k * 0.45, 2.03, { emissive: 0x2fb6ff, emissiveIntensity: 1 });
+        l.material = l.material.clone();
+        lights.push(l); g.add(l);
+      }
+    }
+    // rooftop cooling fans
+    const fans = [];
+    for (let i = 0; i < 3; i++) {
+      g.add(cyl(0.65, 0.65, 0.3, 0x8a8f99, -1.9 + i * 1.9, 2.4, -0.8, 14));
+      const fan = new THREE.Group();
+      for (let b = 0; b < 3; b++) { const bl = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.04, 0.22), mat(0x2a2d33)); bl.rotation.y = b * Math.PI / 3; fan.add(bl); }
+      fan.position.set(-1.9 + i * 1.9, 2.75, -0.8);
+      fans.push(fan); g.add(fan);
+    }
+    return {
+      group: g, top: 5.4,
+      anim(t, dt) {
+        fans.forEach((f, i) => { f.rotation.y += dt * (6 + i); });
+        lights.forEach((l, i) => { l.material.emissiveIntensity = (Math.sin(t * 7 + i * 1.7) > 0.2) ? 1.2 : 0.1; });
+      },
+    };
+  },
+
   furnace(color) {
     const g = new THREE.Group();
     g.add(box(6, 3.2, 4.6, color, 0, 0, 0));
@@ -252,4 +337,11 @@ export function crate(color) {
   const m = box(0.6, 0.5, 0.6, color, 0, 0, 0);
   m.add(box(0.62, 0.08, 0.62, 0x6b4a2b, 0, 0.21 - 0.25, 0));
   return m;
+}
+
+export function powerPole() {
+  const g = new THREE.Group();
+  g.add(box(0.14, 3.2, 0.14, 0x6b4a2b, 0, 0, 0));
+  g.add(box(0.12, 0.12, 1.2, 0x6b4a2b, 0, 2.9, 0));
+  return g;
 }
