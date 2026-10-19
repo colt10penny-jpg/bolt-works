@@ -317,5 +317,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
 })().catch(e => window.__bootError?.('Start failed: ' + (e.stack || e.message || e)));
 
 function withTimeout(p, ms, what) {
-  return Promise.race([p, new Promise(r => setTimeout(() => { window.__bootError?.(`Timed out ${what}; starting fresh`); r(null); }, ms))]);
+  let t;
+  const timer = new Promise(r => { t = setTimeout(() => { window.__bootError?.(`Timed out ${what}; starting fresh`); r(null); }, ms); });
+  return Promise.race([p, timer]).finally(() => clearTimeout(t));
 }
