@@ -11,7 +11,7 @@ export const ADMOB = {
 // Anonymous play stats (PostHog). Leave posthogKey empty to turn tracking off.
 // The project key is meant to be public; it can only send events, not read them.
 export const ANALYTICS = {
-  posthogKey: '',
+  posthogKey: 'phc_uFLGLoCrwfXGmDvvvdiKNnmFHQP8yVDcYouhg5NaBMgD',
   posthogHost: 'https://us.i.posthog.com',
   appVersion: '0.3.0',
 };
