@@ -177,7 +177,7 @@ export class World {
     for (const c of [...land.scenery.children]) this.sceneryGroup.add(c);
     this.land = land.ground.userData;
     this.heightAt = land.height;
-    this.#lampGlow(name === 'moon' ? [] : this.land.lamps || []);
+    this.#lampGlow(this.land.lamps || [], name === 'moon');
     this.scene.fog.near = name === 'moon' ? 260 : 165; this.scene.fog.far = name === 'moon' ? 600 : 430;
     if (!this.padMats) this.padMats = {};
     if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
@@ -200,9 +200,26 @@ export class World {
   }
 
   // soft halos round the streetlights after dark
-  #lampGlow(pts) {
+  #lampGlow(pts, moon = false) {
     if (this.glow) { this.scene.remove(this.glow); this.glow.geometry.dispose(); }
-    if (!pts.length) { this.glow = null; return; }
+    if (this.pools) { this.scene.remove(this.pools); this.pools.geometry.dispose(); }
+    this.glow = null; this.pools = null;
+    if (!pts.length) return;
+    // pools of light on the ground under every streetlight, so the town stays bright at night
+    if (!this.poolTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+      this.poolTex = new THREE.CanvasTexture(c);
+    }
+    const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 5 : 8.5, moon ? 5 : 8.5); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
+    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x5aa8ff : 0xffc27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.pools.renderOrder = 2;
+    this.scene.add(this.pools);
+    quads.forEach(q => q.dispose());
+    if (moon) return;
     if (!this.glowTex) {
       const c = document.createElement('canvas'); c.width = c.height = 64;
       const g = c.getContext('2d');
@@ -465,8 +482,8 @@ export class World {
   // milestone levels make the building a bit taller and wider
   // fraction of the screen (from the top) that's free above an open panel
   setFreeTop(frac) {
-    // put the building a little above the middle of the space left above the panel
-    const y = Math.min(0.5, Math.max(0.28, frac * 0.6));
+    // centre the building in the space between the top bar and the panel
+    const y = Math.min(0.5, Math.max(0.3, (0.12 + frac) / 2));
     this.panelShift = Math.min(0.8, Math.max(0, 1 - 2 * y));
     if (this.selected) this.viewShiftTarget = this.panelShift;
   }
@@ -752,7 +769,8 @@ export class World {
   }
 
   #updateCamera() {
-    const halfH = this.halfH || 17, a = (this.viewShift || 0) * halfH;
+    // the shift is in screen terms, so it mustn't grow as you zoom in
+    const halfH = this.halfH || 17, a = (this.viewShift || 0) * halfH / (this.zoom || 1);
     this.camera.left = -halfH * (this.aspect || 0.5); this.camera.right = halfH * (this.aspect || 0.5);
     this.camera.top = halfH - a; this.camera.bottom = -halfH - a;
     this.camera.zoom = this.zoom;
@@ -863,6 +881,7 @@ export class World {
     if (this.land?.lampMat) this.land.lampMat.emissiveIntensity = n * 2.4;
     if (this.land?.edgeMat) this.land.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
     if (this.glow) this.glow.material.opacity = n * 0.9;
+    if (this.pools) this.pools.material.opacity = n * 0.55;
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
     for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
     if (this.look.sunDir) {

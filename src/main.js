@@ -98,7 +98,7 @@ const sheet = $('sheet');
 let sheetKey = '';
 const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode;
 const go = (id, label) => `<button class="link" data-goto="${id}">${label}</button>`;
-const one = u => u.replace(/s$/, '');
+const one = u => /ss$/.test(u) ? u : /ies$/.test(u) ? u.replace(/ies$/, 'y') : u.replace(/s$/, '');
 
 // one short status line: the most important thing about this building right now
 function statusLine(d) {
@@ -260,6 +260,7 @@ const cashAdOffered = short => short <= Math.max(game.totalRate() * 600, 100);
 const cashAdButton = short => cashAdOffered(short) ? `<button class="btn gold" data-act="cash-ad">${AD} Watch ad for $${fmt(cashAdAmount(short))}</button>` : '';
 
 sheet.addEventListener('click', async e => {
+  if (sheet.dataset.swiped) return;   // that was a swipe, not a tap
   const b = e.target.closest('button');
   if (!b) return;
   const id = world.selected;
@@ -313,8 +314,36 @@ world.onPick = id => {
     if (!game.s.tutorial.opened) { game.s.tutorial.opened = true; track('tutorial_step', { step: 'opened_factory' }); }
     sfx.tap();
   }
+  document.body.classList.toggle('selecting', !!id);
   renderSheet(true);
 };
+
+// swipe the panel down to close it
+{
+  let y0 = null, dy = 0, t0 = 0;
+  sheet.addEventListener('pointerdown', e => {
+    const list = e.target.closest('.hq-list');
+    if (list && list.scrollTop > 0) return;   // let the list scroll first
+    y0 = e.clientY; dy = 0; t0 = performance.now();
+  });
+  addEventListener('pointermove', e => {
+    if (y0 == null) return;
+    dy = Math.max(0, e.clientY - y0);
+    if (dy > 8) { sheet.style.transition = 'none'; sheet.style.transform = `translateY(${dy}px)`; }
+  });
+  const end = () => {
+    if (y0 == null) return;
+    const fast = dy / Math.max(1, performance.now() - t0) > 0.5;
+    sheet.style.transition = 'transform .2s ease-out';
+    if (dy > 70 || (fast && dy > 25)) {
+      sheet.style.transform = `translateY(${sheet.offsetHeight}px)`;
+      setTimeout(() => { world.select(null); sheet.style.transform = ''; }, 180);
+    } else sheet.style.transform = '';
+    if (dy > 8) { sheet.dataset.swiped = '1'; setTimeout(() => delete sheet.dataset.swiped, 50); }
+    y0 = null;
+  };
+  addEventListener('pointerup', end); addEventListener('pointercancel', end);
+}
 
 // ---------- ads ----------
 let adBusy = false;

@@ -350,3 +350,12 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .sh-buy .btn[data-act="hire"] { font-size: 16px; }
 .lot-label.bub.idle { background: #2f7fd1; color: #fff; gap: 3px; }
 .lot-label.bub.idle svg { width: 15px; height: 15px; }
+
+/* ---- v9: while a building is open, only the money and the menu stay on top ---- */
+body.selecting .boost, body.selecting #contract, body.selecting #ep, body.selecting #map-btn, body.selecting #hint, body.selecting #launch-btn {
+  opacity: 0 !important; pointer-events: none !important; transition: opacity .2s;
+}
+.boost, #contract, #ep, #map-btn, #hint { transition: opacity .2s; }
+#sheet { touch-action: none; }
+#sheet .hq-list { touch-action: pan-y; }
+#sheet::before { content: ''; display: block; width: 40px; height: 5px; border-radius: 999px; background: var(--mint-2); margin: -4px auto 0; flex-shrink: 0; }

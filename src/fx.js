@@ -28,22 +28,22 @@ const GradeShader = {
 // key moments of the day: [time, sun colour, sun strength, sky light, ground light, sky strength, window glow, haze colour]
 const DAY = {
   earth: [
-    [0.00, 0x9fb4ff, 0.35, 0x6f86c9, 0x2b3550, 0.75, 1.0, 0x33456e],   // night
+    [0.00, 0xa9bcff, 0.6, 0x8197d6, 0x3a4766, 1.05, 1.0, 0x3b4f7c],   // night
     [0.06, 0xffa86b, 1.3, 0xffd2b0, 0x6b5a4a, 1.0, 0.55, 0xf2b98f],    // sunrise
     [0.14, 0xfff1dc, 2.6, 0xfff6e5, 0x5d7a46, 1.25, 0.0, 0xcfe3f0],    // morning
     [0.55, 0xffffff, 2.8, 0xfff6e5, 0x5d7a46, 1.3, 0.0, 0xd6e7f2],     // afternoon
     [0.66, 0xffb46b, 1.8, 0xffd9b8, 0x6b5a4a, 1.05, 0.25, 0xf3c08e],   // golden hour
     [0.72, 0xff7f5a, 0.9, 0xc99ab0, 0x4a3f50, 0.9, 0.8, 0xc78a92],     // sunset
-    [0.80, 0x9fb4ff, 0.35, 0x6f86c9, 0x2b3550, 0.75, 1.0, 0x33456e],   // night
-    [1.00, 0x9fb4ff, 0.35, 0x6f86c9, 0x2b3550, 0.75, 1.0, 0x33456e],
+    [0.80, 0xa9bcff, 0.6, 0x8197d6, 0x3a4766, 1.05, 1.0, 0x3b4f7c],   // night
+    [1.00, 0xa9bcff, 0.6, 0x8197d6, 0x3a4766, 1.05, 1.0, 0x3b4f7c],
   ],
   // the Moon has no air: always hard white sunlight, and "night" is earthlight
   moon: [
-    [0.00, 0xb8c8ff, 0.7, 0x6f7fb0, 0x20222c, 0.7, 1.0, 0x1b2030],
+    [0.00, 0xb8c8ff, 1.0, 0x7f8fc4, 0x2a2d3a, 0.95, 1.0, 0x1b2030],
     [0.08, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
     [0.70, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
-    [0.80, 0xb8c8ff, 0.7, 0x6f7fb0, 0x20222c, 0.7, 1.0, 0x1b2030],
-    [1.00, 0xb8c8ff, 0.7, 0x6f7fb0, 0x20222c, 0.7, 1.0, 0x1b2030],
+    [0.80, 0xb8c8ff, 1.0, 0x7f8fc4, 0x2a2d3a, 0.95, 1.0, 0x1b2030],
+    [1.00, 0xb8c8ff, 1.0, 0x7f8fc4, 0x2a2d3a, 0.95, 1.0, 0x1b2030],
   ],
 };
 const ca = new THREE.Color(), cb = new THREE.Color();
@@ -138,7 +138,7 @@ export class Look {
     for (const m of GLOW.lit) m.emissiveIntensity = (m.userData.baseGlow ?? 1) * (1 + n * 1.2);
     if (this.bloom) { this.bloom.strength = 0.25 + n * 0.5; this.bloom.threshold = 1.15 - n * 0.35; }
     if (this.grade) {
-      this.grade.uniforms.vignette.value = 0.28 + n * 0.12;
+      this.grade.uniforms.vignette.value = 0.28 + n * 0.05;
       this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02, 1, 1 + n * 0.05);
     }
   }

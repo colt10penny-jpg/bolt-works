@@ -361,6 +361,7 @@ export function buildLand(name, T, LOTS) {
     if (moon) {   // short light posts instead of streetlamps
       poles.add(poleM, boxAt(0.18, 0.7, 0.18, x, 0.14, z));
       poles.add(edgeM, boxAt(0.26, 0.16, 0.26, x, 0.84, z));
+      lights.push(new THREE.Vector3(x, 0.9, z));
       return;
     }
     poles.add(poleM, boxAt(0.13, 2.9, 0.13, x, 0.14, z));
