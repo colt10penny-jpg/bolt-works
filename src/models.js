@@ -294,6 +294,19 @@ export function truck(color) {
   return g;
 }
 
+// a small car, pointing +x like the truck
+export function car(color) {
+  const g = new THREE.Group();
+  g.add(box(1.7, 0.45, 0.9, color, 0, 0.2, 0));
+  g.add(box(0.95, 0.4, 0.82, color, -0.1, 0.65, 0));
+  g.add(box(0.06, 0.3, 0.72, 0x9fd6ff, 0.39, 0.7, 0), box(0.06, 0.3, 0.72, 0x9fd6ff, -0.59, 0.7, 0));
+  for (const x of [-0.55, 0.55]) for (const z of [-0.44, 0.44]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.14, 10), mat(0x2a2a2e));
+    w.rotation.x = Math.PI / 2; w.position.set(x, 0.2, z); g.add(w);
+  }
+  return g;
+}
+
 // ---- scenery for each map theme ----
 export function pine(scale = 1, color = 0x2f6f3e) {
   const g = new THREE.Group();
@@ -604,5 +617,54 @@ Object.assign(BUILDERS, {
     // cryostat tanks
     for (const z of [-1.2, 0.6]) g.add(cyl(0.6, 0.6, 2.0, 0xd8dbe2, 2.6, 0, z, 14));
     return { group: g, top: 5.2, anim(t) { ringA.rotation.x = t * 1.3; ringB.rotation.y = t * 1.7; orb.scale.setScalar(1 + Math.sin(t * 4) * 0.12); } };
+  },
+
+  // ---- headquarters, one per world ----
+  hq(color) {
+    const g = new THREE.Group();
+    g.add(box(3.4, 6.4, 3.4, color, -0.8, 0, -0.8));
+    for (let k = 0; k < 6; k++) for (const [w, d, x, z] of [[3.42, 0.02, -0.8, 0.91], [0.02, 3.42, 0.91, -0.8]])
+      g.add(box(w === 3.42 ? 3.0 : 0.06, 0.45, d === 3.42 ? 3.0 : 0.06, 0x9fd6ff, x, 0.6 + k * 0.95, z));
+    g.add(box(3.6, 0.25, 3.6, shade(color, -0.35), -0.8, 6.4, -0.8));
+    g.add(box(4.4, 1.6, 2.6, shade(color, 0.25), 1.6, 0, 1.6));
+    g.add(box(1.2, 1.0, 0.08, 0x3a3f48, 1.6, 0, 2.92));
+    // flag on the roof
+    g.add(box(0.08, 1.8, 0.08, 0xdddddd, 0.3, 6.65, 0.3));
+    const flag = box(0.9, 0.55, 0.04, 0xffd23f, 0.75, 7.75, 0.3);
+    g.add(flag);
+    return { group: g, top: 8.9, anim(t) { flag.rotation.y = Math.sin(t * 3) * 0.25; } };
+  },
+  hqdesert(color) {
+    const g = new THREE.Group();
+    g.add(box(5.6, 2.6, 4.2, color, 0, 0, -0.4));
+    g.add(box(3.0, 1.6, 2.6, shade(color, 0.12), -0.8, 2.6, -0.8));
+    for (let i = 0; i < 5; i++) g.add(box(0.18, 0.18, 1.0, 0x8a5a33, -2.4 + i * 1.2, 2.2, 1.9));
+    windows(g, 3, 0.8, 1.0, 1.72, 0x9fd6ff, 1.5, -1.5);
+    g.add(box(1.0, 1.4, 0.1, 0x6b4a2b, 2.0, 0, 1.72));
+    for (let i = 0; i < 2; i++) g.add(panel(1.4, 1.2, 0x2a4f8f, 1.6, 2.85, -1.6 + i * 1.4));
+    const mast = new THREE.Group();
+    mast.add(box(0.1, 2.4, 0.1, 0xdddddd, 0, 0, 0));
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), mat(0xf2f2f2, { side: THREE.DoubleSide }));
+    dish.rotation.x = Math.PI / 2.3; dish.position.y = 2.3; mast.add(dish);
+    mast.position.set(-0.8, 4.2, -0.8);
+    g.add(mast);
+    return { group: g, top: 7.4, anim(t) { mast.rotation.y = t * 0.6; } };
+  },
+  hqmoon(color) {
+    const g = new THREE.Group();
+    g.add(dome(2.6, color, -0.6, 0, -0.6));
+    g.add(cyl(2.65, 2.65, 0.5, shade(color, -0.3), -0.6, 0, -0.6, 20));
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      g.add(box(0.5, 0.35, 0.05, 0x5fd3ff, -0.6 + Math.cos(a) * 2.0, 1.3, -0.6 + Math.sin(a) * 2.0, { emissive: 0x2fb6ff, emissiveIntensity: 0.7 }));
+    }
+    g.add(box(1.4, 1.4, 2.0, 0xd8d4c8, 2.4, 0, 1.6));
+    const mast = new THREE.Group();
+    mast.add(box(0.12, 2.0, 0.12, 0xcfd3da, 0, 0, 0));
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.8, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), mat(0xf2f2f2, { side: THREE.DoubleSide }));
+    dish.rotation.x = Math.PI / 2.5; dish.position.y = 2.0; mast.add(dish);
+    mast.position.set(2.4, 1.4, 1.6);
+    g.add(mast);
+    return { group: g, top: 5.8, anim(t) { mast.rotation.y = Math.sin(t * 0.4) * 1.2; } };
   },
 });

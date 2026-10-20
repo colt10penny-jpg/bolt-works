@@ -1,7 +1,7 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
-  FACTORIES, ALL, SUPPORT, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, managerCost, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable,
+  FACTORIES, ALL, BUILDINGS, SUPPORT, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable,
   nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES,
 } from './economy.js';
 import { Game } from './state.js';
@@ -11,6 +11,7 @@ import { sfx } from './sound.js';
 import { initAnalytics, track, flush } from './analytics.js';
 import { GAME } from './config.js';
 import { skin } from './worlds.js';
+import { ACHIEVEMENTS, checkAchievements } from './achievements.js';
 
 if (import.meta.env.MODE === 'artifact') {
   const l = document.createElement('link');
@@ -26,7 +27,7 @@ const game = new Game();
 const world = new World($('world'), $('labels'));
 world.lookFor = id => def(id);
 game.unitOf = id => skin(game.s.current, id).unit;
-const def = id => { const base = ALL.find(f => f.id === id); return base ? { ...base, ...skin(game.s.current, id) } : base; };
+const def = id => { const base = BUILDINGS.find(f => f.id === id); return base ? { ...base, ...skin(game.s.current, id) } : base; };
 if (location.search.includes('debug')) Object.assign(window, { __game: game, __world: world });
 const idx = id => FACTORIES.findIndex(f => f.id === id);
 const hex = n => '#' + n.toString(16).padStart(6, '0');
@@ -46,6 +47,11 @@ const ICON = {
   chip: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg>',
   person: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/></svg>',
   globe: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
+  hq: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V5l8-2v18M12 8h8v13M4 21h17M7 8h2M7 12h2M7 16h2M15 12h2M15 16h2"/></svg>',
+  trophy: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1.5A3.5 3.5 0 0 0 7.5 11M17 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5M12 14v3.5M8.5 21h7M9.5 17.5h5V21h-5z"/></svg>',
+  gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
+  map: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
+  chev: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>',
   clip: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/></svg>',
 };
 
@@ -56,7 +62,13 @@ const pctSpeed = () => Math.round((game.baseFlow().speed - 1) * 100);
 const COIN = '<span class="b-coin" aria-hidden="true">$</span>';
 function labelFor(id) {
   const d = def(id), lv = game.level(id);
+  if (id === 'hq' && lv > 0) {
+    const free = game.freeManagers();
+    return free > 0 ? { cls: 'bub idle', html: `${ICON.person}<b>${free}</b>`, aria: `${free} manager${free > 1 ? 's' : ''} waiting for a job. Tap to send them out.` } : { cls: '', html: '', aria: '' };
+  }
   if (lv <= 0) {
+    // the HQ only shows up once there's a reason to build it
+    if (id === 'hq' && !game.built('furnace')) return { cls: '', html: '', aria: '' };
     const ok = game.canAfford(d.unlock);
     return ok
       ? { cls: 'bub plus', html: '<span aria-hidden="true">+</span>', aria: `Empty lot. You can build a ${d.name}.` }
@@ -145,18 +157,44 @@ function buyRow(d, lv) {
 }
 function managerRow(d) {
   if (game.hasManager(d.id)) return '';
-  const cost = managerCost(d);
-  const ok = game.canAfford(cost);
-  return `<div class="sh-mgr"><span>${ICON.person}<span>Storage <b>$${fmt(game.bin(d.id))}</b> / $${fmt(game.binCap(d.id))}</span></span>
-    <button class="btn small" data-act="manager" ${ok ? '' : 'disabled'}>Hire manager · $${fmtCost(cost)}</button></div>`;
+  const store = `<span>${ICON.person}<span>Storage <b>$${fmt(game.bin(d.id))}</b> / $${fmt(game.binCap(d.id))}</span></span>`;
+  const H = def('hq');
+  let btn;
+  if (!game.built('hq')) btn = `<button class="btn small" data-goto="hq">Build ${H.name} for managers</button>`;
+  else if (game.freeManagers() > 0) btn = `<button class="btn small" data-act="assign" data-id="${d.id}">Send a manager here</button>`;
+  else btn = `<button class="btn small" data-goto="hq">Hire at ${H.name}</button>`;
+  return `<div class="sh-mgr">${store}${btn}</div>`;
+}
+
+// headquarters: hire managers, then send each one to a factory
+function hqSheet(d) {
+  const free = game.freeManagers(), staff = game.staff();
+  const cost = game.nextHireCost();
+  const afford = game.canAfford(cost);
+  const rows = FACTORIES.filter(f => game.built(f.id)).map(f => {
+    const fd = def(f.id), on = game.hasManager(f.id);
+    return `<div class="hq-row ${on ? 'on' : ''}">
+      <span class="hq-dot" style="background:${tint(fd)}"></span>
+      <span class="hq-name">${fd.name}<small>${on ? 'Manager collecting' : `$${fmt(game.bin(f.id))} waiting`}</small></span>
+      ${on ? `<button class="btn small plain" data-act="recall" data-id="${f.id}">Call back</button>`
+           : `<button class="btn small" data-act="assign" data-id="${f.id}" ${free > 0 ? '' : 'disabled'}>Send</button>`}
+    </div>`;
+  }).join('');
+  const sub = staff ? `${staff} manager${staff > 1 ? 's' : ''} · ${free} waiting for a job` : 'Hire managers to collect money for you';
+  return head(d, ICON.hq, d.name, sub) + `
+    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${afford ? `Hire a manager · $${fmtCost(cost)}` : `Next manager · need $${fmtCost(cost - game.run.cash)}`}</button></div>
+    ${afford ? '' : cashAdButton(cost - game.run.cash)}
+    <div class="hq-list">${rows}</div>`;
 }
 
 function renderSheet(force = false) {
   const id = world.selected;
-  if (!id) { sheet.hidden = true; sheetKey = ''; return; }
+  if (!id) { sheet.hidden = true; sheetKey = ''; delete sheet.dataset.for; return; }
   const d = def(id), lv = game.level(id);
   let html;
-  if (lv > 0 && isSupport(id)) {
+  if (lv > 0 && id === 'hq') {
+    html = hqSheet(d);
+  } else if (lv > 0 && isSupport(id)) {
     const fl = game.baseFlow();
     const nextLv = { ...game.levels, [id]: lv + buyCount(d, lv) };
     const pw2 = capacity(SUPPORT[0], nextLv.power) * (game.world.perks.power || 1), dc2 = capacity(SUPPORT[1], nextLv.datacenter);
@@ -178,7 +216,8 @@ function renderSheet(force = false) {
   } else {
     const afford = game.canAfford(d.unlock);
     const prev = idx(id) > 0 ? def(FACTORIES[idx(id) - 1].id) : null;
-    const what = isSupport(id)
+    const what = id === 'hq' ? 'Hire managers and send them to your factories'
+      : isSupport(id)
       ? (id === 'power' ? `Makes electricity for the ${def('datacenter').name}` : `Turns power into compute that speeds up every factory`)
       : prev ? `Turns ${prev.unit} into ${d.makes}` : `Digs ${d.makes}`;
     html = `<div class="sh-head">
@@ -191,10 +230,26 @@ function renderSheet(force = false) {
       <button class="btn green" data-act="build" ${afford ? '' : 'disabled'}>${afford ? `Build · $${fmtCost(d.unlock)}` : `Build · $${fmtCost(d.unlock)} (need $${fmtCost(d.unlock - game.run.cash)} more)`}</button>
       ${afford ? '' : cashAdButton(d.unlock - game.run.cash)}`;
   }
-  if (force || html !== sheetKey) { sheet.innerHTML = html; sheetKey = html; }
+  // update the panel in place, so buttons don't get swapped out from under your finger
+  if (sheet.dataset.for !== id) { sheet.innerHTML = html; sheet.dataset.for = id; sheetKey = html; }
+  else if (force || html !== sheetKey) { const t = document.createElement('div'); t.innerHTML = html; morphKids(sheet, t); sheetKey = html; }
   sheet.hidden = false;
   const h = sheet.offsetHeight, H = window.innerHeight || 1;
   if (h) world.setFreeTop(Math.max(0, (H - h) / H));
+}
+
+function morph(a, b) {
+  if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) { a.replaceWith(b.cloneNode(true)); return; }
+  if (a.nodeType === 3) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return; }
+  if (a.nodeType !== 1) return;
+  for (const { name } of [...a.attributes]) if (!b.hasAttribute(name)) a.removeAttribute(name);
+  for (const { name, value } of [...b.attributes]) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  morphKids(a, b);
+}
+function morphKids(a, b) {
+  const ac = [...a.childNodes], bc = [...b.childNodes];
+  for (let i = 0; i < bc.length; i++) { if (i < ac.length) morph(ac[i], bc[i]); else a.appendChild(bc[i].cloneNode(true)); }
+  for (let i = bc.length; i < ac.length; i++) ac[i].remove();
 }
 
 // The cash ad covers what you're missing (plus a little), or a minute of income,
@@ -220,12 +275,14 @@ sheet.addEventListener('click', async e => {
   if (act === 'build' && game.build(id)) toast(`${def(id).name} is open for business!`);
   if (act === 'cash-ad') {
     const d = def(id), lv = game.level(id);
-    const need = lv > 0 ? upgradeCost(d, lv, buyCount(d, lv)) : d.unlock;
+    const need = id === 'hq' && lv > 0 ? game.nextHireCost() : lv > 0 ? upgradeCost(d, lv, buyCount(d, lv)) : d.unlock;
     const amount = cashAdAmount(need - game.run.cash);
     if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`); }
   }
   if (act === 'launch') openLaunch();
-  if (act === 'manager' && game.hireManager(id)) { sfx.milestone(); toast(`Manager hired at the ${def(id).name}`); track('manager_hired', { factory: id }); }
+  if (act === 'hire' && game.hire()) { sfx.milestone(); world.bounce('hq'); toast('Manager hired! Send them to a factory.'); track('manager_hired', { staff: game.staff() }); }
+  if (act === 'assign' && game.assign(b.dataset.id)) { sfx.upgrade(); toast(`Manager on the way to the ${def(b.dataset.id).name}`); track('manager_sent', { factory: b.dataset.id }); }
+  if (act === 'recall' && game.recall(b.dataset.id)) { sfx.tap(); toast(`Manager heading back to the ${def('hq').name}`); }
   renderSheet(true);
 });
 
@@ -406,7 +463,7 @@ function openLaunch() {
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch?</h2>
-    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch unlocks <b>${next.name}</b>.` : ''}</p>
+    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch takes you to <b>${next.name}</b>.` : ''}</p>
     <div class="stats">
       <div class="stat"><small>Engineering Points</small><b><em>+${gain}</em></b></div>
       <div class="stat"><small>Income bonus after</small><b>+${fmt(totalAfter)}%</b></div>
@@ -446,21 +503,31 @@ async function doLaunch(mult) {
   save();
   setTimeout(() => { flash.hidden = true; document.body.classList.remove('launching'); }, 600);
   launching = false;
-  const next = game.nextWorld();
-  const here = worldById(from);
   const nw = unlocked ? worldById(unlocked) : null;
+  if (nw) {
+    // the rocket takes you to the new world straight away; your old town stays saved
+    await doTravel(nw.id, true);
+    openModal(`
+      <div class="big-icon red">${ICON.rocket}</div>
+      <h2>Welcome to ${nw.name}!</h2>
+      <p>New world, new kinds of factories. ${nw.perk}</p>
+      <div class="stats">
+        <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
+        <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
+      </div>
+      <button class="btn green" data-act="dismiss">Start building</button>
+      <p class="small">Your ${worldById(from).short} town is saved and keeps earning. Go back any time with the map button.</p>`);
+    return;
+  }
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch successful!</h2>
-    <p>${nw ? `You unlocked <b>${nw.name}</b>, with its own kinds of factories. ${nw.perk}` : 'Your town is just as you left it, now with a bigger income bonus.'}</p>
+    <p>Your town is just as you left it, now with a bigger income bonus.</p>
     <div class="stats">
       <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
       <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
     </div>
-    ${nw ? `<button class="btn green" data-act="go">Travel to ${nw.short}</button><button class="btn plain" data-act="dismiss">Stay in ${worldById(from).short}</button>` : `<button class="btn green" data-act="dismiss">Keep building</button>`}
-    <p class="small">Switch worlds any time with the map button.</p>`, act => {
-    if (act === 'go' && nw) doTravel(nw.id);
-  });
+    <button class="btn green" data-act="dismiss">Keep building</button>`);
 }
 
 // ---------- world map ----------
@@ -497,8 +564,8 @@ modal.addEventListener('click', e => {
   if (b) { e.stopPropagation(); closeModal(false); doTravel(b.dataset.world); }
 }, true);
 
-async function doTravel(id) {
-  if (launching || id === game.s.current) return;
+async function doTravel(id, quiet = false) {
+  if ((launching && !quiet) || id === game.s.current) return;
   const flash = $('flash');
   flash.hidden = false;
   await new Promise(r => setTimeout(r, 350));
@@ -508,7 +575,7 @@ async function doTravel(id) {
   rebuildTown();
   save();
   setTimeout(() => { flash.hidden = true; }, 600);
-  toast(res.earned > 0 ? `Welcome to ${game.world.short}! +$${fmt(res.earned)} while you were away` : `Welcome to ${game.world.name}`);
+  if (!quiet) toast(res.earned > 0 ? `Welcome to ${game.world.short}! +$${fmt(res.earned)} while you were away` : `Welcome to ${game.world.name}`);
 }
 $('map-btn').addEventListener('click', openMap);
 
@@ -535,31 +602,75 @@ function maybeDaily() {
   }, () => { const got = game.claimDaily(1); track('daily_claimed', { streak, doubled: false }); toast(`+$${fmt(got)}`); });
 }
 
-// ---------- settings ----------
-$('settings-btn').addEventListener('click', () => {
+// ---------- menu: achievements, worlds, settings ----------
+let seenAch = 0;
+const achCount = () => Object.keys(game.s.achievements || {}).length;
+function openMenu() {
   sfx.tap();
+  const n = achCount(), fresh = n > seenAch;
+  openModal(`
+    <h2>Menu</h2>
+    <div class="menu-list">
+      <button class="menu-row" data-act="ach"><span class="m-ic gold">${ICON.trophy}</span><span class="m-t"><b>Achievements</b><small>${n} of ${ACHIEVEMENTS.length} earned</small></span>${fresh ? '<span class="m-new">New</span>' : ''}${ICON.chev}</button>
+      ${game.unlockedWorlds().length > 1 ? `<button class="menu-row" data-act="worlds"><span class="m-ic blue">${ICON.map}</span><span class="m-t"><b>Your worlds</b><small>You're in ${game.world.short}</small></span>${ICON.chev}</button>` : ''}
+      <button class="menu-row" data-act="settings"><span class="m-ic">${ICON.gear}</span><span class="m-t"><b>Settings</b><small>Sound, stats, start over</small></span>${ICON.chev}</button>
+    </div>
+    <button class="btn plain" data-act="dismiss">Close</button>`, act => {
+    if (act === 'ach') openAchievements();
+    if (act === 'worlds') openMap();
+    if (act === 'settings') openSettings();
+  });
+}
+function openAchievements() {
+  seenAch = achCount(); $('menu-dot').hidden = true;
+  const got = game.s.achievements || {};
+  const list = [...ACHIEVEMENTS].sort((a, b) => (got[b.id] ? 1 : 0) - (got[a.id] ? 1 : 0)).map(a => `
+    <div class="ach ${got[a.id] ? 'got' : ''}">
+      <span class="a-ic">${ICON.trophy}</span>
+      <span class="a-t"><b>${a.name}</b><small>${a.desc}</small></span>
+    </div>`).join('');
+  openModal(`
+    <h2>Achievements</h2>
+    <p class="small">${achCount()} of ${ACHIEVEMENTS.length} earned</p>
+    <div class="ach-list">${list}</div>
+    <button class="btn plain" data-act="back">Back</button>`, act => { if (act === 'back') openMenu(); });
+}
+function openSettings() {
   openModal(`
     <h2>Settings</h2>
     <button class="btn plain toggle" data-act="sound" aria-pressed="${game.s.settings.sound}">Sound and vibration: <b>${game.s.settings.sound ? 'On' : 'Off'}</b></button>
     <p>Rockets launched: <b>${game.s.launches}</b> · Engineering Points: <b>${game.s.ep}</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
     <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it.</p>
     <button class="btn danger" data-act="reset-ask">Start over</button>
-    <button class="btn plain" data-act="dismiss">Close</button>`, async act => {
+    <button class="btn plain" data-act="back">Back</button>`, async act => {
+    if (act === 'back') openMenu();
     if (act === 'sound') {
       game.s.settings.sound = !game.s.settings.sound;
       sfx.setEnabled(game.s.settings.sound);
       save();
-      $('settings-btn').click();
+      openSettings();
     }
     if (act === 'reset-ask') {
-      openModal(`<h2>Start over?</h2><p>This wipes your town, rockets and Engineering Points. It can’t be undone.</p>
+      openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
-        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.setTheme(game.theme()); syncBuilt(); track('reset'); toast('Fresh start!'); }
+        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); toast('Fresh start!'); }
       });
     }
   });
-});
+}
+$('menu-btn').addEventListener('click', openMenu);
+
+function achievementTick(silent = false) {
+  const fresh = checkAchievements(game);
+  if (silent) { seenAch = achCount(); return; }
+  if (!fresh.length) return;
+  for (const a of fresh) track('achievement', { id: a.id });
+  sfx.milestone();
+  toast(fresh.length > 1 ? `${fresh.length} achievements earned!` : `Achievement: ${fresh[0].name}`);
+  $('menu-dot').hidden = false;
+  save();
+}
 
 // ---------- offline earnings ----------
 function welcomeBack() {
@@ -597,7 +708,9 @@ function hintText() {
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
   if (full) return `Your ${def(full.id).name} is full. Tap it to collect!`;
-  if (!Object.keys(game.run.managers).length && game.canAfford(managerCost(def('mine')))) return 'Tip: hire a manager to collect automatically';
+  if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
+  if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
+  if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;
   if (!game.built('power') && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
   if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return `Build the ${def('datacenter').name} to turn power into speed`;
   return '';
@@ -611,6 +724,9 @@ game.on('built', id => {
   sfx.build();
   track('factory_built', { factory: id, launches: game.s.launches });
 });
+// managers drive to work (and back) by car
+game.on('manager', id => world.sendManager('hq', id));
+game.on('recall', id => world.sendManager(id, 'hq'));
 game.on('upgrade', (id, before, after) => {
   world.setGrowth(id, milestoneCount(after));
   const crossed = MILESTONES.filter(m => before < m && after >= m);
@@ -622,7 +738,7 @@ game.on('upgrade', (id, before, after) => {
 });
 
 function syncBuilt() {
-  for (const f of ALL) {
+  for (const f of BUILDINGS) {
     world.setBuilt(f.id, game.built(f.id), def(f.id));
     world.setGrowth(f.id, milestoneCount(game.level(f.id)));
   }
@@ -659,7 +775,7 @@ function dayCheck() {
 }
 
 // ---------- main loop ----------
-let last = performance.now(), uiT = 0, hintCache = null;
+let last = performance.now(), uiT = 0, hintCache = null, achT = 1;
 function loop(now) {
   // clamp: some browsers hand back an older frame time (e.g. after waking), never run time backwards
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
@@ -689,6 +805,7 @@ function loop(now) {
     if (h !== hintCache) { hintCache = h; $('hint').textContent = h; $('hint').hidden = !h; }
     renderContract();
     if (!sheet.hidden) renderSheet();
+    if ((achT -= 0.2) <= 0) { achT = 1; achievementTick(); }
   }
   requestAnimationFrame(loop);
 }
@@ -705,6 +822,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   const brandNew = game.s.totalEarned === 0 && !game.s.playDays.length;
   // no daily gift on the very first day; it starts tomorrow
   if (brandNew) { game.s.daily = { lastDay: game.today(), streak: 0 }; track('first_open'); }
+  achievementTick(true);   // anything already done counts quietly
   welcomeBack();
   maybeDaily();
   dayCheck();

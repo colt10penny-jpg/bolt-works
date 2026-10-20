@@ -23,6 +23,11 @@ export const SUPPORT = [
   { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 300000,  baseCost: 300000,  growth: 1.14, perLevel: 1, need: 3, needUnit: 'MW' },
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
+// Headquarters: where you hire managers and send them out to factories.
+export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 400, baseCost: 400, growth: 1, perLevel: 0, need: 0 };
+export const BUILDINGS = [...ALL, HQ];
+// Each manager you hire costs 10× the one before. Managers can be moved between factories.
+export const hireCost = n => 100 * Math.pow(10, n);
 export const isSupport = id => SUPPORT.some(s => s.id === id);
 
 // Compute speeds up every factory, with diminishing returns:

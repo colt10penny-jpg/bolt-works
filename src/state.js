@@ -1,7 +1,7 @@
 // Game state: worlds (each its own town), stored money, managers, boosts, contracts,
 // launches, and the per-frame tick.
 import {
-  FACTORIES, ALL, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, managerCost,
+  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost,
 } from './economy.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
@@ -12,9 +12,10 @@ const OLD_KEYS = ['boltworks.save.v4', 'boltworks.save.v3'];
 
 function freshRun() {
   const levels = {};
-  for (const f of ALL) levels[f.id] = f.unlock === 0 ? 1 : 0;
-  // bins: money waiting in each building; managers: buildings that collect automatically
-  return { cash: 0, runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, lastActive: Date.now() };
+  for (const f of BUILDINGS) levels[f.id] = f.unlock === 0 ? 1 : 0;
+  // bins: money waiting in each building; managers: factories a manager is working at;
+  // staff: managers hired at headquarters (working or waiting for a job)
+  return { cash: 0, runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, lastActive: Date.now() };
 }
 
 export function freshState() {
@@ -37,13 +38,20 @@ export function freshState() {
     tutorial: { opened: false, collected: false, upgraded: false, done: false },
     settings: { sound: true },
     adsWatched: 0,
+    achievements: {},    // id -> time unlocked
     playDays: [],        // calendar days played, for retention stats
   };
 }
 
 function mergeRun(saved) {
   const base = freshRun();
-  return { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) } };
+  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) } };
+  // older saves hired managers without a headquarters: keep them, and give them an HQ
+  const working = Object.keys(run.managers).filter(k => run.managers[k]).length;
+  if (saved && saved.staff == null) run.staff = working;
+  run.staff = Math.max(run.staff || 0, working);
+  if (working && !run.levels.hq) run.levels.hq = 1;
+  return run;
 }
 
 export class Game {
@@ -88,6 +96,7 @@ export class Game {
         daily: { ...base.daily, ...saved.daily },
         tutorial: { ...base.tutorial, ...saved.tutorial },
         settings: { ...base.settings, ...saved.settings },
+        achievements: { ...(saved.achievements || {}) },
       };
     }
     this.invalidate();
@@ -196,7 +205,7 @@ export class Game {
   }
 
   build(id) {
-    const def = ALL.find(f => f.id === id);
+    const def = BUILDINGS.find(f => f.id === id);
     if (this.built(id) || !this.canAfford(def.unlock)) return false;
     this.run.cash -= def.unlock;
     this.levels[id] = 1;
@@ -206,15 +215,34 @@ export class Game {
     return true;
   }
 
-  hireManager(id) {
-    const def = FACTORIES.find(f => f.id === id);
-    if (!def || !this.built(id) || this.hasManager(id)) return false;
-    const cost = managerCost(def);
+  // ---- headquarters and managers ----
+  staff() { return this.run.staff || 0; }
+  working() { return FACTORIES.filter(f => this.run.managers[f.id]).length; }
+  freeManagers() { return Math.max(0, this.staff() - this.working()); }
+  nextHireCost() { return hireCost(this.staff()); }
+  hire() {
+    if (!this.built('hq')) return false;
+    const cost = this.nextHireCost();
     if (!this.canAfford(cost)) return false;
     this.run.cash -= cost;
+    this.run.staff = this.staff() + 1;
+    this.emit('hired');
+    this.emit('change');
+    return true;
+  }
+  // send a waiting manager to a factory; they collect its money from then on
+  assign(id) {
+    if (!FACTORIES.some(f => f.id === id) || !this.built(id) || this.hasManager(id) || this.freeManagers() < 1) return false;
     this.run.managers[id] = true;
     this.collect(id);
     this.emit('manager', id);
+    this.emit('change');
+    return true;
+  }
+  recall(id) {
+    if (!this.hasManager(id)) return false;
+    delete this.run.managers[id];
+    this.emit('recall', id);
     this.emit('change');
     return true;
   }

@@ -1,8 +1,9 @@
 // The 3D town: fixed-angle camera, lots, factories, supply trucks, crates, smoke,
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
-import { FACTORIES, ALL } from './economy.js';
-import { BUILDERS, box, mat, tree, truck, pine, cactus, mesa, rock, crater, crate, powerPole } from './models.js';
+import { FACTORIES, BUILDINGS } from './economy.js';
+import { BUILDERS, box, mat, tree, truck, car, pine, cactus, mesa, rock, crater, crate, powerPole } from './models.js';
+import { Traffic, lotRoute, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
 
 // 3x3 town grid. The chain snakes: mine -> furnace -> press, gear -> engine,
 // turbine -> rocket; the power plant and data center sit on the right.
@@ -10,19 +11,48 @@ export const LOTS = {
   mine: [14, 14], furnace: [0, 14], press: [-14, 14],
   gear: [-14, 0], engine: [0, 0], power: [14, 0],
   rocket: [-14, -14], turbine: [0, -14], datacenter: [14, -14],
+  hq: [14, 28],
 };
 const LOT = 10;
-const ROAD_W = 3.6;
-const CROSS = [-21, -7, 7, 21];   // roads running along x
-const AVES = [-21, -7, 7, 21];    // roads running along z
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
-const BOUNDS = { minX: -20, maxX: 20, minZ: -22, maxZ: 22 };
+const BOUNDS = { minX: -20, maxX: 20, minZ: -22, maxZ: 27 };
 
 const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
   desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0xd8c39c, pad: 0xe8dcc4 },
   moon:     { ground: 0x9c9ca2, sky: 0x9c9ca2, hemiSky: 0xdfe6ff, hemiGround: 0x3a3d48, sun: 2.6, hemi: 1.2, road: 0x4b4e57, walk: 0xb4b4ba, pad: 0xc9c9cf },
 };
+
+// Bake lots of small static meshes into one mesh per material, so a big landscape
+// costs a handful of draw calls instead of thousands.
+function mergeStatic(src, cast = true) {
+  src.updateMatrixWorld(true);
+  const byMat = new Map();
+  src.traverse(o => {
+    if (!o.isMesh) return;
+    const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+    g.applyMatrix4(o.matrixWorld);
+    if (!byMat.has(o.material.uuid)) byMat.set(o.material.uuid, { m: o.material, gs: [] });
+    byMat.get(o.material.uuid).gs.push(g);
+  });
+  const out = new THREE.Group();
+  for (const { m, gs } of byMat.values()) {
+    let n = 0; for (const g of gs) n += g.attributes.position.count;
+    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+    let off = 0;
+    for (const g of gs) { pos.set(g.attributes.position.array, off * 3); nor.set(g.attributes.normal.array, off * 3); off += g.attributes.position.count; g.dispose(); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.castShadow = cast; mesh.receiveShadow = true;
+    out.add(mesh);
+  }
+  src.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+  return out;
+}
 
 function rng(seed) { return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; }
 
@@ -40,7 +70,7 @@ export class World {
     this.target = new THREE.Vector3(7, 0, 12);
     this.zoom = 1;
     this.shake = 0;
-    this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 400);
+    this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
 
     this.lots = {};
     this.selected = null;
@@ -50,9 +80,10 @@ export class World {
     this.onDelivery = () => {};
     this.smoke = [];
     this.pops = [];
-    this.trucks = [];        // ambient traffic
-    this.deliveries = [];    // supply trucks in flight
+    this.traffic = new Traffic(this.scene);
+    this.idleCars = [];      // ambient cars waiting to re-enter town
     this.truckPool = [];
+    this.carPool = [];
     this.flowInfo = null;
     this.t = 0;
 
@@ -60,7 +91,7 @@ export class World {
     this.groundGroup = new THREE.Group();
     this.sceneryGroup = new THREE.Group();
     this.scene.add(this.groundGroup, this.sceneryGroup);
-    for (const f of ALL) this.#lot(f);
+    for (const f of BUILDINGS) this.#lot(f);
     this.#powerLine();
     this.#traffic();
     this.setTheme('colorado');
@@ -104,23 +135,34 @@ export class World {
 
   #ground(T) {
     const G = this.groundGroup;
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), mat(T.ground));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), mat(T.ground));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
     G.add(ground);
+    // roads run far past the edge of the screen, however far you zoom out
+    const L = EDGE * 2 + 60;
+    const paint = new THREE.Group();
     const line = 0xf4efe0;
     for (const x of AVES) {
-      G.add(box(ROAD_W + 1.2, 0.04, 120, T.walk, x, 0, 0));
-      G.add(box(ROAD_W, 0.06, 120, T.road, x, 0, 0));
+      paint.add(box(ROAD_W + 1.2, 0.04, L, T.walk, x, 0, 0));
+      paint.add(box(ROAD_W, 0.06, L, T.road, x, 0, 0));
     }
     for (const z of CROSS) {
-      G.add(box(120, 0.04, ROAD_W + 1.2, T.walk, 0, 0, z));
-      G.add(box(120, 0.07, ROAD_W, T.road, 0, 0, z));
+      paint.add(box(L, 0.04, ROAD_W + 1.2, T.walk, 0, 0, z));
+      paint.add(box(L, 0.07, ROAD_W, T.road, 0, 0, z));
     }
-    for (let i = -58; i < 58; i += 2.4) {
-      if (!CROSS.some(z => Math.abs(i - z) < 2.6)) for (const x of AVES) G.add(box(0.16, 0.08, 1.1, line, x, 0, i));
-      if (!AVES.some(x => Math.abs(i - x) < 2.6)) for (const z of CROSS) G.add(box(1.1, 0.09, 0.16, line, i, 0, z));
+    const half = L / 2;
+    for (let i = -half; i < half; i += 2.4) {
+      if (!CROSS.some(z => Math.abs(i - z) < STOP_R + 0.4)) for (const x of AVES) paint.add(box(0.16, 0.08, 1.1, line, x, 0, i));
+      if (!AVES.some(x => Math.abs(i - x) < STOP_R + 0.4)) for (const z of CROSS) paint.add(box(1.1, 0.09, 0.16, line, i, 0, z));
     }
-    G.traverse(o => { if (o.isMesh) o.castShadow = false; });
+    // stop lines at every intersection, across the lane coming in
+    for (const x of AVES) for (const z of CROSS) {
+      for (const [hx, hz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const cx = x - hx * STOP_R + (-hz) * LANE, cz = z - hz * STOP_R + hx * LANE;
+        paint.add(hx ? box(0.28, 0.09, ROAD_W / 2 - 0.15, 0xffffff, cx, 0, cz) : box(ROAD_W / 2 - 0.15, 0.09, 0.28, 0xffffff, cx, 0, cz));
+      }
+    }
+    G.add(mergeStatic(paint, false));
   }
 
   #scenery(name) {
@@ -131,16 +173,19 @@ export class World {
       if (CROSS.some(rz => Math.abs(z - rz) < ROAD_W / 2 + pad)) return true;
       return Object.values(LOTS).some(([lx, lz]) => Math.abs(x - lx) < LOT / 2 + 0.4 && Math.abs(z - lz) < LOT / 2 + 0.4);
     };
+    // near: inside the shadowed area around town; far: out to past the screen edge
+    const near = new THREE.Group(), far = new THREE.Group();
+    const SPAN = 240, NEAR = 46;
     const place = (count, make, pad) => {
+      count = Math.round(count * (SPAN * SPAN) / (84 * 84) * 0.7);
       let n = 0;
       for (let i = 0; i < count * 6 && n < count; i++) {
-        const x = (r() - 0.5) * 84, z = (r() - 0.5) * 84;
+        const x = (r() - 0.5) * SPAN, z = (r() - 0.5) * SPAN;
         if (blocked(x, z, pad)) continue;
         const o = make(r);
         o.position.x = x; o.position.z = z;
         o.rotation.y = r() * Math.PI * 2;
-        o.traverse(m => { if (m.isMesh) m.castShadow = true; });
-        S.add(o); n++;
+        (Math.abs(x) < NEAR && Math.abs(z) < NEAR ? near : far).add(o); n++;
       }
     };
     if (name === 'colorado') {
@@ -158,8 +203,9 @@ export class World {
       const flag = new THREE.Group();
       flag.add(box(0.08, 2.4, 0.08, 0xdddddd, 0, 0, 0), box(1.1, 0.7, 0.04, 0xffffff, 0.55, 1.6, 0), box(0.5, 0.36, 0.05, 0x2f5fb0, 0.25, 1.94, 0));
       flag.position.set(5.5, 0, 22.5);
-      S.add(flag);
+      near.add(flag);
     }
+    S.add(mergeStatic(near, true), mergeStatic(far, false));
   }
 
   // ---------- lots ----------
@@ -293,46 +339,75 @@ export class World {
 
   // ---------- traffic ----------
   #traffic() {
-    const colors = [0xe85a3c, 0x2f7fd1, 0x1f8a5b, 0xffc23d, 0x7f6bbf];
-    const lanes = [
-      { axis: 'x', fixed: 21.9, dir: 1 }, { axis: 'x', fixed: 20.1, dir: -1 },
-      { axis: 'x', fixed: -20.1, dir: 1 }, { axis: 'x', fixed: -21.9, dir: -1 },
-    ];
-    let i = 0;
-    for (const lane of lanes) {
-      const t = truck(colors[i++ % colors.length]);
-      t.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      this.scene.add(t);
-      this.trucks.push({ mesh: t, ...lane, pos: -40 + i * 19, speed: 4 + (i % 3) });
+    const colors = [0xe85a3c, 0x2f7fd1, 0x1f8a5b, 0xffc23d, 0x7f6bbf, 0xf3f0e8, 0x3a3f48];
+    for (let i = 0; i < 11; i++) {
+      const m = i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
+      m.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      if (!this.traffic.spawnAmbient(m, true)) this.idleCars.push(m);
+      else this.#onAmbientEnd(this.traffic.cars[this.traffic.cars.length - 1]);
     }
   }
+  #onAmbientEnd(c) { c.onArrive = () => this.idleCars.push(c.mesh); }
+  #refillAmbient(dt) {
+    this.refillT = (this.refillT || 0) - dt;
+    if (this.refillT > 0 || !this.idleCars.length) return;
+    this.refillT = 0.7;
+    const m = this.idleCars.shift();
+    const c = this.traffic.spawnAmbient(m);
+    if (c) this.#onAmbientEnd(c); else this.idleCars.push(m);
+  }
 
-  // supply trucks drive from the supplier's yard to the next factory along the road
+  // a vehicle from one lot to another, by road, following the rules
+  #drive(fromId, toId, mesh, kind, speed, data, onArrive) {
+    const C = lotRoute(LOTS[fromId], LOTS[toId]);
+    if (!C) return false;
+    // wait for the driveway to be clear before the next truck pulls out
+    const start = new THREE.Vector3(C[0].x, 0.06, C[0].z);
+    if (this.traffic.cars.some(c => c.pos.distanceTo(start) < 3.2)) return false;
+    this.traffic.add(C, mesh, { kind, speed, drive: true, data, onArrive });
+    return true;
+  }
+
+  stepTraffic(dt) {
+    this.#updateDeliveries(dt);
+    this.#refillAmbient(dt);
+    this.traffic.update(dt);
+  }
+
+  // supply trucks drive from the supplier's yard to the next factory
   #spawnDelivery(fromId, toId) {
-    const [ax, az] = LOTS[fromId], [bx, bz] = LOTS[toId];
-    const dir = bx > ax ? 1 : bx < ax ? -1 : 1;
-    const rA = ax + 7 * dir;                       // the avenue beside A, toward B
-    const rB = bx === ax ? rA : bx - 7 * dir;      // the avenue beside B, toward A
-    const lane = 0.9 * (bz <= az ? 1 : -1);
-    const y = 0.06, zA = az + 2.6, zB = bz + 2.6, hz = Math.max(az, bz) + 7; // front street
-    const P = (x, z) => new THREE.Vector3(x, y, z);
-    const pts = [P(rA - dir * 3.4, zA), P(rA + lane, zA)];
-    if (rA !== rB) pts.push(P(rA + lane, hz), P(rB + lane, hz));
-    pts.push(P(rB + lane, zB), P(rB + (bx === ax ? -dir : dir) * 3.4, zB));
     let mesh = this.truckPool.pop();
     if (!mesh) {
       mesh = truck(0xffffff);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      // cargo crate on the back
       const cargo = box(0.9, 0.55, 0.8, 0xffffff, -0.35, 1.25, 0);
       cargo.name = 'cargo';
       mesh.add(cargo);
     }
     const color = this.lookFor?.(fromId)?.color ?? FACTORIES.find(f => f.id === fromId).color;
-    mesh.getObjectByName('cargo').material = mat(color === 0xe8e4da ? 0xb9b4a8 : color);
-    mesh.visible = true;
-    this.scene.add(mesh);
-    this.deliveries.push({ mesh, pts, seg: 0, u: 0, to: toId, speed: 7 });
+    mesh.getObjectByName('cargo').material = mat([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(color) ? 0xb9b4a8 : color);
+    const ok = this.#drive(fromId, toId, mesh, 'delivery', 6, { to: toId }, c => {
+      this.truckPool.push(c.mesh);
+      this.lots[toId].bounce = Math.max(this.lots[toId].bounce, 0.35);
+      this.onDelivery(toId);
+    });
+    if (!ok) this.truckPool.push(mesh);
+    return ok;
+  }
+
+  // a manager's car heading out from headquarters (or back to it)
+  sendManager(fromId, toId) {
+    let mesh = this.carPool.pop();
+    if (!mesh) {
+      mesh = car(0x1f8a5b);
+      mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    }
+    const go = () => this.#drive(fromId, toId, mesh, 'manager', 6.5, { to: toId }, c => {
+      this.carPool.push(c.mesh);
+      this.lots[toId].bounce = Math.max(this.lots[toId].bounce, 0.6);
+    });
+    // if the driveway is busy, try again in a moment
+    if (!go()) { const t = setInterval(() => { if (go()) clearInterval(t); }, 700); setTimeout(() => clearInterval(t), 15000); }
   }
 
   #updateDeliveries(dt) {
@@ -342,38 +417,19 @@ export class World {
         if (!p.made || !prev.made) continue;
         const key = 'spawn_' + p.id;
         this[key] = (this[key] ?? Math.random() * 2) - dt;
-        const inFlight = this.deliveries.filter(d => d.to === p.id).length;
+        const inFlight = this.traffic.count(c => c.kind === 'delivery' && c.data?.to === p.id);
         if (this[key] <= 0 && inFlight < 3) {
           // busier links send trucks more often
-          this[key] = Math.max(1.6, 7 - Math.log2(1 + p.made * FACTORIES[i].need) * 0.9);
-          this.#spawnDelivery(FACTORIES[i - 1].id, p.id);
+          if (this.#spawnDelivery(FACTORIES[i - 1].id, p.id)) this[key] = Math.max(1.8, 7 - Math.log2(1 + p.made * FACTORIES[i].need) * 0.9);
+          else this[key] = 0.5;
         }
       }
-    }
-    for (let i = this.deliveries.length - 1; i >= 0; i--) {
-      const d = this.deliveries[i];
-      const a = d.pts[d.seg], b = d.pts[d.seg + 1];
-      const len = a.distanceTo(b) || 0.001;
-      d.u += (d.speed * dt) / len;
-      if (d.u >= 1) {
-        d.seg++; d.u = 0;
-        if (d.seg >= d.pts.length - 1) {
-          this.scene.remove(d.mesh); d.mesh.visible = false; this.truckPool.push(d.mesh);
-          this.deliveries.splice(i, 1);
-          this.lots[d.to].bounce = Math.max(this.lots[d.to].bounce, 0.35);
-          this.onDelivery(d.to);
-          continue;
-        }
-      }
-      const A = d.pts[d.seg], B = d.pts[d.seg + 1];
-      d.mesh.position.lerpVectors(A, B, d.u);
-      d.mesh.rotation.y = Math.atan2(-(B.z - A.z), B.x - A.x);
     }
   }
 
   clearDeliveries() {
-    for (const d of this.deliveries) { this.scene.remove(d.mesh); d.mesh.visible = false; this.truckPool.push(d.mesh); }
-    this.deliveries = [];
+    for (const c of this.traffic.cars) if (c.kind === 'delivery') this.truckPool.push(c.mesh); else if (c.kind === 'manager') this.carPool.push(c.mesh);
+    this.traffic.clear('delivery'); this.traffic.clear('manager');
     for (const sm of this.smoke) { this.scene.remove(sm.m); sm.m.geometry.dispose(); sm.m.material.dispose(); }
     this.smoke = [];
     for (const p of this.pops) p.el.remove();
@@ -560,12 +616,7 @@ export class World {
       s.m.material.opacity = 0.85 * (1 - k);
       if (k >= 1) { this.scene.remove(s.m); s.m.geometry.dispose(); s.m.material.dispose(); this.smoke.splice(i, 1); }
     }
-    for (const t of this.trucks) {
-      t.pos += t.speed * dt * t.dir;
-      if (t.pos > 45) t.pos = -45; if (t.pos < -45) t.pos = 45;
-      t.mesh.position.set(t.pos, 0.06, t.fixed); t.mesh.rotation.y = t.dir > 0 ? 0 : Math.PI;
-    }
-    this.#updateDeliveries(dt);
+    this.stepTraffic(dt);
     if (this.powerLineGroup.visible) {
       const { x, z1, z2 } = this.powerLine;
       for (const p of this.pulses) {
