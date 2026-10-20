@@ -1,8 +1,8 @@
 // The 3D town: fixed-angle camera, lots, factories, supply trucks, crates, smoke,
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
-import { FACTORIES, BUILDINGS } from './economy.js';
-import { BUILDERS, box, cyl, mat, truck, car, crate, powerPole } from './models.js';
+import { FACTORIES, BUILDINGS, PLOTS } from './economy.js';
+import { BUILDERS, box, cyl, mat, truck, car, crate, powerPole, tree, pine, cactus, rock } from './models.js';
 const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -11,17 +11,29 @@ const NIGHT_LIST = () => GLOW.night;
 import { buildLand, withClouds, SHARED } from './terrain.js';
 import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
 
-// 3x3 town grid. The chain snakes: mine -> furnace -> press, gear -> engine,
-// turbine -> rocket; the power plant and data center sit on the right.
+// 5x5 town grid with a block of open land between the factories. The chain snakes:
+// mine -> furnace -> press, gear -> engine, turbine -> rocket; power and the data
+// centre sit on the right, headquarters in the middle. The other 15 blocks are land
+// you can develop for extra factories.
 export const LOTS = {
-  mine: [14, 14], furnace: [0, 14], press: [-14, 14],
-  gear: [-14, 0], engine: [0, 0], power: [14, 0],
-  rocket: [-14, -14], turbine: [0, -14], datacenter: [14, -14],
-  hq: [14, 28],
+  mine: [28, 28], furnace: [0, 28], press: [-28, 28],
+  gear: [-28, 0], engine: [0, 0], power: [28, 0],
+  rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28],
+  hq: [14, 14],
 };
+{
+  const taken = new Set(Object.values(LOTS).map(p => p.join()));
+  let i = 0;
+  // plots nearest the starting corner come first
+  const all = [];
+  for (const x of [-28, -14, 0, 14, 28]) for (const z of [-28, -14, 0, 14, 28]) if (!taken.has(x + ',' + z)) all.push([x, z]);
+  all.sort((a, b) => Math.hypot(a[0] - 28, a[1] - 28) - Math.hypot(b[0] - 28, b[1] - 28));
+  for (const p of all) LOTS['p' + i++] = p;
+}
 const LOT = 10;
+export const START = [23, 24];   // where the camera starts: by the Ore Mine
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
-const BOUNDS = { minX: -20, maxX: 20, minZ: -22, maxZ: 27 };
+const BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
 const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
@@ -109,7 +121,7 @@ export class World {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene = new THREE.Scene();
-    this.target = new THREE.Vector3(7, 0, 12);
+    this.target = new THREE.Vector3(START[0], 0, START[1]);
     this.zoom = 1;
     this.shake = 0;
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
@@ -138,6 +150,9 @@ export class World {
     this.sceneryGroup = new THREE.Group();
     this.scene.add(this.groundGroup, this.sceneryGroup);
     for (const f of BUILDINGS) this.#lot(f);
+    for (const id of PLOTS) this.#lot({ id, name: 'Open land', color: 0x8a8f99, plot: true });
+    this.typeOf = id => id;          // set by the game: what kind of building stands in a lot
+    this.slotsOf = type => [type];   // set by the game: every built lot of a kind
     this.#powerLine();
     this.#traffic();
     this.setTheme('colorado');
@@ -182,8 +197,43 @@ export class World {
     if (!this.padMats) this.padMats = {};
     if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
     for (const L of Object.values(this.lots)) L.pad.material = this.padMats[name];
+    for (const L of Object.values(this.lots)) if (L.def.plot) this.#wild(L, name);
     this.look.groundBase = new THREE.Color(T.ground);
     this.look.setWorld(name);
+  }
+
+  // untouched land on a plot nobody has developed yet, with a for-sale sign
+  #wild(L, theme) {
+    if (L.wild) { L.group.remove(L.wild); L.wild.traverse(o => o.geometry?.dispose()); }
+    const g = new THREE.Group();
+    let seed = (L.group.position.x * 73 + L.group.position.z * 19 + 1000) | 0 || 1;
+    const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    for (let i = 0; i < 7; i++) {
+      const x = (r() - 0.5) * 8, z = (r() - 0.5) * 8;
+      if (Math.abs(x - 2.6) < 1.2 && Math.abs(z - 2.6) < 1.2) continue;
+      let o;
+      if (theme === 'colorado') o = r() < 0.5 ? tree(0.8 + r() * 0.6, [0x3f8f4a, 0x4fa152, 0x357d40][Math.floor(r() * 3)]) : pine(0.8 + r() * 0.7);
+      else if (theme === 'desert') o = r() < 0.6 ? cactus(0.7 + r() * 0.5) : rock(0.6 + r(), 0xb98b5c);
+      else o = rock(0.6 + r() * 1.4, 0x85858b);
+      o.position.set(x, 0, z); o.rotation.y = r() * 6.28;
+      g.add(o);
+    }
+    // the sign
+    g.add(box(0.14, 1.5, 0.14, 0x7a5230, 2.6, 0, 2.6));
+    const sign = box(1.7, 0.9, 0.1, 0xf4efe0, 2.6, 1.15, 2.67);
+    g.add(sign, box(1.5, 0.22, 0.12, 0xd9482b, 2.6, 1.6, 2.7), box(1.1, 0.12, 0.12, 0x3a3f48, 2.6, 1.3, 2.7));
+    g.traverse(o => { o.userData.lotId = L.def.id; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    L.group.add(g);
+    L.wild = g;
+    this.setLand(L.def.id, L.developed || false);
+  }
+  setLand(id, developed) {
+    const L = this.lots[id];
+    if (!L || !L.def.plot) return;
+    L.developed = developed;
+    if (L.wild) L.wild.visible = !developed;
+    L.pad.visible = developed;
+    L.sale.visible = developed && !L.model;
   }
 
   #padTex() {
@@ -300,7 +350,7 @@ export class World {
       L.sale.visible = false;
       L.bounce = 1;
     } else if (!built && L.model) {
-      L.group.remove(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = true;
+      L.group.remove(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = !L.def.plot || !!L.developed;
       if (L.extras) { L.group.remove(L.extras); L.extras = null; }
       L.rocket = null; L.scaffold = null;
       L.crates.children.forEach(c => { c.visible = false; });
@@ -406,18 +456,10 @@ export class World {
     L.group.add(ex);
     L.extras = ex;
   }
-  // which sides of a lot trucks drive in and out of
+  // which sides of a lot trucks drive in and out of: the two facing the middle of town
   #baySides(id) {
-    if (!this.bayMap) {
-      const m = {};
-      const add = (lot, pt) => { const [lx, lz] = LOTS[lot]; const dx = Math.round(pt.x - lx), dz = Math.round(pt.z - lz); (m[lot] ||= new Set()).add(Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'x+' : 'x-') : (dz > 0 ? 'z+' : 'z-')); };
-      const pairs = [];
-      for (let i = 1; i < FACTORIES.length; i++) pairs.push([FACTORIES[i - 1].id, FACTORIES[i].id]);
-      for (const f of FACTORIES) pairs.push(['hq', f.id], [f.id, 'hq']);
-      for (const [a, b] of pairs) { const C = lotRoute(LOTS[a], LOTS[b]); if (C) { add(a, C[0]); add(b, C[C.length - 1]); } }
-      this.bayMap = m;
-    }
-    return this.bayMap[id] || new Set();
+    const [lx, lz] = LOTS[id];
+    return new Set([lx > 0 ? 'x-' : 'x+', lz > 0 ? 'z-' : 'z+']);
   }
   // a loading bay: open garage door the trucks come and go through
   #bay(side, color) {
@@ -541,7 +583,7 @@ export class World {
   // poles and a wire from the power plant to the data center, with pulses of power
   #powerLine() {
     const [px, pz] = LOTS.power, [dx, dz] = LOTS.datacenter;
-    const x = px + 4.2;
+    const x = px + 4.85;
     const g = new THREE.Group();
     const z1 = pz - 3.4, z2 = dz + 3.4;
     for (const z of [z1, z2]) { const p = powerPole(); p.position.set(x, 0, z); g.add(p); }
@@ -564,7 +606,7 @@ export class World {
   // ---------- traffic ----------
   #traffic() {
     const colors = [0xe85a3c, 0x2f7fd1, 0x1f8a5b, 0xffc23d, 0x7f6bbf, 0xf3f0e8, 0x3a3f48];
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 15; i++) {
       const m = i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
       m.traverse(o => { if (o.isMesh) o.castShadow = true; });
       if (!this.traffic.spawnAmbient(m, true)) this.idleCars.push(m);
@@ -608,7 +650,7 @@ export class World {
       cargo.name = 'cargo';
       mesh.add(cargo);
     }
-    const color = this.lookFor?.(fromId)?.color ?? FACTORIES.find(f => f.id === fromId).color;
+    const color = this.lookFor?.(fromId)?.color ?? 0xb9b4a8;
     mesh.getObjectByName('cargo').material = mat([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(color) ? 0xb9b4a8 : color);
     const ok = this.#drive(fromId, toId, mesh, 'delivery', 6, { to: toId }, c => {
       this.truckPool.push(c.mesh);
@@ -635,17 +677,22 @@ export class World {
   }
 
   #updateDeliveries(dt) {
-    if (this.flowInfo) {
-      for (let i = 1; i < this.flowInfo.length; i++) {
-        const p = this.flowInfo[i], prev = this.flowInfo[i - 1];
-        if (!p.made || !prev.made) continue;
-        const key = 'spawn_' + p.id;
-        this[key] = (this[key] ?? Math.random() * 2) - dt;
-        const inFlight = this.traffic.count(c => c.kind === 'delivery' && c.data?.to === p.id);
-        if (this[key] <= 0 && inFlight < 3) {
-          // busier links send trucks more often
-          if (this.#spawnDelivery(FACTORIES[i - 1].id, p.id)) this[key] = Math.max(1.8, 7 - Math.log2(1 + p.made * FACTORIES[i].need) * 0.9);
-          else this[key] = 0.5;
+    if (!this.flowInfo) return;
+    for (let i = 1; i < this.flowInfo.length; i++) {
+      const p = this.flowInfo[i], prev = this.flowInfo[i - 1];
+      if (!p.made || !prev.made) continue;
+      const suppliers = this.slotsOf(FACTORIES[i - 1].id);
+      if (!suppliers.length) continue;
+      for (const to of this.slotsOf(p.id)) {
+        const key = 'spawn_' + to;
+        this[key] = (this[key] ?? Math.random() * 3) - dt;
+        const inFlight = this.traffic.count(c => c.kind === 'delivery' && c.data?.to === to);
+        if (this[key] <= 0 && inFlight < 2) {
+          // the nearest supplier sends the truck; busier links send them more often
+          const [tx, tz] = LOTS[to];
+          const from = suppliers.slice().sort((a, b) => Math.hypot(LOTS[a][0] - tx, LOTS[a][1] - tz) - Math.hypot(LOTS[b][0] - tx, LOTS[b][1] - tz))[Math.random() < 0.7 ? 0 : Math.floor(Math.random() * suppliers.length)];
+          if (this.#spawnDelivery(from, to)) this[key] = Math.max(2.2, 8 - Math.log2(1 + p.made * FACTORIES[i].need) * 0.9);
+          else this[key] = 0.6;
         }
       }
     }
@@ -730,7 +777,7 @@ export class World {
     c.addEventListener('wheel', e => { e.preventDefault(); this.setZoom(this.zoom * (e.deltaY < 0 ? 1.1 : 0.9)); }, { passive: false });
   }
 
-  setZoom(z) { this.zoom = Math.min(2.2, Math.max(0.7, z)); this.#updateCamera(); }
+  setZoom(z) { this.zoom = Math.min(2.2, Math.max(0.6, z)); this.#updateCamera(); }
 
   #panBy(dx, dy) {
     const rect = this.canvas.getBoundingClientRect();
@@ -836,7 +883,8 @@ export class World {
     for (const p of this.flowInfo || []) info[p.id] = p;
     for (const [k, v] of Object.entries(this.supportInfo || {})) info[k] = v;
     for (const [id, L] of Object.entries(this.lots)) {
-      const f = info[id];
+      const type = L.model ? this.typeOf(id) : null;
+      const f = type ? info[type] : null;
       // starved factories run their machines slower; idle ones stop
       L.speed = f ? (f.made > 0 ? 0.25 + 0.75 * f.util : 0) : 1;
       L.at += dt * L.speed;
@@ -847,7 +895,7 @@ export class World {
         L.model.scale.set(L.grow * (1 - b * 0.5), L.grow * (1 + b), L.grow * (1 - b * 0.5));
         if (L.smokeAt.length && L.speed > 0 && (L.smokeT = (L.smokeT || 0) - dt) <= 0) { L.smokeT = 0.7 / Math.max(0.3, L.speed); this.#emitSmoke(L); }
         // crates pile up when this factory makes more than the next one can use
-        const i = FACTORIES.findIndex(d => d.id === id);
+        const i = FACTORIES.findIndex(d => d.id === type);
         const nextBuilt = i >= 0 && i < FACTORIES.length - 1 && (info[FACTORIES[i + 1].id]?.cap || 0) > 0;
         const n = f && f.made > 0 && nextBuilt ? Math.round(f.surplus * 9) : 0;
         L.crates.children.forEach((c, i) => { c.visible = i < n; });

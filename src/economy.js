@@ -28,6 +28,13 @@ export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
 export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 400, baseCost: 400, growth: 1, perLevel: 0, need: 0 };
 export const BUILDINGS = [...ALL, HQ];
+// Open land around town: develop a plot, then build an extra factory of any kind on it.
+export const PLOTS = Array.from({ length: 15 }, (_, i) => 'p' + i);
+export const isPlot = id => /^p\d+$/.test(id);
+// each plot costs 6x the one before (and more in later worlds)
+export const landCost = (developed, world) => 400 * Math.pow(6, developed) * (world?.cost || 1);
+// an extra copy costs more to build and upgrade than the first one
+export const EXTRA_BUILD = 2, EXTRA_UPGRADE = 3;
 // Each manager you hire costs 10× the one before. Managers can be moved between factories.
 export const hireCost = n => 100 * Math.pow(10, n);
 export const isSupport = id => SUPPORT.some(s => s.id === id);
@@ -64,10 +71,17 @@ export function capacity(def, level) {
 // Actual flow through the town given everyone's levels.
 // Returns chain entries { id, cap, made, util, starved, used, surplus }, support entries,
 // the compute speed multiplier, and total income per second.
-export function flow(levels, mult = 1, perks = {}) {
+// `extras` are the extra buildings on developed land: [{ type, level }]; they add their
+// capacity to that product.
+export function totalCap(def, levels, extras = []) {
+  let c = capacity(def, levels[def.id] || 0);
+  for (const e of extras) if (e.type === def.id) c += capacity(def, e.level);
+  return c;
+}
+export function flow(levels, mult = 1, perks = {}, extras = []) {
   const pw = SUPPORT[0], dc = SUPPORT[1];
-  const powerMade = capacity(pw, levels.power || 0) * (perks.power || 1);
-  const dcCap = capacity(dc, levels.datacenter || 0);
+  const powerMade = totalCap(pw, levels, extras) * (perks.power || 1);
+  const dcCap = totalCap(dc, levels, extras);
   const compute = Math.min(dcCap, powerMade / dc.need);
   const powerUsed = compute * dc.need;
   const speed = speedFromCompute(compute);
@@ -81,12 +95,12 @@ export function flow(levels, mult = 1, perks = {}) {
   let upstream = Infinity;
   for (let i = 0; i < FACTORIES.length; i++) {
     const d = FACTORIES[i];
-    const cap = capacity(d, levels[d.id] || 0) * speed * (perks[d.id] || 1);
+    const cap = totalCap(d, levels, extras) * speed * (perks[d.id] || 1);
     const canFeed = d.need ? upstream / d.need : Infinity;
     const made = Math.min(cap, canFeed);
     out.push({ id: d.id, cap, made, util: cap ? made / cap : 0, starved: cap > 0 && made < cap * 0.98 });
     income += made * d.value * (perks.value || 1) * mult;
-    upstream = (levels[d.id] || 0) > 0 ? made : 0;
+    upstream = cap > 0 ? made : 0;
   }
   for (let i = 0; i < out.length; i++) {
     const next = out[i + 1];

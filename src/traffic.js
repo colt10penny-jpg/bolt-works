@@ -4,8 +4,8 @@
 // and checks for cars before pulling out of a driveway.
 import * as THREE from 'three';
 
-export const AVES = [-21, -7, 7, 21];   // roads running along z, at these x
-export const CROSS = [-21, -7, 7, 21];  // roads running along x, at these z
+export const AVES = [-35, -21, -7, 7, 21, 35];   // roads running along z, at these x
+export const CROSS = [-35, -21, -7, 7, 21, 35];  // roads running along x, at these z
 export const ROAD_W = 3.6;
 export const LANE = 0.9;                 // lane centre offset from the road centre
 export const STOP_R = ROAD_W / 2 + 1.1;  // stop line distance from an intersection centre (crosswalk in between)
@@ -98,11 +98,12 @@ function noUturn(C) {
 function exits(lx, lz) {
   const out = [];
   const sides = [
-    { road: { x: lx + 7, z: lz }, inLot: { x: lx + 2.6, z: lz }, along: 'z', ok: AVES.includes(lx + 7) },
-    { road: { x: lx - 7, z: lz }, inLot: { x: lx - 2.6, z: lz }, along: 'z', ok: AVES.includes(lx - 7) },
-    { road: { x: lx, z: lz + 7 }, inLot: { x: lx, z: lz + 2.6 }, along: 'x', ok: CROSS.includes(lz + 7) },
-    { road: { x: lx, z: lz - 7 }, inLot: { x: lx, z: lz - 2.6 }, along: 'x', ok: CROSS.includes(lz - 7) },
+    { road: { x: lx + 7, z: lz }, inLot: { x: lx + 2.6, z: lz }, along: 'z', ok: AVES.includes(lx + 7) && lx <= 0 },
+    { road: { x: lx - 7, z: lz }, inLot: { x: lx - 2.6, z: lz }, along: 'z', ok: AVES.includes(lx - 7) && lx > 0 },
+    { road: { x: lx, z: lz + 7 }, inLot: { x: lx, z: lz + 2.6 }, along: 'x', ok: CROSS.includes(lz + 7) && lz <= 0 },
+    { road: { x: lx, z: lz - 7 }, inLot: { x: lx, z: lz - 2.6 }, along: 'x', ok: CROSS.includes(lz - 7) && lz > 0 },
   ];
+  // each lot's loading bays face the middle of town (two sides), so trucks always use them
   for (const sd of sides) {
     if (!sd.ok) continue;
     for (const d of [-7, 7]) {

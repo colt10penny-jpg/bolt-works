@@ -185,7 +185,7 @@ class Batch {
 }
 
 // ---------- the land ----------
-const TOWN = { x0: -28, x1: 28, z0: -28, z1: 35 };
+const TOWN = { x0: -38, x1: 38, z0: -38, z1: 38 };
 function townDist(x, z) {
   const dx = Math.max(TOWN.x0 - x, 0, x - TOWN.x1), dz = Math.max(TOWN.z0 - z, 0, z - TOWN.z1);
   return Math.hypot(dx, dz);
@@ -196,12 +196,12 @@ function roadDist(x, z) {
   for (const c of CROSS) d = Math.min(d, Math.abs(z - c));
   return d;
 }
-const LAKE = { x: 50, z: 46, r: 15 };
+const LAKE = { x: 66, z: 64, r: 15 };
 
 // the shape of the land, before flattening it for town and roads
 function rawHeight(name, x, z) {
-  const back = clamp01((-(x + z) - 70) / 90);              // far behind town (top of the screen)
-  const side = clamp01((Math.abs(x - z) - 60) / 80);
+  const back = clamp01((-(x + z) - 95) / 90);              // far behind town (top of the screen)
+  const side = clamp01((Math.abs(x - z) - 85) / 80);
   if (name === 'colorado') {
     let h = (fbm(x / 34, z / 34, 4, 2) - 0.45) * 5;
     const ridge = 1 - Math.abs(2 * fbm(x / 46, z / 46, 5, 7) - 1);
@@ -219,7 +219,7 @@ function rawHeight(name, x, z) {
     const butte = smooth(0.52, 0.56, b) * (14 + fbm(x / 9, z / 9, 2, 4) * 2);
     h = Math.max(h, butte * Math.max(back, side * 0.7));
     h += back * 3 * fbm(x / 60, z / 60, 3, 2);
-    const ds = Math.hypot(x - 48, z - 46);
+    const ds = Math.hypot(x - 66, z - 64);
     if (ds < 22) h = h * smooth(14, 22, ds) + 0.02;   // the salt flat
     return h;
   }
@@ -279,7 +279,7 @@ export function buildLand(name, T, LOTS) {
     if (h > 6) c.lerp(c2.setHex(P.rock), smooth(6, 12, h + n2 * 4));
     if (h > 20) c.lerp(c2.setHex(P.snow), smooth(20, 28, h + n * 8));
     if (name === 'colorado' && h < -0.4) c.lerp(c2.setHex(0xc9b48a), 0.8);   // lake shore sand
-    if (name === 'desert') c.lerp(c2.setHex(0xefe6d2), smooth(21, 12, Math.hypot(x - 48, z - 46) + (n2 - 0.5) * 6) * 0.9);   // salt flat
+    if (name === 'desert') c.lerp(c2.setHex(0xefe6d2), smooth(21, 12, Math.hypot(x - 66, z - 64) + (n2 - 0.5) * 6) * 0.9);   // salt flat
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -373,8 +373,8 @@ export function buildLand(name, T, LOTS) {
   const o = HW + SW / 2;
   for (const x of AVES) for (const z of CROSS) { lamp(x + o, z + o, -0.7, -0.7); lamp(x - o, z - o, 0.7, 0.7); }
   // out of town, a light every block or so along each road
-  for (const z of CROSS) for (let x = -94; x <= 94; x += 14) if (Math.abs(x) > 28) lamp(x, z + o, 0, -1);
-  for (const x of AVES) for (let z = -94; z <= 94; z += 14) if (Math.abs(z) > 28 && !(z > 28 && z < 40)) lamp(x + o, z, -1, 0);
+  for (const z of CROSS) for (let x = -108; x <= 108; x += 14) if (Math.abs(x) > 42) lamp(x, z + o, 0, -1);
+  for (const x of AVES) for (let z = -108; z <= 108; z += 14) if (Math.abs(z) > 42) lamp(x + o, z, -1, 0);
   poles.build(ground, { cast: true });
   ground.userData.lamps = lights;
   ground.userData.lampMat = lampM;
@@ -388,7 +388,7 @@ export function buildLand(name, T, LOTS) {
     if (name === 'colorado' && H(x, z) < -0.3) return true;
     return Object.values(LOTS).some(([lx, lz]) => Math.abs(x - lx) < 5.4 + pad * 0.3 && Math.abs(z - lz) < 5.4 + pad * 0.3);
   };
-  const SPAN = 250, NEAR = 50;
+  const SPAN = 270, NEAR = 60;
   const place = (count, make, { pad = 0.6, maxH = 99, minH = -0.3, span = SPAN, where = null, blob = 1 } = {}) => {
     let n = 0;
     for (let i = 0; i < count * 8 && n < count; i++) {
@@ -419,7 +419,7 @@ export function buildLand(name, T, LOTS) {
     place(160, S.rock, { pad: 0.3, blob: 0.7 });
     place(40, S.boulder, { minH: 4, blob: 0 });
     // farm fields near the lake side
-    const fields = [[34, 72, 30, 14, 0xd9b45a], [70, 22, 16, 28, 0x8fbf4d], [30, 100, 26, 12, 0xc2a24a], [96, 60, 14, 30, 0xa7c95a]];
+    const fields = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
     const fieldM = new Map();
     for (const [fx, fz, w, d, color] of fields) {
       if (!fieldM.has(color)) fieldM.set(color, withClouds(std(color, { map: tx.rows, roughness: 0.95 })));

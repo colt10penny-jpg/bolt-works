@@ -2,6 +2,7 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
+  PLOTS, isPlot, landCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap,
 } from './economy.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
@@ -15,7 +16,8 @@ function freshRun() {
   for (const f of BUILDINGS) levels[f.id] = f.unlock === 0 ? 1 : 0;
   // bins: money waiting in each building; managers: factories a manager is working at;
   // staff: managers hired at headquarters (working or waiting for a job)
-  return { runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, lastActive: Date.now() };
+  // land: developed plots; extra: the extra factory on a plot ({ type, level })
+  return { runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, land: {}, extra: {}, lastActive: Date.now() };
 }
 
 export function freshState() {
@@ -47,7 +49,7 @@ export function freshState() {
 
 function mergeRun(saved) {
   const base = freshRun();
-  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) } };
+  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) }, land: { ...(saved?.land || {}) }, extra: { ...(saved?.extra || {}) } };
   // older saves hired managers without a headquarters: keep them, and give them an HQ
   const working = Object.keys(run.managers).filter(k => run.managers[k]).length;
   if (saved && saved.staff == null) run.staff = working;
@@ -147,36 +149,96 @@ export class Game {
   invalidate() { this.cache = {}; }
   get cash() { return this.s.cash; }
   get levels() { return this.run.levels; }
-  level(id) { return this.levels[id] || 0; }
+  // a "slot" is a core building id (mine, hq...) or a plot id (p0..p14)
+  typeOf(id, run = this.run) { return isPlot(id) ? run.extra[id]?.type || null : id; }
+  level(id, run = this.run) { return isPlot(id) ? run.extra[id]?.level || 0 : run.levels[id] || 0; }
   built(id) { return this.level(id) > 0; }
+  developed(id) { return !isPlot(id) || !!this.run.land[id]; }
   hasManager(id) { return !!this.run.managers[id]; }
   boostLeft(now = Date.now()) { return Math.max(0, this.s.boostUntil - now) / 1000; }
   epMult() { return 1 + this.s.ep * EP_BONUS; }
   mult(now = Date.now()) { return (this.boostLeft(now) > 0 ? 2 : 1) * this.epMult(); }
   // a building's numbers in a world (later worlds cost more)
   defOf(id, worldId = this.s.current) { return inWorld(BUILDINGS.find(f => f.id === id), worldById(worldId)); }
+  // the numbers for whatever stands in a slot (extra copies cost more)
+  slotDef(id, worldId = this.s.current, run = this.s.worlds[worldId]) {
+    if (!isPlot(id)) return this.defOf(id, worldId);
+    const t = this.typeOf(id, run);
+    if (!t) return null;
+    const base = this.defOf(t, worldId);
+    return { ...base, id, type: t, extra: true, unlock: (base.unlock || 150 * (worldById(worldId).cost || 1)) * EXTRA_BUILD, baseCost: base.baseCost * EXTRA_UPGRADE };
+  }
+  extrasOf(run) { return Object.values(run.extra || {}).filter(e => e && e.level > 0); }
+  // every built slot of a type in a world (the core building first)
+  slotsOf(type, run = this.run) {
+    const out = (run.levels[type] || 0) > 0 ? [type] : [];
+    for (const [id, e] of Object.entries(run.extra || {})) if (e && e.type === type && e.level > 0) out.push(id);
+    return out;
+  }
   // flow without the ad boost, cached per world until levels or EP change
   flowFor(worldId) {
     const r = this.s.worlds[worldId];
     if (!r) return null;
     if (!this.cache) this.cache = {};
-    return (this.cache[worldId] ||= flow(r.levels, this.epMult(), worldById(worldId).perks));
+    return (this.cache[worldId] ||= flow(r.levels, this.epMult(), worldById(worldId).perks, this.extrasOf(r)));
   }
   baseFlow() { return this.flowFor(this.s.current); }
-  info(id) { const f = this.baseFlow(); return f.per.find(p => p.id === id) || f.support[id]; }
+  // totals for a product type
+  typeInfo(type, worldId = this.s.current) { const f = this.flowFor(worldId); return f.per.find(p => p.id === type) || f.support[type]; }
+  // this one building's part of its product (it shares the work with its copies)
+  share(id, worldId = this.s.current) {
+    const run = this.s.worlds[worldId], t = this.typeOf(id, run);
+    const d = BUILDINGS.find(f => f.id === t);
+    if (!d) return 0;
+    const all = totalCap(d, run.levels, this.extrasOf(run));
+    return all > 0 ? capacity(d, this.level(id, run)) / all : 0;
+  }
+  info(id) {
+    const t = this.typeOf(id); if (!t) return null;
+    const e = this.typeInfo(t); if (!e) return null;
+    const k = this.share(id);
+    return { ...e, made: e.made * k, cap: e.cap * k, total: e.made };
+  }
   baseRate() { return this.baseFlow().income; }
   // everything every world is making, per second (without the ad boost)
   totalRate() { return Object.keys(this.s.worlds).reduce((a, w) => a + this.flowFor(w).income, 0); }
   rate() { return this.totalRate() * (this.boostLeft() > 0 ? 2 : 1); }
-  // money per second one factory earns (with boost)
+  // money per second one building earns (with boost)
   earnRate(id, worldId = this.s.current) {
-    const d = this.defOf(id, worldId);
-    const p = this.flowFor(worldId)?.per.find(x => x.id === id);
-    return d && p ? p.made * d.value * this.mult() : 0;
+    const run = this.s.worlds[worldId], t = this.typeOf(id, run);
+    const d = t && this.defOf(t, worldId);
+    const p = t && this.flowFor(worldId)?.per.find(x => x.id === t);
+    return d && p ? p.made * this.share(id, worldId) * d.value * this.mult() : 0;
   }
   bin(id) { return this.run.bins[id] || 0; }
   binCap(id, worldId = this.s.current) { return Math.max(10, this.earnRate(id, worldId) * BIN_SECONDS); }
   binFull(id) { return this.bin(id) >= this.binCap(id) - 1e-6; }
+  factorySlots(run = this.run) { return FACTORIES.flatMap(f => this.slotsOf(f.id, run)); }
+
+  // ---- land ----
+  landPrice() { return landCost(Object.keys(this.run.land).length, this.world); }
+  develop(id) {
+    if (!isPlot(id) || this.run.land[id]) return false;
+    const cost = this.landPrice();
+    if (!this.canAfford(cost)) return false;
+    this.s.cash -= cost;
+    this.run.land[id] = true;
+    this.emit('developed', id);
+    this.emit('change');
+    return true;
+  }
+  extraCost(type) { const b = this.defOf(type); return (b.unlock || 150 * (this.world.cost || 1)) * EXTRA_BUILD; }
+  buildExtra(id, type) {
+    if (!isPlot(id) || !this.run.land[id] || this.built(id)) return false;
+    const cost = this.extraCost(type);
+    if (!this.canAfford(cost)) return false;
+    this.s.cash -= cost;
+    this.run.extra[id] = { type, level: 1 };
+    this.invalidate();
+    this.emit('built', id);
+    this.emit('change');
+    return true;
+  }
 
   // ---- per-frame production ----
   // Every world runs all the time. Factories with a manager pay straight into the
@@ -197,8 +259,13 @@ export class Game {
         run.made[d.id] = (run.made[d.id] || 0) + units;
         if (d.id === 'rocket') run.rocketsBuilt += units;
         const amount = units * d.value * valueMult * this.epMult() * boost;
-        if (run.managers[d.id]) mine += amount;
-        else run.bins[d.id] = Math.min(this.binCap(d.id, wId), (run.bins[d.id] || 0) + amount);
+        // split between the main building and any copies on developed land
+        const slots = this.slotsOf(d.id, run);
+        for (const id of slots) {
+          const part = slots.length === 1 ? amount : amount * this.share(id, wId);
+          if (run.managers[id]) mine += part;
+          else run.bins[id] = Math.min(this.binCap(id, wId), (run.bins[id] || 0) + part);
+        }
       }
       if (mine) { run.runEarned += mine; direct += mine; }
     }
@@ -220,13 +287,13 @@ export class Game {
   canAfford(cost) { return this.s.cash >= cost - 1e-9; }
 
   buyLevels(id, n) {
-    const def = this.defOf(id);
+    const def = this.slotDef(id);
     const lv = this.level(id);
-    if (n <= 0 || lv <= 0) return false;
+    if (!def || n <= 0 || lv <= 0) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
     this.s.cash -= cost;
-    this.levels[id] = lv + n;
+    if (isPlot(id)) this.run.extra[id].level = lv + n; else this.levels[id] = lv + n;
     this.s.tutorial.upgraded = true;
     this.invalidate();
     this.emit('upgrade', id, lv, lv + n);
@@ -247,7 +314,7 @@ export class Game {
 
   // ---- headquarters and managers ----
   staff() { return this.run.staff || 0; }
-  working() { return FACTORIES.filter(f => this.run.managers[f.id]).length; }
+  working() { return this.factorySlots().filter(id => this.run.managers[id]).length; }
   freeManagers() { return Math.max(0, this.staff() - this.working()); }
   nextHireCost() { return hireCost(this.staff()) * (this.world.cost || 1); }
   hire() {
@@ -262,7 +329,7 @@ export class Game {
   }
   // send a waiting manager to a factory; they collect its money from then on
   assign(id) {
-    if (!FACTORIES.some(f => f.id === id) || !this.built(id) || this.hasManager(id) || this.freeManagers() < 1) return false;
+    if (!FACTORIES.some(f => f.id === this.typeOf(id)) || !this.built(id) || this.hasManager(id) || this.freeManagers() < 1) return false;
     this.run.managers[id] = true;
     this.collect(id);
     this.emit('manager', id);
@@ -321,19 +388,19 @@ export class Game {
       return;
     }
     if (c.status !== 'active') return;
-    const p = this.info(c.id);
+    const p = this.typeInfo(c.id);
     c.progress = Math.min(c.target, c.progress + (p ? p.made * dt : 0));
     if (c.progress >= c.target) { c.status = 'done'; this.emit('contract', c); }
     else if (now >= c.endsAt) { c.status = 'failed'; this.emit('contract', c); }
   }
 
   newContract() {
-    const builtIds = FACTORIES.filter(f => this.built(f.id) && this.info(f.id).made > 0).map(f => f.id);
+    const builtIds = FACTORIES.filter(f => this.slotsOf(f.id).length && this.typeInfo(f.id).made > 0).map(f => f.id);
     if (!builtIds.length) { this.s.nextContractAt = Date.now() + 30_000; return; }
     const pick = builtIds[Math.max(0, builtIds.length - 1 - Math.floor(Math.random() * Math.min(2, builtIds.length)))];
     const d = FACTORIES.find(f => f.id === pick);
     const minutes = [5, 8, 10, 15][Math.floor(Math.random() * 4)];
-    const rate = this.info(pick).made;
+    const rate = this.typeInfo(pick).made;
     const stretch = 1.15 + Math.random() * 0.6;
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
     const reward = Math.max(50, target * d.value * (this.world.value || 1) * this.epMult() * 2.5);
