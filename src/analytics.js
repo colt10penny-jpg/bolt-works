@@ -24,17 +24,18 @@ export function track(event, props = {}) {
   timer = setTimeout(flush, 2000);
 }
 
-export function flush() {
+// Sent as plain text (no CORS preflight, which Safari can silently drop),
+// and with sendBeacon when the page is closing so the last events still arrive.
+export function flush(closing = false) {
   if (!enabled || !queue.length) return;
   const batch = queue; queue = [];
+  const url = `${ANALYTICS.posthogHost}/batch/`;
+  const body = JSON.stringify({ api_key: ANALYTICS.posthogKey, batch });
   try {
-    fetch(`${ANALYTICS.posthogHost}/batch/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: ANALYTICS.posthogKey, batch }),
-      keepalive: true,
-    }).catch(() => {});
+    if (closing && navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }))) return;
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body, keepalive: body.length < 60000 }).catch(() => {});
   } catch { /* offline or blocked: drop silently */ }
 }
 
-addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+addEventListener('visibilitychange', () => { if (document.hidden) flush(true); });
+addEventListener('pagehide', () => flush(true));
