@@ -10,6 +10,7 @@ import { ads } from './ads.js';
 import { sfx } from './sound.js';
 import { initAnalytics, track, flush } from './analytics.js';
 import { GAME } from './config.js';
+import { skin } from './worlds.js';
 
 if (import.meta.env.MODE === 'artifact') {
   const l = document.createElement('link');
@@ -23,11 +24,13 @@ if (import.meta.env.MODE === 'artifact') {
 const $ = id => document.getElementById(id);
 const game = new Game();
 const world = new World($('world'), $('labels'));
-const def = id => ALL.find(f => f.id === id);
+world.lookFor = id => def(id);
+game.unitOf = id => skin(game.s.current, id).unit;
+const def = id => { const base = ALL.find(f => f.id === id); return base ? { ...base, ...skin(game.s.current, id) } : base; };
 if (location.search.includes('debug')) Object.assign(window, { __game: game, __world: world });
 const idx = id => FACTORIES.findIndex(f => f.id === id);
 const hex = n => '#' + n.toString(16).padStart(6, '0');
-const tint = d => hex(d.color === 0xe8e4da ? 0x8a8f99 : d.color);
+const tint = d => hex([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(d.color) ? 0x8a8f99 : d.color);
 const AD = '<span class="ad-tag">AD</span>';
 
 const ICON = {
@@ -35,6 +38,7 @@ const ICON = {
   plus: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  boltSm: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
   bolt: '<svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
   moon: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
   rocket: '<svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 2.5 4.5 6 4.5 10v5h-9v-5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.8"/><path d="M7.5 14 4.5 17v3h3M16.5 14l3 3v3h-3M10 20.5c.5 1 1.2 1.5 2 1.5s1.5-.5 2-1.5"/></svg>',
@@ -75,100 +79,76 @@ function labelFor(id) {
   return { cls: '', html: '', aria: '' };
 }
 
-// ---------- bottom sheet ----------
+// ---------- bottom sheet (compact) ----------
 let buyMode = 1;
+let factOpen = false;
 const sheet = $('sheet');
 let sheetKey = '';
 const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.run.cash)) : buyMode;
+const go = (id, label) => `<button class="link" data-goto="${id}">${label}</button>`;
+const one = u => u.replace(/s$/, '');
 
-function supplyBlock(d) {
+// one short status line: the most important thing about this building right now
+function statusLine(d) {
   const i = idx(d.id);
   const f = game.info(d.id);
-  const prev = i > 0 ? FACTORIES[i - 1] : null;
-  const next = FACTORIES[i + 1];
-  let html = '';
-  if (prev) {
-    const needed = f.cap * d.need;
-    const pf = game.info(prev.id);
-    if (!game.built(prev.id)) {
-      html += `<div class="supply warn"><b>Needs ${prev.unit}.</b> Build a ${prev.name} to supply it.<button class="link" data-goto="${prev.id}">Show me</button></div>`;
-    } else if (f.starved) {
-      html += `<div class="supply warn"><b>Short on ${prev.unit}: running at ${Math.round(f.util * 100)}%.</b> It needs ${fmtRate(needed)} ${prev.unit}/s but gets ${fmtRate(pf.made)}/s. Upgrade the ${prev.name}.<button class="link" data-goto="${prev.id}">Go to ${prev.name}</button></div>`;
-    } else {
-      html += `<div class="supply ok"><b>Fully supplied.</b> Uses ${d.need} ${prev.unit} for each ${d.unit.replace(/s$/, '')}.</div>`;
-    }
-  }
-  if (next && game.built(next.id) && f.surplus > 0.15 && f.made > 0) {
-    html += `<div class="supply info">${Math.round(f.surplus * 100)}% of your ${d.unit} ${d.unit.endsWith('s') ? 'are' : 'is'} piling up in the yard. Upgrade the ${next.name} to use it.<button class="link" data-goto="${next.id}">Go to ${next.name}</button></div>`;
-  }
-  return html;
+  const prev = i > 0 ? def(FACTORIES[i - 1].id) : null;
+  const next = FACTORIES[i + 1] ? def(FACTORIES[i + 1].id) : null;
+  if (prev && !game.built(prev.id)) return `<div class="sh-status warn">Needs ${prev.unit} from a ${prev.name} ${go(prev.id, 'Show')}</div>`;
+  if (prev && f.starved) return `<div class="sh-status warn">Short on ${prev.unit} · ${Math.round(f.util * 100)}% speed ${go(prev.id, `Fix: ${prev.name}`)}</div>`;
+  if (next && game.built(next.id) && f.surplus > 0.15 && f.made > 0) return `<div class="sh-status info">${Math.round(f.surplus * 100)}% of ${d.unit} piling up ${go(next.id, next.name)}</div>`;
+  return prev ? `<div class="sh-status ok">Fully supplied · ${d.need} ${prev.unit} per ${one(d.unit)}</div>` : '';
 }
-
-function supportBlock(d, lv) {
+function supportStatus(d) {
   const fl = game.baseFlow();
   const pw = fl.support.power, dc = fl.support.datacenter;
-  const dcDef = SUPPORT[1];
+  const P = def('power'), D = def('datacenter');
   if (d.id === 'power') {
-    if (!game.built('datacenter')) return `<div class="supply info">Electricity is used by a Data Center, which speeds up every factory. Build one next.<button class="link" data-goto="datacenter">Show me</button></div>`;
-    const spare = pw.made - pw.used;
-    return spare > 0.01
-      ? `<div class="supply ok"><b>The Data Center uses ${fmtRate(pw.used)} of ${fmtRate(pw.made)} MW.</b> Upgrade the Data Center to use the spare power.<button class="link" data-goto="datacenter">Go to Data Center</button></div>`
-      : `<div class="supply warn"><b>All ${fmtRate(pw.made)} MW is in use.</b> The Data Center wants ${fmtRate(dc.cap * dcDef.need)} MW. More power means more compute.</div>`;
+    if (!game.built('datacenter')) return `<div class="sh-status info">Build a ${D.name} to use this power ${go('datacenter', 'Show')}</div>`;
+    return pw.made - pw.used > 0.01
+      ? `<div class="sh-status ok">${fmtRate(pw.used)} of ${fmtRate(pw.made)} MW in use ${go('datacenter', D.name)}</div>`
+      : `<div class="sh-status warn">All ${fmtRate(pw.made)} MW in use · more power = more compute</div>`;
   }
-  if (!game.built('power')) return `<div class="supply warn"><b>No power.</b> Build a Power Plant to run the servers.<button class="link" data-goto="power">Show me</button></div>`;
-  if (dc.starved) return `<div class="supply warn"><b>Short on power: running at ${Math.round(dc.util * 100)}%.</b> Needs ${fmtRate(dc.cap * dcDef.need)} MW but gets ${fmtRate(pw.made)} MW. Upgrade the Power Plant.<button class="link" data-goto="power">Go to Power Plant</button></div>`;
-  return `<div class="supply ok"><b>Fully powered.</b> Uses ${dcDef.need} MW for each PFLOPS of compute.</div>`;
+  if (!game.built('power')) return `<div class="sh-status warn">No power · build a ${P.name} ${go('power', 'Show')}</div>`;
+  if (dc.starved) return `<div class="sh-status warn">Short on power · ${Math.round(dc.util * 100)}% speed ${go('power', `Fix: ${P.name}`)}</div>`;
+  return `<div class="sh-status ok">Fully powered · ${SUPPORT[1].need} MW per PFLOPS</div>`;
 }
 
-function renderSupportSheet(d, lv) {
-  const n = buyCount(d, lv);
-  const cost = upgradeCost(d, lv, n);
-  const afford = game.canAfford(cost);
-  const short = cost - game.run.cash;
-  const fl = game.baseFlow();
-  const f = game.info(d.id);
+function head(d, badge, title, sub) {
+  return `<div class="sh-head">
+      <span class="badge sm" style="background:${tint(d)}">${badge}</span>
+      <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
+      <button class="icon-sm" data-act="fact" aria-label="How it works" aria-pressed="${factOpen}">i</button>
+      <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
+    </div>
+    ${factOpen ? `<p class="sh-fact">${d.fact}</p>` : ''}`;
+}
+function mileBar(lv, word) {
   const nm = nextMilestone(lv);
   const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 0;
   const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
-  // what the next purchase would do to factory speed
-  const nextLevels = { ...game.levels, [d.id]: lv + n };
-  const pw2 = capacity(SUPPORT[0], nextLevels.power), dc2 = capacity(SUPPORT[1], nextLevels.datacenter);
-  const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
-  const stats = d.id === 'power'
-    ? `<div class="stat"><small>Makes</small><b>${fmtRate(f.made)} MW</b></div><div class="stat"><small>Factory speed</small><b>+${pctSpeed()}%${nextSpeed > pctSpeed() ? ` → <em>+${nextSpeed}%</em>` : ''}</b></div>`
-    : `<div class="stat"><small>Compute</small><b>${fmtRate(fl.compute)} PFLOPS</b></div><div class="stat"><small>Factory speed</small><b>+${pctSpeed()}%${nextSpeed > pctSpeed() ? ` → <em>+${nextSpeed}%</em>` : ''}</b></div>`;
-  return `
-    <div class="sheet-head">
-      <span class="badge" style="background:${tint(d)}">${d.id === 'power' ? ICON.bolt.replace('width="46" height="46"', 'width="30" height="30"') : ICON.chip}</span>
-      <span class="sheet-title"><h2>${d.name}</h2><span>Level ${lv} · makes ${d.makes}</span></span>
-      <button class="close" data-act="close" aria-label="Close">${ICON.close}</button>
-    </div>
-    <div class="stats">${stats}</div>
-    ${supportBlock(d, lv)}
-    <div class="mile">
-      <div class="mile-row"><span>${nm ? `Level ${nm}: twice the output` : 'All output bonuses earned'}</span><span>${nm ? `${lv}/${nm}` : ''}</span></div>
-      <div class="mile-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
-    </div>
-    <div class="amounts" role="group" aria-label="How many levels to buy">
-      <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
-      <button data-buy="10" aria-pressed="${buyMode === 10}">×10</button>
-      <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max${buyMode === 'max' ? ` (${n})` : ''}</button>
-    </div>
-    <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `Upgrade +${n} · $${fmtCost(cost)}` : `Need $${fmtCost(short)} more`}</button>
-    ${!afford ? cashAdButton(short) : ''}
-    <p class="fact"><b>Good to know:</b> ${FACTS[d.id]}</p>`;
+  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${word}` : 'All bonuses earned'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : ''}</span></div>`;
 }
-
-function managerBlock(d) {
-  if (game.hasManager(d.id)) return `<div class="mgr on"><span class="mgr-ic" aria-hidden="true">${ICON.person}</span><span><b>Manager on duty.</b> Collects this building's money automatically.</span></div>`;
+function buyRow(d, lv) {
+  const n = buyCount(d, lv);
+  const cost = upgradeCost(d, lv, n);
+  const afford = game.canAfford(cost);
+  return `<div class="sh-buy">
+      <div class="amounts sm" role="group" aria-label="How many levels to buy">
+        <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
+        <button data-buy="10" aria-pressed="${buyMode === 10}">×10</button>
+        <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max</button>
+      </div>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `+${n} · $${fmtCost(cost)}` : `Need $${fmtCost(cost - game.run.cash)}`}</button>
+    </div>
+    ${afford ? '' : cashAdButton(cost - game.run.cash)}`;
+}
+function managerRow(d) {
+  if (game.hasManager(d.id)) return '';
   const cost = managerCost(d);
   const ok = game.canAfford(cost);
-  const stored = game.bin(d.id), cap = game.binCap(d.id);
-  return `<div class="mgr">
-      <span class="mgr-ic" aria-hidden="true">${ICON.person}</span>
-      <span class="mgr-txt"><b>Storage: $${fmt(stored)} of $${fmt(cap)}</b>Tap the building to collect. A manager collects for you.</span>
-      <button class="btn small" data-act="manager" ${ok ? '' : 'disabled'}>Hire · $${fmtCost(cost)}</button>
-    </div>`;
+  return `<div class="sh-mgr"><span>${ICON.person}<span>Storage <b>$${fmt(game.bin(d.id))}</b> / $${fmt(game.binCap(d.id))}</span></span>
+    <button class="btn small" data-act="manager" ${ok ? '' : 'disabled'}>Hire manager · $${fmtCost(cost)}</button></div>`;
 }
 
 function renderSheet(force = false) {
@@ -176,83 +156,40 @@ function renderSheet(force = false) {
   if (!id) { sheet.hidden = true; sheetKey = ''; return; }
   const d = def(id), lv = game.level(id);
   let html;
-  if (lv > 0 && isSupport(id)) html = renderSupportSheet(d, lv);
-  else if (lv > 0) {
-    const n = buyCount(d, lv);
-    const cost = upgradeCost(d, lv, n);
+  if (lv > 0 && isSupport(id)) {
+    const fl = game.baseFlow();
+    const nextLv = { ...game.levels, [id]: lv + buyCount(d, lv) };
+    const pw2 = capacity(SUPPORT[0], nextLv.power) * (game.world.perks.power || 1), dc2 = capacity(SUPPORT[1], nextLv.datacenter);
+    const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
+    const made = id === 'power' ? `${fmtRate(game.info('power').made)} MW` : `${fmtRate(fl.compute)} PFLOPS`;
+    const sub = `Lv ${lv} · ${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
+    html = head(d, id === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus(d) + mileBar(lv, '2× output') + buyRow(d, lv);
+  } else if (lv > 0) {
     const f = game.info(id);
-    const earnNow = f.made * d.value * game.mult();
-    const nm = nextMilestone(lv);
-    const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 0;
-    const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
-    const afford = game.canAfford(cost);
-    const short = cost - game.run.cash;
-    const rocketBlock = id === 'rocket' ? `
-      <div class="launch-box">
-        <div><b>${Math.floor(game.run.rocketsBuilt)}</b> rocket${Math.floor(game.run.rocketsBuilt) === 1 ? '' : 's'} built</div>
-        <button class="btn red" data-act="launch" ${game.canLaunch() ? '' : 'disabled'}>${game.canLaunch() ? `Launch · +${Math.max(1, game.launchPreview())} Engineering Points` : 'First rocket still in the shop'}</button>
-      </div>` : '';
-    html = `
-      <div class="sheet-head">
-        <span class="badge" style="background:${tint(d)}">${ICON.factory}</span>
-        <span class="sheet-title"><h2>${d.name}</h2><span>Level ${lv} · makes ${d.makes}</span></span>
-        <button class="close" data-act="close" aria-label="Close">${ICON.close}</button>
-      </div>
-      <div class="stats">
-        <div class="stat"><small>Makes</small><b>${fmtRate(f.made)} ${d.unit}/s</b></div>
-        <div class="stat"><small>Earns</small><b>$${fmt(earnNow)}/s</b></div>
-      </div>
-      ${supplyBlock(d)}
-      ${managerBlock(d)}
-      ${rocketBlock}
-      <div class="mile">
-        <div class="mile-row"><span>${nm ? `Level ${nm}: runs twice as fast` : 'All speed bonuses earned'}</span><span>${nm ? `${lv}/${nm}` : ''}</span></div>
-        <div class="mile-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
-      </div>
-      <div class="amounts" role="group" aria-label="How many levels to buy">
-        <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
-        <button data-buy="10" aria-pressed="${buyMode === 10}">×10</button>
-        <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max${buyMode === 'max' ? ` (${n})` : ''}</button>
-      </div>
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `Upgrade +${n} · $${fmtCost(cost)}` : `Need $${fmtCost(short)} more`}</button>
-      ${!afford ? cashAdButton(short) : ''}
-      <p class="fact"><b>How it’s made:</b> ${FACTS[id]}</p>`;
+    const earn = f.made * d.value * game.mult();
+    const sub = `Lv ${lv} · ${fmtRate(f.made)} ${d.unit}/s · $${fmt(earn)}/s${game.hasManager(id) ? ' · <span class="mgr-on">manager</span>' : ''}`;
+    const rocket = id === 'rocket' ? (() => {
+      const pts = game.launchPreview(), next = game.nextWorld(), unlocks = next && !game.s.worlds[next.id];
+      const can = game.canLaunch() && (pts >= 1 || unlocks);
+      return `<div class="sh-row"><span>${Math.floor(game.run.rocketsBuilt)} ${d.unit} ready</span>
+        <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
+    })() : '';
+    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + rocket + mileBar(lv, '2× speed') + buyRow(d, lv) + managerRow(d);
   } else {
     const afford = game.canAfford(d.unlock);
-    const short = d.unlock - game.run.cash;
-    const prev = idx(id) > 0 ? FACTORIES[idx(id) - 1] : null;
-    if (isSupport(id)) {
-      html = `
-      <div class="sheet-head">
-        <span class="badge dashed">${ICON.plus}</span>
-        <span class="sheet-title"><h2>Build ${d.name}</h2><span>${id === 'power' ? 'Makes electricity for the Data Center' : 'Speeds up every factory in town'}</span></span>
-        <button class="close" data-act="close" aria-label="Close">${ICON.close}</button>
+    const prev = idx(id) > 0 ? def(FACTORIES[idx(id) - 1].id) : null;
+    const what = isSupport(id)
+      ? (id === 'power' ? `Makes electricity for the ${def('datacenter').name}` : `Turns power into compute that speeds up every factory`)
+      : prev ? `Turns ${prev.unit} into ${d.makes}` : `Digs ${d.makes}`;
+    html = `<div class="sh-head">
+        <span class="badge sm dashed">${ICON.plus}</span>
+        <span class="sh-title"><b>${d.name}</b><small>${what}</small></span>
+        <button class="icon-sm" data-act="fact" aria-label="How it works" aria-pressed="${factOpen}">i</button>
+        <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
       </div>
-      <div class="stats">
-        <div class="stat"><small>Cost</small><b>$${fmtCost(d.unlock)}</b></div>
-        <div class="stat"><small>Makes</small><b>${fmtRate(d.perLevel)} ${d.unit}</b></div>
-      </div>
-      <div class="supply info">${id === 'power'
-        ? 'A Data Center turns this power into compute. Every bit of compute makes all your factories run faster.'
-        : `Needs ${d.need} MW from a Power Plant for each PFLOPS. 1 PFLOPS makes every factory 20% faster, and each doubling adds another 20%.`}</div>
-      <button class="btn green" data-act="build" ${afford ? '' : 'disabled'}>${afford ? `Build · $${fmtCost(d.unlock)}` : `Need $${fmtCost(short)} more`}</button>
-      ${!afford ? cashAdButton(short) : ''}
-      <p class="fact"><b>Good to know:</b> ${FACTS[id]}</p>`;
-    } else html = `
-      <div class="sheet-head">
-        <span class="badge dashed">${ICON.plus}</span>
-        <span class="sheet-title"><h2>Build ${d.name}</h2><span>${prev ? `Turns ${prev.unit} into ${d.makes}` : `Digs ${d.makes}`}</span></span>
-        <button class="close" data-act="close" aria-label="Close">${ICON.close}</button>
-      </div>
-      <div class="stats three">
-        <div class="stat"><small>Cost</small><b>$${fmtCost(d.unlock)}</b></div>
-        <div class="stat"><small>Makes</small><b>${fmtRate(d.perLevel)}/s</b></div>
-        <div class="stat"><small>Worth</small><b>$${fmt(d.value * game.epMult())} each</b></div>
-      </div>
-      ${prev ? `<div class="supply ok">Uses ${d.need} ${prev.unit} for each ${d.unit.replace(/s$/, '')}, delivered by truck from your ${prev.name}.</div>` : ''}
-      <button class="btn green" data-act="build" ${afford ? '' : 'disabled'}>${afford ? `Build · $${fmtCost(d.unlock)}` : `Need $${fmtCost(short)} more`}</button>
-      ${!afford ? cashAdButton(short) : ''}
-      <p class="fact"><b>How it’s made:</b> ${FACTS[id]}</p>`;
+      ${factOpen ? `<p class="sh-fact">${d.fact}</p>` : ''}
+      <button class="btn green" data-act="build" ${afford ? '' : 'disabled'}>${afford ? `Build · $${fmtCost(d.unlock)}` : `Build · $${fmtCost(d.unlock)} (need $${fmtCost(d.unlock - game.run.cash)} more)`}</button>
+      ${afford ? '' : cashAdButton(d.unlock - game.run.cash)}`;
   }
   if (force || html !== sheetKey) { sheet.innerHTML = html; sheetKey = html; }
   sheet.hidden = false;
@@ -271,6 +208,7 @@ sheet.addEventListener('click', async e => {
   const b = e.target.closest('button');
   if (!b) return;
   const id = world.selected;
+  if (b.dataset.act === 'fact') { factOpen = !factOpen; renderSheet(true); return; }
   if (b.dataset.buy) { buyMode = b.dataset.buy === 'max' ? 'max' : +b.dataset.buy; sfx.tap(); renderSheet(true); return; }
   if (b.dataset.goto) { world.select(b.dataset.goto); world.focus(b.dataset.goto); sfx.tap(); return; }
   const act = b.dataset.act;
@@ -464,16 +402,17 @@ function openLaunch() {
   const totalAfter = (game.s.ep + gain) * EP_BONUS * 100;
   const w = game.world, next = game.nextWorld();
   const unlocks = next && !game.s.worlds[next.id];
+  const r = def('rocket');
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
-    <h2>Launch the rocket?</h2>
-    <p>Your ${w.short} town resets, but you keep <b>Engineering Points</b>. Each one adds ${EP_BONUS * 100}% income in every world, forever.${unlocks ? ` This launch unlocks <b>${next.name}</b>.` : ''}</p>
+    <h2>Launch?</h2>
+    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch unlocks <b>${next.name}</b>.` : ''}</p>
     <div class="stats">
-      <div class="stat"><small>Points from launch</small><b><em>+${gain}</em></b></div>
+      <div class="stat"><small>Engineering Points</small><b><em>+${gain}</em></b></div>
       <div class="stat"><small>Income bonus after</small><b>+${fmt(totalAfter)}%</b></div>
     </div>
-    <p class="small">Launching later gives more points: they grow with the cash you earn in this town.${w.perks.ep ? ' Low gravity here doubles them.' : ''}</p>
-    <button class="btn gold" data-act="l2">${AD} Launch with 2× points (+${gain * 2})</button>
+    <p class="small">Points come from all the cash you've earned in every world. Each one adds ${EP_BONUS * 100}% income everywhere, forever.${w.perks.ep ? ' Low gravity here doubles them.' : ''}</p>
+    ${gain >= 1 ? `<button class="btn gold" data-act="l2">${AD} Launch with 2× points (+${gain * 2})</button>` : ''}
     <button class="btn red" data-act="l1">Launch now</button>
     <button class="btn plain" data-act="dismiss">Not yet</button>`, async act => {
     let mult = 1;
@@ -504,23 +443,23 @@ async function doLaunch(mult) {
   const before = game.s.ep;
   const { gained, unlocked, from } = game.launch(mult);
   track('rocket_launched', { ep_gained: gained, launches: game.s.launches, doubled: mult === 2, world: from, unlocked: unlocked || '' });
-  rebuildTown();
   save();
   setTimeout(() => { flash.hidden = true; document.body.classList.remove('launching'); }, 600);
   launching = false;
   const next = game.nextWorld();
   const here = worldById(from);
+  const nw = unlocked ? worldById(unlocked) : null;
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch successful!</h2>
-    <p>${unlocked ? `You unlocked <b>${worldById(unlocked).name}</b>. ${worldById(unlocked).perk}` : `Your ${here.short} town is ready to rebuild, with a bigger income bonus.`}</p>
+    <p>${nw ? `You unlocked <b>${nw.name}</b>, with its own kinds of factories. ${nw.perk}` : 'Your town is just as you left it, now with a bigger income bonus.'}</p>
     <div class="stats">
       <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
       <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
     </div>
-    ${next && game.s.worlds[next.id] ? `<button class="btn green" data-act="go">Travel to ${next.short}</button><button class="btn plain" data-act="dismiss">Rebuild ${here.short}</button>` : `<button class="btn green" data-act="dismiss">Start rebuilding</button>`}
-    <p class="small">You can switch worlds any time with the map button.</p>`, act => {
-    if (act === 'go' && next) doTravel(next.id);
+    ${nw ? `<button class="btn green" data-act="go">Travel to ${nw.short}</button><button class="btn plain" data-act="dismiss">Stay in ${worldById(from).short}</button>` : `<button class="btn green" data-act="dismiss">Keep building</button>`}
+    <p class="small">Switch worlds any time with the map button.</p>`, act => {
+    if (act === 'go' && nw) doTravel(nw.id);
   });
 }
 
@@ -646,21 +585,21 @@ function welcomeBack() {
 function hintText() {
   if (game.s.launches === 0 && !game.s.tutorial.done) {
     const t = game.s.tutorial;
-    if (!t.collected) return game.bin('mine') >= 1 ? 'Tap the coin to collect your mine\u2019s money' : 'Your Ore Mine is digging\u2026';
-    if (!t.opened) return 'Tap the mine building to see upgrades';
-    if (!t.upgraded) return 'Upgrade the mine to dig more ore';
-    if (!game.built('furnace')) return game.canAfford(def('furnace').unlock) ? 'Build a Steel Furnace to turn ore into steel' : `Save $${fmtCost(def('furnace').unlock)} for a Steel Furnace`;
-    if (game.info('furnace').starved && game.level('furnace') > 1) return 'The furnace is short on ore. Upgrade the mine!';
-    if (!game.built('press')) return game.canAfford(def('press').unlock) ? 'Build a Bolt Press next to the furnace' : 'Trucks carry ore to the furnace. Keep the mine ahead!';
+    if (!t.collected) return game.bin('mine') >= 1 ? `Tap the coin to collect your ${def('mine').name}\u2019s money` : `Your ${def('mine').name} is working\u2026`;
+    if (!t.opened) return `Tap the ${def('mine').name} building to see upgrades`;
+    if (!t.upgraded) return `Upgrade the ${def('mine').name} to make more ${def('mine').unit}`;
+    if (!game.built('furnace')) return game.canAfford(def('furnace').unlock) ? `Build a ${def('furnace').name} to turn ${def('mine').unit} into ${def('furnace').unit}` : `Save $${fmtCost(def('furnace').unlock)} for a ${def('furnace').name}`;
+    if (game.info('furnace').starved && game.level('furnace') > 1) return `The ${def('furnace').name} is short on ${def('mine').unit}. Upgrade the ${def('mine').name}!`;
+    if (!game.built('press')) return game.canAfford(def('press').unlock) ? `Build a ${def('press').name} next` : `Trucks carry ${def('mine').unit} to the ${def('furnace').name}. Keep the ${def('mine').name} ahead!`;
     if (game.s.contract && game.s.contractsDone === 0) return 'Fill the order at the top for a big bonus';
     if (game.s.contractsDone > 0 || game.built('engine')) { t.done = true; track('tutorial_step', { step: 'done' }); }
     return '';
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
-  if (full) return `Your ${full.name} is full. Tap it to collect!`;
+  if (full) return `Your ${def(full.id).name} is full. Tap it to collect!`;
   if (!Object.keys(game.run.managers).length && game.canAfford(managerCost(def('mine')))) return 'Tip: hire a manager to collect automatically';
-  if (!game.built('power') && game.canAfford(def('power').unlock)) return 'New: a Power Plant and Data Center speed up every factory';
-  if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return 'Build the Data Center to turn power into speed';
+  if (!game.built('power') && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
+  if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return `Build the ${def('datacenter').name} to turn power into speed`;
   return '';
 }
 
@@ -668,7 +607,7 @@ function hintText() {
 const popAcc = {};
 const popT = {};
 game.on('built', id => {
-  world.setBuilt(id, true);
+  world.setBuilt(id, true, def(id));
   sfx.build();
   track('factory_built', { factory: id, launches: game.s.launches });
 });
@@ -684,7 +623,7 @@ game.on('upgrade', (id, before, after) => {
 
 function syncBuilt() {
   for (const f of ALL) {
-    world.setBuilt(f.id, game.built(f.id));
+    world.setBuilt(f.id, game.built(f.id), def(f.id));
     world.setGrowth(f.id, milestoneCount(game.level(f.id)));
   }
 }
@@ -743,7 +682,8 @@ function loop(now) {
     world.setRocketReady(game.canLaunch());
     const mb = $('map-btn'); const wl = game.unlockedWorlds().length;
     mb.hidden = wl < 2; $('map-name').textContent = game.world.short;
-    const showLaunch = game.canLaunch() && !world.selected && !launching;
+    const nxt = game.nextWorld();
+    const showLaunch = game.canLaunch() && (game.launchPreview() >= 1 || (nxt && !game.s.worlds[nxt.id])) && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;
     const h = world.selected || showLaunch ? '' : hintText();
     if (h !== hintCache) { hintCache = h; $('hint').textContent = h; $('hint').hidden = !h; }

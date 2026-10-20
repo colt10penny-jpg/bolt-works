@@ -114,7 +114,7 @@ export const THEMES = ['colorado', 'desert', 'moon'];
 // travel back and forth. Each has a perk so it's worth revisiting.
 export const WORLDS = [
   { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Power Plant makes 3× electricity.', perks: { power: 3 } },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
   { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 } },
 ];
 export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];

@@ -279,3 +279,39 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .w-info small { font-size: 12px; color: var(--ink-soft); line-height: 1.3; }
 .w-info .w-rate { color: var(--green); font-weight: 800; }
 .w-here, .w-lock { font: 800 12px var(--body); color: var(--ink-soft); flex-shrink: 0; }
+
+/* ---- v5: compact building panel ---- */
+.sheet { gap: 8px; padding: 12px max(14px, var(--sa-r)) calc(12px + var(--sa-b)) max(14px, var(--sa-l)); border-radius: 22px 22px 0 0; }
+.sh-head { display: flex; align-items: center; gap: 10px; }
+.badge.sm { width: 42px; height: 42px; border-radius: 13px; }
+.badge.sm svg { width: 24px; height: 24px; }
+.sh-title { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.15; }
+.sh-title b { font: 800 19px var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-title small { font-size: 12px; font-weight: 800; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-title em { font-style: normal; color: var(--green); }
+.mgr-on { color: var(--green); }
+.icon-sm, .close.sm { width: 36px; height: 36px; border-radius: 11px; border: none; background: var(--mint); display: grid; place-items: center; flex-shrink: 0; font: 800 15px var(--display); color: var(--ink); }
+.icon-sm[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.close.sm svg { width: 14px; height: 14px; }
+.sh-fact { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); background: var(--mint); border-radius: 12px; padding: 8px 10px; }
+.sh-status { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; font-size: 12.5px; font-weight: 800; border-radius: 11px; padding: 6px 10px; min-height: 32px; }
+.sh-status.ok { background: var(--mint); color: var(--ink-soft); }
+.sh-status.warn { background: #fff1e0; color: #8a4207; }
+.sh-status.info { background: #eef4ff; color: #21407a; }
+.sh-status .link { min-height: 24px; padding: 0; font-size: 12.5px; margin-left: auto; }
+.sh-mile { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 800; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.sh-bar { flex: 1; height: 7px; border-radius: 999px; background: var(--mint); overflow: hidden; }
+.sh-bar i { display: block; height: 100%; background: var(--gold); border-radius: 999px; }
+.sh-buy { display: flex; gap: 8px; align-items: stretch; }
+.amounts.sm { display: flex; padding: 3px; gap: 2px; border-radius: 13px; flex-shrink: 0; }
+.amounts.sm button { min-height: 42px; min-width: 44px; padding: 0 6px; font-size: 13px; border-radius: 10px; }
+.sh-buy .btn { flex: 1; min-height: 48px; font-size: 18px; border-radius: 15px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet .btn.gold { min-height: 44px; font-size: 15px; border-radius: 14px; }
+.sheet > .btn.green { min-height: 48px; font-size: 17px; border-radius: 15px; }
+.sh-mgr, .sh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ink-soft); }
+.sh-mgr > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sh-mgr svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sh-mgr b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.sh-mgr .btn.small, .sh-row .btn.small { min-height: 38px; font-size: 13px; border-radius: 12px; padding: 0 10px; }
+.btn.small.red { background: #d9482b; box-shadow: 0 3px 0 #96301b; }
+.btn.small.red:disabled { background: var(--mint-2); box-shadow: none; }

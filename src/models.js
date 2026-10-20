@@ -345,3 +345,264 @@ export function powerPole() {
   g.add(box(0.12, 0.12, 1.2, 0x6b4a2b, 0, 2.9, 0));
   return g;
 }
+
+// ======== Mojave and Moon buildings ========
+function makeRocket({ body = 0xf7f7f7, nose = 0xe8553a, band = 0x2f7fd1, h = 4, r = 0.6 } = {}) {
+  const rocket = new THREE.Group();
+  rocket.add(cyl(r, r, h, body, 0, 0.6, 0, 14));
+  const n = new THREE.Mesh(new THREE.ConeGeometry(r, r * 2.3, 14), mat(nose));
+  n.position.y = 0.6 + h + r * 1.15; n.castShadow = true; rocket.add(n);
+  rocket.add(cyl(r + 0.02, r + 0.02, 0.4, band, 0, 0.6 + h * 0.8, 0, 14));
+  for (let i = 0; i < 3; i++) {
+    const fin = box(0.1, 1.1, 0.8, nose, 0, 0.3, 0);
+    const a = (i / 3) * Math.PI * 2;
+    fin.position.x = Math.cos(a) * (r + 0.05); fin.position.z = Math.sin(a) * (r + 0.05);
+    fin.rotation.y = -a;
+    rocket.add(fin);
+  }
+  return rocket;
+}
+function scaffoldAt(x, z, h = 5.5) {
+  const s = new THREE.Group();
+  for (let i = 0; i < 4; i++) s.add(box(1.5, 0.12, 1.5, 0xb9b4a8, x, 0.6 + i * (h / 4.2), z));
+  s.add(box(0.12, h, 0.12, 0xb9b4a8, x - 0.7, 0, z + 0.7), box(0.12, h, 0.12, 0xb9b4a8, x + 0.7, 0, z - 0.7));
+  return s;
+}
+const dome = (r, color, x, y, z, opts) => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(color, opts));
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; return m;
+};
+const cone = (r, h, color, x, z, seg = 9) => {
+  const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat(color, { flatShading: true }));
+  m.position.set(x, h / 2, z); m.castShadow = true; m.receiveShadow = true; return m;
+};
+const panel = (w, d, color, x, y, z, tilt = -0.5) => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), mat(color));
+  m.position.set(x, y, z); m.rotation.x = tilt; m.castShadow = true; return m;
+};
+function wheelsOn(g, xs, zs, y = 0.25, r = 0.28) {
+  for (const x of xs) for (const z of zs) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.2, 10), mat(0x2a2a2e));
+    w.rotation.x = Math.PI / 2; w.position.set(x, y, z); g.add(w);
+  }
+}
+
+Object.assign(BUILDERS, {
+  // ---- Mojave ----
+  quarry(color) {
+    const g = new THREE.Group();
+    g.add(cone(1.8, 1.6, color, -2.2, 1.4), cone(1.2, 1.1, shade(color, 0.15), -0.6, 2.6), cone(1.4, 1.2, shade(color, -0.1), 2.4, 2.2));
+    g.add(box(2.6, 1.6, 2, 0xe2c58f, 1.4, 0, -2.2));
+    g.add(box(2.8, 0.2, 2.2, 0xb98b5c, 1.4, 1.6, -2.2));
+    // excavator
+    const ex = new THREE.Group();
+    ex.add(box(1.4, 0.5, 1.0, 0x3a3f48, 0, 0, 0), box(1.1, 0.8, 0.9, 0xffc23d, 0, 0.5, 0));
+    const arm = new THREE.Group();
+    arm.add(box(0.25, 0.25, 2.2, 0xffc23d, 0, 0, 1.1));
+    arm.add(box(0.6, 0.4, 0.5, 0x3a3f48, 0, -0.2, 2.2));
+    arm.position.set(0, 1.1, 0.2);
+    ex.add(arm);
+    ex.position.set(-1.6, 0, -1.6);
+    g.add(ex);
+    return { group: g, top: 4.6, anim(t) { arm.rotation.x = 0.3 + Math.sin(t * 1.4) * 0.35; ex.rotation.y = Math.sin(t * 0.5) * 0.6; } };
+  },
+  kiln(color) {
+    const g = new THREE.Group();
+    g.add(dome(2.2, color, -0.8, 0, -0.4));
+    g.add(box(1.0, 1.0, 0.1, 0xffb347, -0.8, 0.2, 1.8, { emissive: 0xff8a1f, emissiveIntensity: 0.8 }));
+    g.add(cyl(0.45, 0.55, 4.6, shade(color, -0.25), 1.6, 0, -1.6));
+    g.add(box(2.2, 1.4, 2.2, 0xe8dcc4, 2.2, 0, 1.2));
+    for (let i = 0; i < 3; i++) g.add(box(0.5, 0.05, 1.4, 0x9fd6ff, 1.5 + i * 0.6, 1.42, 1.2, { transparent: true, opacity: 0.8 }));
+    return { group: g, top: 5.4, smoke: [new THREE.Vector3(1.6, 4.8, -1.6)] };
+  },
+  solarfab(color) {
+    const g = new THREE.Group();
+    g.add(box(6.2, 2.0, 4.6, 0xeae6dc, 0, 0, -0.2));
+    for (let i = 0; i < 3; i++) for (let k = 0; k < 2; k++) g.add(panel(1.7, 1.6, color, -2 + i * 2.0, 2.45, -1.2 + k * 1.9));
+    g.add(box(2.0, 1.5, 0.1, 0x3a3f48, -1.6, 0, 2.12));
+    windows(g, 2, 0.9, 1.0, 2.12, 0xd8ecff, 1.3, 0.9);
+    return { group: g, top: 4.2 };
+  },
+  battery(color) {
+    const g = new THREE.Group();
+    g.add(box(4.0, 2.2, 4.4, 0xe6e9ee, -1.0, 0, -0.2));
+    g.add(box(4.2, 0.2, 4.6, 0x8a8f99, -1.0, 2.2, -0.2));
+    for (const [x, z] of [[2.3, -1.4], [2.3, 0.6], [2.3, 2.4]]) {
+      g.add(cyl(0.75, 0.75, 2.6, 0x2a2d33, x, 0, z, 16));
+      g.add(cyl(0.77, 0.77, 0.6, color, x, 2.0, z, 16));
+      g.add(cyl(0.25, 0.25, 0.3, 0xd9d9d9, x, 2.6, z, 10));
+    }
+    const bolt = box(0.15, 1.2, 0.1, 0xffd23f, -1.0, 0.5, 2.03, { emissive: 0xffc23d, emissiveIntensity: 0.6 });
+    g.add(bolt);
+    return { group: g, top: 4.4 };
+  },
+  drone(color) {
+    const g = new THREE.Group();
+    g.add(box(5.2, 2.2, 4.4, 0xe8dcc4, -0.6, 0, -0.4));
+    g.add(box(5.4, 0.2, 4.6, color, -0.6, 2.2, -0.4));
+    g.add(box(2.4, 1.8, 0.1, 0x3a3f48, -0.6, 0, 1.82));
+    g.add(box(1.6, 0.06, 1.6, 0xffffff, 2.6, 0.15, 2.0));
+    const drones = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new THREE.Group();
+      d.add(box(0.5, 0.15, 0.5, color, 0, 0, 0));
+      for (const [x, z] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) d.add(box(0.36, 0.03, 0.06, 0x2a2a2e, x, 0.12, z));
+      d.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      drones.push(d); g.add(d);
+    }
+    return {
+      group: g, top: 5,
+      anim(t) { drones.forEach((d, i) => { const a = t * 0.8 + i * 2.1; d.position.set(2.4 + Math.cos(a) * 1.2, 3 + Math.sin(t * 2 + i) * 0.4 + i * 0.5, 1.2 + Math.sin(a) * 1.2); }); },
+    };
+  },
+  rover(color) {
+    const g = new THREE.Group();
+    g.add(box(5.0, 2.6, 3.8, 0xe2d2b0, -0.8, 0, -1.0));
+    g.add(box(5.2, 0.2, 4.0, color, -0.8, 2.6, -1.0));
+    g.add(box(2.6, 2.0, 0.1, 0x3a3f48, -0.8, 0, 0.92));
+    const rv = new THREE.Group();
+    rv.add(box(1.4, 0.4, 0.9, 0xf3f0e8, 0, 0.35, 0), box(0.5, 0.35, 0.5, color, 0.3, 0.75, 0));
+    rv.add(box(0.08, 0.7, 0.08, 0x8a8f99, -0.5, 0.75, 0), box(0.6, 0.06, 0.4, 0x2f5fb0, -0.5, 1.45, 0));
+    wheelsOn(rv, [-0.5, 0, 0.5], [-0.5, 0.5], 0.22, 0.22);
+    g.add(rv);
+    return { group: g, top: 5, anim(t) { rv.position.set(-0.8 + Math.sin(t * 0.6) * 2.4, 0, 2.6); rv.rotation.y = Math.cos(t * 0.6) > 0 ? 0 : Math.PI; } };
+  },
+  launchpad(color) {
+    const g = new THREE.Group();
+    g.add(box(5.6, 0.5, 5.6, color, 0, 0, 0));
+    g.add(box(2.6, 0.08, 2.6, 0x2a2a2e, 0.6, 0.5, 0.2));
+    g.add(box(0.6, 7, 0.6, 0x8a8f99, -1.6, 0.5, -1.4));
+    for (let i = 0; i < 5; i++) g.add(box(1.8, 0.14, 0.14, 0x8a8f99, -0.8, 1.6 + i * 1.3, -1.4));
+    g.add(box(2.0, 1.2, 1.6, 0xe8dcc4, -1.8, 0.5, 2.0));
+    const rocket = makeRocket({ body: 0xf4f1ea, nose: 0x2f5fb0, band: 0xe07b2a, h: 4.6 });
+    rocket.position.set(0.6, 0.5, 0.2);
+    g.add(rocket);
+    const scaffold = scaffoldAt(0.6, 0.2);
+    scaffold.position.y = 0.5;
+    g.add(scaffold);
+    return { group: g, top: 8, rocket, scaffold };
+  },
+  solarfarm(color) {
+    const g = new THREE.Group();
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+      g.add(box(0.12, 0.6, 0.12, 0x8a8f99, -2.6 + c * 2.4, 0, -3 + r * 1.8));
+      g.add(panel(2.1, 1.3, color, -2.6 + c * 2.4, 0.75, -3 + r * 1.8, -0.55));
+    }
+    g.add(box(1.2, 1.2, 1.0, 0xe6e9ee, 3.4, 0, 3.4));
+    return { group: g, top: 3 };
+  },
+
+  // ---- Moon ----
+  regolith(color) {
+    const g = new THREE.Group();
+    g.add(dome(1.8, 0xe6e6ea, -2, 0, -1.6));
+    g.add(cone(1.4, 1.0, color, 2.2, 2.2), cone(1.0, 0.8, shade(color, -0.15), 1.0, 2.8));
+    g.add(box(0.2, 4, 0.2, 0x5b5f66, 1.2, 0, -1.6), box(0.2, 4, 0.2, 0x5b5f66, 2.6, 0, -1.6), box(1.8, 0.25, 0.4, 0x5b5f66, 1.9, 4, -1.6));
+    const drill = new THREE.Group();
+    drill.add(cyl(0.3, 0.05, 2.0, 0xd9a441, 0, 0, 0, 8));
+    for (let i = 0; i < 4; i++) { const t = box(0.7, 0.06, 0.12, 0xd9a441, 0, 0.3 + i * 0.4, 0); t.rotation.y = i * 0.8; drill.add(t); }
+    drill.position.set(1.9, 0.8, -1.6);
+    g.add(drill);
+    return { group: g, top: 5, anim(t, dt) { drill.rotation.y += dt * 6; drill.position.y = 0.6 + Math.abs(Math.sin(t * 0.8)) * 0.6; } };
+  },
+  he3(color) {
+    const g = new THREE.Group();
+    for (const [x, z, r] of [[-2, -1.4, 1.3], [0.6, -1.8, 1.0], [-1.4, 1.6, 0.9]]) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 12), mat(0xe8eaf0));
+      s.position.set(x, r + 0.5, z); s.castShadow = true; g.add(s);
+      g.add(cyl(0.12, 0.12, 0.6, 0x8a8f99, x, 0, z, 6));
+    }
+    g.add(box(2.4, 2.0, 2.4, color, 2.2, 0, 1.0));
+    g.add(box(3.4, 0.2, 0.2, 0x8a8f99, 0.6, 1.4, 0), box(0.2, 0.2, 3.2, 0x8a8f99, -0.6, 1.0, 0));
+    const glow = box(0.6, 0.6, 0.08, 0x9fe8ff, 2.2, 0.8, 2.22, { emissive: 0x4fd0ff, emissiveIntensity: 0.9 });
+    g.add(glow);
+    return { group: g, top: 4 };
+  },
+  fuelcell(color) {
+    const g = new THREE.Group();
+    g.add(dome(1.6, 0xeceef2, -1.6, 0, -1.2), dome(1.2, 0xeceef2, 1.4, 0, -1.6), dome(1.0, color, 0.2, 0, 1.6));
+    g.add(box(1.2, 0.6, 0.8, 0xd9d9de, -0.1, 0, -1.4));
+    for (let i = 0; i < 4; i++) g.add(box(0.5, 1.0, 0.5, color, 2.0 + (i % 2) * 0.7, 0, 1.0 + Math.floor(i / 2) * 0.8));
+    return { group: g, top: 3.4 };
+  },
+  habitat(color) {
+    const g = new THREE.Group();
+    const hab = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 4.4, 18, 1, false, 0, Math.PI), mat(color));
+    hab.geometry.rotateX(Math.PI / 2); hab.geometry.rotateZ(Math.PI / 2);
+    hab.position.set(0, 0, 0); hab.castShadow = true; g.add(hab);
+    // printer gantry
+    g.add(box(0.2, 3.6, 0.2, 0xffc23d, -2.2, 0, -2.4), box(0.2, 3.6, 0.2, 0xffc23d, 2.2, 0, -2.4), box(0.2, 3.6, 0.2, 0xffc23d, -2.2, 0, 2.4), box(0.2, 3.6, 0.2, 0xffc23d, 2.2, 0, 2.4));
+    g.add(box(4.6, 0.2, 0.2, 0xffc23d, 0, 3.6, -2.4), box(4.6, 0.2, 0.2, 0xffc23d, 0, 3.6, 2.4));
+    const head = new THREE.Group();
+    head.add(box(0.25, 0.25, 5.0, 0xffc23d, 0, 0, 0), box(0.5, 0.6, 0.5, 0x3a3f48, 0, -0.4, 0));
+    head.position.set(0, 3.6, 0);
+    g.add(head);
+    return { group: g, top: 5, anim(t) { head.position.x = Math.sin(t * 0.9) * 1.8; head.children[1].position.z = Math.sin(t * 2.3) * 2.0; } };
+  },
+  lunarrover(color) {
+    const g = new THREE.Group();
+    g.add(dome(2.2, 0xeceef2, -1.2, 0, -1.2));
+    g.add(box(1.6, 1.4, 0.2, 0x3a3f48, -1.2, 0, 0.95));
+    const rv = new THREE.Group();
+    rv.add(box(1.6, 0.15, 1.0, color, 0, 0.45, 0), box(0.4, 0.4, 0.8, 0x8a8f99, -0.5, 0.6, 0));
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.05, 0.1, 10), mat(0xe8eaf0));
+    dish.position.set(0.5, 1.2, 0); rv.add(dish); rv.add(box(0.05, 0.6, 0.05, 0x8a8f99, 0.5, 0.6, 0));
+    wheelsOn(rv, [-0.6, 0.6], [-0.55, 0.55], 0.28, 0.28);
+    g.add(rv);
+    return { group: g, top: 4.6, anim(t) { rv.position.set(1.0 + Math.sin(t * 0.5) * 1.6, 0, 2.4); } };
+  },
+  telescope(color) {
+    const g = new THREE.Group();
+    g.add(box(2.4, 1.2, 2.4, 0xd8d8de, -2.0, 0, -1.6));
+    g.add(cyl(0.3, 0.4, 2.6, 0x8a8f99, 1.0, 0, 0.4, 10));
+    const dish = new THREE.Group();
+    const bowl = new THREE.Mesh(new THREE.SphereGeometry(2.0, 20, 8, 0, Math.PI * 2, Math.PI * 0.62, Math.PI * 0.38), mat(0xeceef2, { side: THREE.DoubleSide }));
+    bowl.rotation.x = Math.PI; bowl.castShadow = true;
+    dish.add(bowl);
+    dish.add(box(0.1, 1.6, 0.1, color, 0, 0.2, 0));
+    dish.add(box(0.4, 0.4, 0.4, color, 0, 1.0, 0));
+    dish.position.set(1.0, 3.4, 0.4); dish.rotation.x = -0.6;
+    g.add(dish);
+    return { group: g, top: 6.4, anim(t) { dish.rotation.y = Math.sin(t * 0.25) * 0.8; } };
+  },
+  starship(color) {
+    const g = new THREE.Group();
+    g.add(cyl(2.8, 2.8, 0.4, 0x8a8a90, 0, 0, 0, 20));
+    g.add(box(0.7, 9, 0.7, 0x5b5f66, -2.2, 0.4, -1.6));
+    for (let i = 0; i < 6; i++) g.add(box(1.8, 0.14, 0.14, 0x5b5f66, -1.5, 1.4 + i * 1.4, -1.6));
+    const rocket = makeRocket({ body: color, nose: color, band: 0x2a2a2e, h: 6.4, r: 0.85 });
+    rocket.position.set(0.4, 0.4, 0.2);
+    g.add(rocket);
+    const scaffold = scaffoldAt(0.4, 0.2, 7.5);
+    scaffold.position.y = 0.4;
+    g.add(scaffold);
+    return { group: g, top: 10, rocket, scaffold };
+  },
+  fusion(color) {
+    const g = new THREE.Group();
+    g.add(box(6.0, 0.6, 5.0, 0xd8d8de, 0, 0, -0.4));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.55, 12, 28), mat(color));
+    ring.rotation.x = Math.PI / 2; ring.position.set(-0.6, 1.4, -0.4); ring.castShadow = true;
+    g.add(ring);
+    const core = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.18, 8, 28), new THREE.MeshBasicMaterial({ color: 0xff7ae0 }));
+    core.rotation.x = Math.PI / 2; core.position.set(-0.6, 1.4, -0.4);
+    g.add(core);
+    for (const [x, z] of [[-2.6, -2.2], [1.4, -2.2], [-2.6, 1.4], [1.4, 1.4]]) g.add(box(0.4, 2.6, 0.4, 0x8a8f99, x, 0.6, z));
+    g.add(box(1.6, 1.6, 1.6, 0xe8eaf0, 2.4, 0.6, 1.6));
+    return { group: g, top: 4.4, anim(t) { core.material.color.setHSL(0.85 + Math.sin(t * 3) * 0.05, 1, 0.6 + Math.sin(t * 5) * 0.1); ring.rotation.z = t * 0.4; } };
+  },
+  quantum(color) {
+    const g = new THREE.Group();
+    g.add(box(4.6, 2.6, 4.2, 0xf2f3f6, -0.6, 0, -0.4));
+    g.add(box(4.8, 0.2, 4.4, color, -0.6, 2.6, -0.4));
+    const ringA = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.08, 8, 30), new THREE.MeshBasicMaterial({ color: 0x6fe3ff }));
+    const ringB = ringA.clone();
+    ringA.position.set(-0.6, 3.8, -0.4); ringB.position.copy(ringA.position);
+    g.add(ringA, ringB);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.35, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    orb.position.copy(ringA.position); g.add(orb);
+    // cryostat tanks
+    for (const z of [-1.2, 0.6]) g.add(cyl(0.6, 0.6, 2.0, 0xd8dbe2, 2.6, 0, z, 14));
+    return { group: g, top: 5.2, anim(t) { ringA.rotation.x = t * 1.3; ringB.rotation.y = t * 1.7; orb.scale.setScalar(1 + Math.sin(t * 4) * 0.12); } };
+  },
+});

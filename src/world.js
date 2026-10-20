@@ -88,6 +88,8 @@ export class World {
   setTheme(name) {
     if (this.themeName === name) return;
     this.themeName = name;
+    // every world has its own buildings, so take the old ones down
+    for (const id of Object.keys(this.lots)) this.setBuilt(id, false);
     const T = THEME[name] || THEME.colorado;
     this.scene.background = new THREE.Color(T.sky);
     this.hemi.color.setHex(T.hemiSky); this.hemi.groundColor.setHex(T.hemiGround); this.hemi.intensity = T.hemi;
@@ -206,10 +208,14 @@ export class World {
     group.traverse(o => { o.userData.lotId = def.id; });
   }
 
-  setBuilt(id, built) {
+  // look = { model, color } for this world's version of the building
+  setBuilt(id, built, look) {
     const L = this.lots[id];
     if (built && !L.model) {
-      const m = BUILDERS[id](L.def.color);
+      const color = look?.color ?? L.def.color;
+      const m = (BUILDERS[look?.model] || BUILDERS[id])(color);
+      const crateColor = color === 0xe8e4da || color === 0xd8d2c4 || color === 0xcfd3da ? 0xb9b4a8 : color;
+      L.crates.children.forEach(c => { c.material = mat(crateColor); });
       m.group.position.y = 0.15;
       m.group.traverse(o => { o.userData.lotId = id; });
       L.group.add(m.group);
@@ -322,7 +328,7 @@ export class World {
       cargo.name = 'cargo';
       mesh.add(cargo);
     }
-    const color = FACTORIES.find(f => f.id === fromId).color;
+    const color = this.lookFor?.(fromId)?.color ?? FACTORIES.find(f => f.id === fromId).color;
     mesh.getObjectByName('cargo').material = mat(color === 0xe8e4da ? 0xb9b4a8 : color);
     mesh.visible = true;
     this.scene.add(mesh);

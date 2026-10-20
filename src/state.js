@@ -4,10 +4,11 @@ import {
   FACTORIES, ALL, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, managerCost,
 } from './economy.js';
 import { GAME } from './config.js';
+import { CUSTOMERS } from './worlds.js';
 import * as storage from './storage.js';
 
-const SAVE_VERSION = 4;
-const OLD_KEYS = ['boltworks.save.v3'];
+const SAVE_VERSION = 5;
+const OLD_KEYS = ['boltworks.save.v4', 'boltworks.save.v3'];
 
 function freshRun() {
   const levels = {};
@@ -26,6 +27,7 @@ export function freshState() {
     current: 'colorado',
     worlds: { colorado: freshRun() },
     ep: 0,               // Engineering Points (permanent, shared by every world)
+    epClaimed: 0,        // points already taken from lifetime earnings
     launches: 0,
     boostUntil: 0,
     contract: null,      // active order (in the current world)
@@ -59,12 +61,17 @@ export class Game {
     if (!saved) {
       for (const k of OLD_KEYS) {
         const old = await storage.load(k);
+        if (old && old.v === 4 && old.worlds) {
+          // v4 -> v5: launches no longer reset towns; points now come from lifetime earnings
+          saved = { ...old, v: SAVE_VERSION, epClaimed: Math.floor(Math.sqrt(Math.max(0, old.totalEarned || 0) / 1e7)) };
+          break;
+        }
         if (old && old.v === 3 && old.run) {
           const cur = WORLDS[Math.min(old.launches || 0, WORLDS.length - 1)].id;
           const worlds = {};
           for (const w of WORLDS.slice(0, WORLDS.findIndex(x => x.id === cur) + 1)) worlds[w.id] = freshRun();
           worlds[cur] = mergeRun(old.run);
-          saved = { ...old, v: SAVE_VERSION, current: cur, worlds };
+          saved = { ...old, v: SAVE_VERSION, current: cur, worlds, epClaimed: Math.floor(Math.sqrt(Math.max(0, old.totalEarned || 0) / 1e7)) };
           delete saved.run;
           break;
         }
@@ -292,17 +299,9 @@ export class Game {
     const stretch = 1.15 + Math.random() * 0.6;
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
     const reward = Math.max(50, target * d.value * this.epMult() * 2.5);
-    const CUSTOMERS = {
-      mine: ['Leadville Smelter', 'Pueblo Steel Mill', 'Front Range Foundry'],
-      furnace: ['Pueblo Rail Yard', 'Denver Bridge Crew', 'Golden Shipyard'],
-      press: ['Boulder Bike Works', 'Front Range Builders', 'Aurora Stadium'],
-      gear: ['Pueblo Wind Farm', 'Clock Tower Repair', 'Rocky Mountain Rail'],
-      engine: ['Mile High Motors', 'Vail Snowcat Co.', 'Fort Collins Tractors'],
-      turbine: ['Denver Airport Hangar', 'High Plains Power', 'Colorado Air Lines'],
-      rocket: ['Space Agency', 'Orbital Freight Co.', 'Lunar Mining Group'],
-    }[pick];
+    const list = (CUSTOMERS[this.s.current] || CUSTOMERS.colorado)[pick];
     this.s.contract = {
-      id: pick, unit: d.unit, customer: CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)],
+      id: pick, unit: this.unitOf ? this.unitOf(pick) : d.unit, customer: list[Math.floor(Math.random() * list.length)],
       target, progress: 0, reward, minutes, startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, status: 'active',
     };
     this.emit('contract', this.s.contract);
@@ -320,25 +319,28 @@ export class Game {
   }
 
   // ---- rocket launch ----
+  // Engineering Points come from everything you've ever earned (all worlds):
+  // total points = floor(sqrt(lifetime / 10M)). A launch claims the ones you've
+  // earned since last time, so launching often or rarely gives the same total.
+  // Launching uses up one rocket and keeps your town as it is.
+  pendingEP() { return Math.max(0, epForRun(this.s.totalEarned) - (this.s.epClaimed || 0)); }
   canLaunch() { return this.run.rocketsBuilt >= 1; }
-  launchPreview() { return Math.max(1, epForRun(this.run.runEarned)) * (this.world.perks.ep || 1); }
+  launchPreview() { return this.pendingEP() * (this.world.perks.ep || 1); }
   nextWorld() {
     const i = WORLDS.findIndex(w => w.id === this.s.current);
     return WORLDS[i + 1] || null;
   }
-  // Launching resets this world's town for Engineering Points and, the first time,
-  // unlocks the next world.
   launch(adMult = 1) {
-    const gained = this.launchPreview() * adMult;
+    const pending = this.pendingEP();
+    const gained = pending * (this.world.perks.ep || 1) * adMult;
+    this.s.epClaimed = (this.s.epClaimed || 0) + pending;
     this.s.ep += gained;
     this.s.launches++;
+    this.run.rocketsBuilt = Math.max(0, this.run.rocketsBuilt - 1);
     const from = this.s.current;
-    this.s.worlds[from] = freshRun();
     const next = this.nextWorld();
     let unlocked = null;
     if (next && !this.s.worlds[next.id]) { this.s.worlds[next.id] = freshRun(); unlocked = next.id; }
-    this.s.contract = null;
-    this.s.nextContractAt = Date.now() + 90_000;
     this.invalidate();
     this.emit('launched', gained, unlocked);
     this.emit('change');
