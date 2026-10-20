@@ -639,6 +639,8 @@ function openSettings() {
   openModal(`
     <h2>Settings</h2>
     <button class="btn plain toggle" data-act="sound" aria-pressed="${game.s.settings.sound}">Sound and vibration: <b>${game.s.settings.sound ? 'On' : 'Off'}</b></button>
+    <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
+    <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
     <p>Rockets launched: <b>${game.s.launches}</b> · Engineering Points: <b>${game.s.ep}</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
     <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it.</p>
     <button class="btn danger" data-act="reset-ask">Start over</button>
@@ -649,6 +651,17 @@ function openSettings() {
       sfx.setEnabled(game.s.settings.sound);
       save();
       openSettings();
+    }
+    if (act === 'gfx') {
+      game.s.settings.graphics = world.look.quality === 'high' ? 'low' : 'high';
+      world.look.setQuality(game.s.settings.graphics);
+      track('graphics_changed', { to: game.s.settings.graphics });
+      save(); openSettings();
+    }
+    if (act === 'daynight') {
+      game.s.settings.daynight = game.s.settings.daynight === false;
+      world.look.cycle = game.s.settings.daynight;
+      save(); openSettings();
     }
     if (act === 'reset-ask') {
       openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
@@ -776,11 +789,30 @@ function dayCheck() {
 
 // ---------- main loop ----------
 let last = performance.now(), uiT = 0, hintCache = null, achT = 1;
+// On the first run, watch the frame rate for a few seconds. If the phone struggles
+// with the full effects, switch to battery saver for it (the player can change it).
+let perf = { start: 0, frames: 0, done: false };
+function perfCheck(now, dt) {
+  if (perf.done) return;
+  if ((game.s.settings.graphics || 'auto') !== 'auto' || document.hidden) { perf.done = true; return; }
+  if (!perf.start) { perf.start = now + 1500; return; }   // skip start-up hitches
+  if (now < perf.start) return;
+  perf.frames++;
+  const secs = (now - perf.start) / 1000;
+  if (secs >= 5) {
+    perf.done = true;
+    const fps = perf.frames / secs;
+    game.s.settings.graphics = fps < 38 ? 'low' : 'high';
+    if (fps < 38) world.look.setQuality('low');
+    track('graphics_auto', { fps: Math.round(fps), chose: game.s.settings.graphics });
+  }
+}
 function loop(now) {
   // clamp: some browsers hand back an older frame time (e.g. after waking), never run time backwards
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = Math.max(last, now);
   if (!launching) game.tick(dt);
+  perfCheck(now, dt);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
   $('cash').textContent = '$' + (game.run.cash < 1000 ? Math.floor(game.run.cash) : fmt(game.run.cash));
@@ -817,6 +849,10 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   initAnalytics(game.s.playerId);
   sfx.setEnabled(game.s.settings.sound);
   step('building town');
+  // graphics: High unless the player chose otherwise (an automatic check below may lower it)
+  const gfx = game.s.settings.graphics || 'auto';
+  world.look.setQuality(gfx === 'low' ? 'low' : 'high');
+  world.look.cycle = game.s.settings.daynight !== false;
   world.setTheme(game.theme());
   syncBuilt();
   const brandNew = game.s.totalEarned === 0 && !game.s.playDays.length;

@@ -2,17 +2,58 @@
 // replace a builder function with a loaded 3D model later without touching game logic.
 import * as THREE from 'three';
 
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// Materials: physically based, so light, shadow and reflections look solid.
+// Glass and metal colours get shinier materials automatically; glass glows warm at night.
+const GLASS = new Set([0x9fd6ff, 0xd8ecff, 0x9fe8ff]);
+const METAL = new Set([0x8a8f99, 0x5b5f66, 0xdddddd, 0xd9d9d9, 0xcfd3da, 0xd8d8de, 0xd9d9de, 0xb9b4a8]);
+export const GLOW = { glass: [], lit: [], night: [] };   // materials the day/night cycle lights up
 const matCache = new Map();
 export function mat(color, opts = {}) {
-  const key = color + JSON.stringify(opts);
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshLambertMaterial({ color, ...opts }));
-  return matCache.get(key);
+  // windows: some lit at night and some dark, so buildings look lived in
+  const glassVar = GLASS.has(color) && !opts.emissive ? Math.floor(Math.random() * 3) : 0;
+  const key = color + JSON.stringify(opts) + glassVar;
+  if (matCache.has(key)) return matCache.get(key);
+  let m;
+  if (opts.night) {
+    // lights that only come on after dark (headlights, lamps)
+    const { night, ...o } = opts;
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.4, emissiveIntensity: 0, ...o });
+    m.userData.night = night; GLOW.night.push(m);
+  } else if (GLASS.has(color) && !opts.emissive) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.08, metalness: 0.55, emissive: 0xffc98a, emissiveIntensity: 0, ...opts });
+    m.userData.glow = [0.75, 0.35, 0.05][glassVar];
+    GLOW.glass.push(m);
+  } else if (METAL.has(color)) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.6, ...opts });
+  } else {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...opts });
+    if (opts.emissive) { m.userData.baseGlow = opts.emissiveIntensity ?? 1; GLOW.lit.push(m); }
+  }
+  matCache.set(key, m);
+  return m;
 }
 
+// Boxes big enough to notice get softly rounded edges that catch the light.
+export let roundEdges = true;
+export function setRoundEdges(on) { roundEdges = on; }
+function boxGeo(w, h, d) {
+  const m = Math.min(w, h, d);
+  if (!roundEdges || m < 0.3) return new THREE.BoxGeometry(w, h, d);
+  return new RoundedBoxGeometry(w, h, d, 2, Math.min(0.1, m * 0.14));
+}
 export function box(w, h, d, color, x = 0, y = 0, z = 0, opts) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
+  const m = new THREE.Mesh(boxGeo(w, h, d), mat(color, opts));
   m.position.set(x, y + h / 2, z);
   m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+// plain sharp box, for road paint and other flat things
+export function flatBox(w, h, d, color, x = 0, y = 0, z = 0, opts) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = false; m.receiveShadow = true;
   return m;
 }
 export function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 12, opts) {
@@ -287,6 +328,10 @@ export function truck(color) {
   g.add(box(1.5, 1, 0.95, 0xf3f0e8, -0.35, 0.25, 0));
   g.add(box(0.7, 0.8, 0.95, color, 0.8, 0.25, 0));
   g.add(box(0.06, 0.35, 0.8, 0x9fd6ff, 1.16, 0.6, 0));
+  for (const z of [-0.32, 0.32]) {
+    g.add(flatBox(0.05, 0.12, 0.16, 0xfff6d8, 1.17, 0.32, z, { emissive: 0xfff0c0, night: 3 }));
+    g.add(flatBox(0.05, 0.12, 0.14, 0x8a1f1f, -1.11, 0.32, z, { emissive: 0xff2a1a, night: 2 }));
+  }
   for (const x of [-0.7, 0.75]) for (const z of [-0.45, 0.45]) {
     const w = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.15, 10), mat(0x2a2a2e));
     w.rotation.x = Math.PI / 2; w.position.set(x, 0.22, z); g.add(w);
@@ -300,6 +345,10 @@ export function car(color) {
   g.add(box(1.7, 0.45, 0.9, color, 0, 0.2, 0));
   g.add(box(0.95, 0.4, 0.82, color, -0.1, 0.65, 0));
   g.add(box(0.06, 0.3, 0.72, 0x9fd6ff, 0.39, 0.7, 0), box(0.06, 0.3, 0.72, 0x9fd6ff, -0.59, 0.7, 0));
+  for (const z of [-0.3, 0.3]) {
+    g.add(flatBox(0.05, 0.1, 0.16, 0xfff6d8, 0.86, 0.35, z, { emissive: 0xfff0c0, night: 3 }));
+    g.add(flatBox(0.05, 0.1, 0.14, 0x8a1f1f, -0.86, 0.35, z, { emissive: 0xff2a1a, night: 2 }));
+  }
   for (const x of [-0.55, 0.55]) for (const z of [-0.44, 0.44]) {
     const w = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.14, 10), mat(0x2a2a2e));
     w.rotation.x = Math.PI / 2; w.position.set(x, 0.2, z); g.add(w);

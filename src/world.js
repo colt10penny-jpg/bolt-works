@@ -2,8 +2,13 @@
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
 import { FACTORIES, BUILDINGS } from './economy.js';
-import { BUILDERS, box, mat, tree, truck, car, pine, cactus, mesa, rock, crater, crate, powerPole } from './models.js';
-import { Traffic, lotRoute, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
+import { BUILDERS, box, mat, truck, car, crate, powerPole } from './models.js';
+import { Look } from './fx.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLOW } from './models.js';
+const NIGHT_LIST = () => GLOW.night;
+import { buildLand, withClouds, SHARED } from './terrain.js';
+import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
 
 // 3x3 town grid. The chain snakes: mine -> furnace -> press, gear -> engine,
 // turbine -> rocket; the power plant and data center sit on the right.
@@ -54,16 +59,52 @@ function mergeStatic(src, cast = true) {
   return out;
 }
 
+// Merge every part of a building that never moves into one mesh per material
+// (far fewer draw calls). Parts the animation moves are found by running it a few
+// times and seeing what changed.
+function bakeModel(m) {
+  const g = m.group;
+  const snap = new Map();
+  g.traverse(o => snap.set(o, [o.position.clone(), o.quaternion.clone(), o.scale.clone(), o.visible]));
+  if (m.anim) for (const [t, dt] of [[0.37, 0.05], [1.91, 0.1], [3.3, 0.02], [5.7, 0.2], [8.2, 0.05], [13.1, 0.3]]) { try { m.anim(t, dt); } catch { return; } }
+  const moving = new Set();
+  g.traverse(o => { const s = snap.get(o); if (!s || !o.position.equals(s[0]) || !o.quaternion.equals(s[1]) || !o.scale.equals(s[2]) || o.visible !== s[3]) moving.add(o); });
+  for (const [o, s] of snap) { o.position.copy(s[0]); o.quaternion.copy(s[1]); o.scale.copy(s[2]); o.visible = s[3]; }
+  for (const keep of [m.rocket, m.scaffold]) if (keep) moving.add(keep);
+  const dynamic = o => { for (let p = o; p && p !== g; p = p.parent) if (moving.has(p)) return true; return false; };
+  g.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
+  const byMat = new Map();
+  const statics = [];
+  g.traverse(o => { if (o.isMesh && !dynamic(o)) statics.push(o); });
+  for (const o of statics) {
+    const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+    if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    if (!byMat.has(o.material)) byMat.set(o.material, []);
+    byMat.get(o.material).push(geo);
+  }
+  for (const o of statics) o.parent.remove(o);
+  for (const [material, list] of byMat) {
+    const merged = mergeGeometries(list, false);
+    list.forEach(x => x.dispose());
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    g.add(mesh);
+  }
+}
+
 function rng(seed) { return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; }
 
 export class World {
   constructor(canvas, labelsEl) {
     this.canvas = canvas;
     this.labelsEl = labelsEl;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene = new THREE.Scene();
@@ -81,13 +122,17 @@ export class World {
     this.smoke = [];
     this.pops = [];
     this.traffic = new Traffic(this.scene);
+    DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(LOTS));
     this.idleCars = [];      // ambient cars waiting to re-enter town
     this.truckPool = [];
     this.carPool = [];
     this.flowInfo = null;
     this.t = 0;
 
+    this.look = new Look(this.renderer, this.scene, this.camera);
     this.#lights();
+    this.look.setLights(this.sun, this.hemi, new THREE.Color(0x8cc65f));
+    this.look.setQuality('high');
     this.groundGroup = new THREE.Group();
     this.sceneryGroup = new THREE.Group();
     this.scene.add(this.groundGroup, this.sceneryGroup);
@@ -109,8 +154,9 @@ export class World {
     sun.shadow.mapSize.set(2048, 2048);
     const c = sun.shadow.camera;
     c.left = -45; c.right = 45; c.top = 45; c.bottom = -45; c.near = 1; c.far = 120;
-    sun.shadow.bias = -0.0008;
-    sun.shadow.normalBias = 0.02;
+    sun.shadow.bias = -0.0005;
+    sun.shadow.normalBias = 0.035;
+    sun.shadow.radius = 3;
     this.sun = sun;
     this.scene.add(sun, sun.target);
   }
@@ -122,90 +168,51 @@ export class World {
     // every world has its own buildings, so take the old ones down
     for (const id of Object.keys(this.lots)) this.setBuilt(id, false);
     const T = THEME[name] || THEME.colorado;
-    this.scene.background = new THREE.Color(T.sky);
-    this.hemi.color.setHex(T.hemiSky); this.hemi.groundColor.setHex(T.hemiGround); this.hemi.intensity = T.hemi;
-    this.sun.intensity = T.sun;
     for (const g of [this.groundGroup, this.sceneryGroup]) {
       for (const c of [...g.children]) { g.remove(c); c.traverse(o => o.geometry?.dispose()); }
     }
-    this.#ground(T);
-    for (const L of Object.values(this.lots)) L.pad.material = mat(T.pad);
-    this.#scenery(name);
+    const land = buildLand(name, T, LOTS);
+    for (const c of [...land.ground.children]) this.groundGroup.add(c);
+    for (const c of [...land.scenery.children]) this.sceneryGroup.add(c);
+    this.land = land.ground.userData;
+    this.heightAt = land.height;
+    this.#lampGlow(name === 'moon' ? [] : this.land.lamps || []);
+    this.scene.fog.near = name === 'moon' ? 260 : 165; this.scene.fog.far = name === 'moon' ? 600 : 430;
+    if (!this.padMats) this.padMats = {};
+    if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
+    for (const L of Object.values(this.lots)) L.pad.material = this.padMats[name];
+    this.look.groundBase = new THREE.Color(T.ground);
+    this.look.setWorld(name);
   }
 
-  #ground(T) {
-    const G = this.groundGroup;
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), mat(T.ground));
-    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
-    G.add(ground);
-    // roads run far past the edge of the screen, however far you zoom out
-    const L = EDGE * 2 + 60;
-    const paint = new THREE.Group();
-    const line = 0xf4efe0;
-    for (const x of AVES) {
-      paint.add(box(ROAD_W + 1.2, 0.04, L, T.walk, x, 0, 0));
-      paint.add(box(ROAD_W, 0.06, L, T.road, x, 0, 0));
-    }
-    for (const z of CROSS) {
-      paint.add(box(L, 0.04, ROAD_W + 1.2, T.walk, 0, 0, z));
-      paint.add(box(L, 0.07, ROAD_W, T.road, 0, 0, z));
-    }
-    const half = L / 2;
-    for (let i = -half; i < half; i += 2.4) {
-      if (!CROSS.some(z => Math.abs(i - z) < STOP_R + 0.4)) for (const x of AVES) paint.add(box(0.16, 0.08, 1.1, line, x, 0, i));
-      if (!AVES.some(x => Math.abs(i - x) < STOP_R + 0.4)) for (const z of CROSS) paint.add(box(1.1, 0.09, 0.16, line, i, 0, z));
-    }
-    // stop lines at every intersection, across the lane coming in
-    for (const x of AVES) for (const z of CROSS) {
-      for (const [hx, hz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const cx = x - hx * STOP_R + (-hz) * LANE, cz = z - hz * STOP_R + hx * LANE;
-        paint.add(hx ? box(0.28, 0.09, ROAD_W / 2 - 0.15, 0xffffff, cx, 0, cz) : box(ROAD_W / 2 - 0.15, 0.09, 0.28, 0xffffff, cx, 0, cz));
-      }
-    }
-    G.add(mergeStatic(paint, false));
+  #padTex() {
+    if (this.padTex) return this.padTex;
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2500; i++) { const v = 215 + Math.random() * 40; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+    g.fillStyle = 'rgba(0,0,0,0.13)';
+    for (let k = 1; k < 4; k++) { g.fillRect(k * 64 - 1, 0, 2, 256); g.fillRect(0, k * 64 - 1, 256, 2); }
+    g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 4; g.strokeRect(2, 2, 252, 252);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return (this.padTex = t);
   }
 
-  #scenery(name) {
-    const r = rng(name === 'colorado' ? 7 : name === 'desert' ? 11 : 13);
-    const S = this.sceneryGroup;
-    const blocked = (x, z, pad = 1.4) => {
-      if (AVES.some(rx => Math.abs(x - rx) < ROAD_W / 2 + pad)) return true;
-      if (CROSS.some(rz => Math.abs(z - rz) < ROAD_W / 2 + pad)) return true;
-      return Object.values(LOTS).some(([lx, lz]) => Math.abs(x - lx) < LOT / 2 + 0.4 && Math.abs(z - lz) < LOT / 2 + 0.4);
-    };
-    // near: inside the shadowed area around town; far: out to past the screen edge
-    const near = new THREE.Group(), far = new THREE.Group();
-    const SPAN = 240, NEAR = 46;
-    const place = (count, make, pad) => {
-      count = Math.round(count * (SPAN * SPAN) / (84 * 84) * 0.7);
-      let n = 0;
-      for (let i = 0; i < count * 6 && n < count; i++) {
-        const x = (r() - 0.5) * SPAN, z = (r() - 0.5) * SPAN;
-        if (blocked(x, z, pad)) continue;
-        const o = make(r);
-        o.position.x = x; o.position.z = z;
-        o.rotation.y = r() * Math.PI * 2;
-        (Math.abs(x) < NEAR && Math.abs(z) < NEAR ? near : far).add(o); n++;
-      }
-    };
-    if (name === 'colorado') {
-      const greens = [0x3f8f4a, 0x4fa152, 0x357d40, 0x5bb05a];
-      place(110, r => tree(0.8 + r() * 0.6, greens[Math.floor(r() * greens.length)]));
-      place(70, r => pine(0.8 + r() * 0.7));
-    } else if (name === 'desert') {
-      place(60, r => cactus(0.8 + r() * 0.6));
-      place(45, r => rock(0.8 + r() * 1.4, 0xb98b5c));
-      place(10, r => mesa(4 + r() * 4, 2 + r() * 2.5, 4 + r() * 4), 4);
-    } else {
-      place(28, r => crater(1.4 + r() * 2.2), 3);
-      place(90, r => rock(0.6 + r() * 1.6, 0x85858b));
-      // a little flag by the first factory, because of course
-      const flag = new THREE.Group();
-      flag.add(box(0.08, 2.4, 0.08, 0xdddddd, 0, 0, 0), box(1.1, 0.7, 0.04, 0xffffff, 0.55, 1.6, 0), box(0.5, 0.36, 0.05, 0x2f5fb0, 0.25, 1.94, 0));
-      flag.position.set(5.5, 0, 22.5);
-      near.add(flag);
+  // soft halos round the streetlights after dark
+  #lampGlow(pts) {
+    if (this.glow) { this.scene.remove(this.glow); this.glow.geometry.dispose(); }
+    if (!pts.length) { this.glow = null; return; }
+    if (!this.glowTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d');
+      const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,230,170,1)'); gr.addColorStop(0.25, 'rgba(255,210,140,0.55)'); gr.addColorStop(1, 'rgba(255,200,120,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      this.glowTex = new THREE.CanvasTexture(c);
     }
-    S.add(mergeStatic(near, true), mergeStatic(far, false));
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    this.glow = new THREE.Points(geo, new THREE.PointsMaterial({ map: this.glowTex, size: 3.2, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    this.scene.add(this.glow);
   }
 
   // ---------- lots ----------
@@ -263,8 +270,10 @@ export class World {
       const crateColor = color === 0xe8e4da || color === 0xd8d2c4 || color === 0xcfd3da ? 0xb9b4a8 : color;
       L.crates.children.forEach(c => { c.material = mat(crateColor); });
       m.group.position.y = 0.15;
-      m.group.traverse(o => { o.userData.lotId = id; });
       L.group.add(m.group);
+      this.#decorate(L, m, id);
+      bakeModel(m);
+      m.group.traverse(o => { o.userData.lotId = id; });
       L.model = m.group; L.anim = m.anim || null; L.top = m.top;
       L.smokeAt = m.smoke || [];
       L.rocket = m.rocket || null; L.scaffold = m.scaffold || null;
@@ -272,9 +281,77 @@ export class World {
       L.bounce = 1;
     } else if (!built && L.model) {
       L.group.remove(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = true;
+      if (L.extras) { L.group.remove(L.extras); L.extras = null; }
       L.rocket = null; L.scaffold = null;
       L.crates.children.forEach(c => { c.visible = false; });
     }
+  }
+
+  // little touches that make each lot look lived in: rooftop units, a soft shadow
+  // under the building, and a couple of parked cars where there's room
+  #decorate(L, m, id) {
+    let seed = [...id].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647 || 1;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    const g = m.group;
+    L.group.updateMatrixWorld(true);
+    const meshes = []; g.traverse(o => { if (o.isMesh) meshes.push(o); });
+    const bb = new THREE.Box3().setFromObject(g);
+    const ray = new THREE.Raycaster(); const down = new THREE.Vector3(0, -1, 0);
+    const topAt = (x, z) => { ray.set(new THREE.Vector3(x, 80, z), down); return ray.intersectObjects(meshes, false)[0] || null; };
+    const placed = [];
+    if (!this.themeName?.startsWith('moon') || true) for (let i = 0; i < 24 && placed.length < 3; i++) {
+      const x = bb.min.x + 0.7 + rnd() * Math.max(0, bb.max.x - bb.min.x - 1.4), z = bb.min.z + 0.7 + rnd() * Math.max(0, bb.max.z - bb.min.z - 1.4);
+      const hit = topAt(x, z);
+      if (!hit || hit.point.y < 1.8 || !hit.face) continue;
+      const nrm = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+      if (nrm.y < 0.98) continue;
+      // the whole unit has to sit on the same flat roof
+      const same = [[0.55, 0.45], [-0.55, 0.45], [0.55, -0.45], [-0.55, -0.45]].every(([dx, dz]) => { const h = topAt(x + dx, z + dz); return h && h.object === hit.object && Math.abs(h.point.y - hit.point.y) < 0.03; });
+      if (!same || placed.some(p => Math.hypot(p.x - x, p.z - z) < 1.5)) continue;
+      placed.push(hit.point.clone());
+      const unit = new THREE.Group();
+      unit.add(box(0.85, 0.42, 0.65, 0xc9ccd2, 0, 0, 0));
+      unit.add(box(0.5, 0.05, 0.5, 0x3a3f48, 0, 0.42, 0));
+      if (rnd() < 0.5) unit.add(box(0.14, 0.5, 0.14, 0x8a8f99, 0.5, 0, 0.25));
+      const local = g.worldToLocal(hit.point.clone());
+      unit.position.copy(local); unit.rotation.y = rnd() < 0.5 ? 0 : Math.PI / 2;
+      g.add(unit);
+    }
+    // on the lot itself
+    const ex = new THREE.Group();
+    const lx = L.group.position.x, lz = L.group.position.z;
+    const w = bb.max.x - bb.min.x, d = bb.max.z - bb.min.z;
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(9.2, w * 1.25), Math.min(9.2, d * 1.25)), this.#aoMat());
+    shadow.rotation.x = -Math.PI / 2; shadow.position.set((bb.min.x + bb.max.x) / 2 - lx, 0.162, (bb.min.z + bb.max.z) / 2 - lz);
+    shadow.renderOrder = 1;
+    ex.add(shadow);
+    if (this.themeName !== 'moon') for (const [cx, cz] of [[3.5, 3.6], [-3.5, 3.6], [3.5, -3.6], [-3.5, -3.6]]) {
+      if (rnd() < 0.45) continue;
+      const hit = topAt(lx + cx, lz + cz);
+      if (hit && hit.point.y > 0.6) continue;               // building there
+      if (L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.4 && Math.abs(c.position.z - cz) < 1.2)) continue;
+      const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
+      const c = car(colors[Math.floor(rnd() * colors.length)]);
+      c.rotation.y = Math.PI / 2; c.position.set(cx, 0.15, cz);
+      ex.add(c);
+      for (const sx of [-0.65, 0.65]) ex.add(box(0.08, 0.02, 1.9, 0xf4efe0, cx + sx, 0.15, cz));
+    }
+    L.group.add(ex);
+    L.extras = ex;
+  }
+  #aoMat() {
+    if (this.ao) return this.ao;
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const img = g.createImageData(64, 64);
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+      const dx = Math.max(0, Math.abs(x - 31.5) - 18) / 14, dy = Math.max(0, Math.abs(y - 31.5) - 18) / 14;
+      const a = Math.max(0, 1 - Math.hypot(dx, dy));
+      img.data[(y * 64 + x) * 4 + 3] = a * a * 120;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    return (this.ao = new THREE.MeshBasicMaterial({ map: t, color: 0x000000, transparent: true, depthWrite: false }));
   }
 
   // milestone levels make the building a bit taller and wider
@@ -430,7 +507,7 @@ export class World {
   clearDeliveries() {
     for (const c of this.traffic.cars) if (c.kind === 'delivery') this.truckPool.push(c.mesh); else if (c.kind === 'manager') this.carPool.push(c.mesh);
     this.traffic.clear('delivery'); this.traffic.clear('manager');
-    for (const sm of this.smoke) { this.scene.remove(sm.m); sm.m.geometry.dispose(); sm.m.material.dispose(); }
+    for (const sm of this.smoke) { this.scene.remove(sm.m); sm.m.material.dispose(); }
     this.smoke = [];
     for (const p of this.pops) p.el.remove();
     this.pops = [];
@@ -460,8 +537,7 @@ export class World {
       const wp = new THREE.Vector3(); R.getWorldPosition(wp);
       for (let k = 0; k < 2; k++) {
         const hot = Math.random() < 0.4;
-        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + Math.random() * 0.5, 0),
-          new THREE.MeshLambertMaterial({ color: hot ? 0xffa53a : 0xf2f2f2, emissive: hot ? 0xff7a1a : 0x000000, transparent: true, opacity: 0.9, flatShading: true }));
+        const m = this.#puff(hot ? 0xffb35a : 0xf2f2f2, hot, 1.6 + Math.random() * 1.2);
         m.position.set(wp.x + (Math.random() - 0.5) * 1.2, Math.max(0.3, wp.y - 0.2), wp.z + (Math.random() - 0.5) * 1.2);
         this.scene.add(m);
         this.smoke.push({ m, age: 0, life: 2.2, spread: true });
@@ -539,7 +615,7 @@ export class World {
   resize() {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (!w || !h) return;
-    this.renderer.setSize(w, h, false);
+    this.look.resize();
     this.aspect = w / h;
     this.halfH = Math.max(17, 15.5 / this.aspect);
     this.#updateCamera();
@@ -566,10 +642,28 @@ export class World {
     this.pops.push({ el, id, age: 0 });
   }
 
+  // a soft round puff that always faces the camera
+  #puff(color, hot, size) {
+    if (!this.puffTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d');
+      for (let i = 0; i < 7; i++) {
+        const x = 32 + (Math.random() - 0.5) * 18, y = 32 + (Math.random() - 0.5) * 18, r = 12 + Math.random() * 10;
+        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      }
+      this.puffTex = new THREE.CanvasTexture(c);
+    }
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.puffTex, color, transparent: true, depthWrite: false, opacity: 0.9, rotation: Math.random() * 6.28, blending: hot ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    m.scale.setScalar(size); m.userData.size = size;
+    return m;
+  }
+
   #emitSmoke(L) {
     for (const p of L.smokeAt) {
       const big = L.def.id === 'power';
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(big ? 0.9 : 0.45, 0), new THREE.MeshLambertMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.85, flatShading: true }));
+      const m = this.#puff(0xf4f4f4, false, big ? 2.6 : 1.3);
       const wp = p.clone(); L.model.localToWorld(wp);
       m.position.copy(wp);
       this.scene.add(m);
@@ -612,9 +706,11 @@ export class World {
       s.age += dt;
       const k = s.age / s.life;
       s.m.position.y += dt * (s.spread ? 0.4 : 1.6); s.m.position.x -= dt * 0.5;
-      s.m.scale.setScalar(1 + k * (s.spread ? 3 : 1.8));
-      s.m.material.opacity = 0.85 * (1 - k);
-      if (k >= 1) { this.scene.remove(s.m); s.m.geometry.dispose(); s.m.material.dispose(); this.smoke.splice(i, 1); }
+      s.m.scale.setScalar((s.m.userData.size || 1) * (1 + k * (s.spread ? 2.4 : 1.6)));
+      s.m.material.opacity = 0.85 * (1 - k) * Math.min(1, s.age * 6);
+      // smoke picks up the colour of the light (warm at sunset, dim at night)
+      if (!s.m.material.blending || s.m.material.blending === THREE.NormalBlending) s.m.material.color.setScalar(0.95 - this.look.night * 0.55);
+      if (k >= 1) { this.scene.remove(s.m); s.m.material.dispose(); this.smoke.splice(i, 1); }
     }
     this.stepTraffic(dt);
     if (this.powerLineGroup.visible) {
@@ -626,7 +722,23 @@ export class World {
       }
     }
     this.#updateLaunch(dt);
-    this.renderer.render(this.scene, this.camera);
+    // day/night, sun follows the view so shadows stay crisp where you're looking
+    this.look.update(dt);
+    SHARED.time.value = this.t;
+    const n = this.look.night;
+    if (this.land?.lampMat) this.land.lampMat.emissiveIntensity = n * 2.4;
+    if (this.land?.edgeMat) this.land.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
+    if (this.glow) this.glow.material.opacity = n * 0.9;
+    if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
+    for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
+    if (this.look.sunDir) {
+      this.sun.position.copy(this.target).add(this.look.sunDir);
+      this.sun.target.position.copy(this.target);
+      const span = Math.min(70, 34 / this.zoom + 6);
+      const c = this.sun.shadow.camera;
+      if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
+    }
+    this.look.render();
     this.#labels(dt, labelFor);
   }
 
