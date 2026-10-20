@@ -232,3 +232,50 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 
 .lot-label .perk { font-size: 11px; color: #2563a8; line-height: 1; }
 .lot-label.support .bar i { background: #3f7fd0; }
+
+/* ---- v4: discreet bubbles over buildings ---- */
+.lot-label.bub {
+  min-height: 0; padding: 3px 9px 3px 4px; gap: 5px; border-radius: 999px; font: 800 12px var(--body);
+  box-shadow: 0 2px 0 rgba(0,0,0,.18); background: rgba(255,255,255,.94);
+}
+.lot-label.bub.cash b { font-variant-numeric: tabular-nums; }
+.lot-label.bub.cash i { font-style: normal; font-size: 9px; letter-spacing: .06em; background: #d9482b; color: #fff; border-radius: 5px; padding: 1px 4px; margin-left: 2px; }
+.lot-label.bub.cash.full { background: #fff3c4; animation: bob 1s ease-in-out infinite; }
+.lot-label.bub.warn-dot::after { content: ''; position: absolute; right: -3px; top: -3px; width: 10px; height: 10px; border-radius: 999px; background: #e8862c; border: 2px solid #fff; }
+.b-coin { width: 20px; height: 20px; border-radius: 999px; background: var(--gold); box-shadow: inset 0 -2px 0 var(--gold-d); display: grid; place-items: center; font: 800 11px var(--display); color: var(--gold-ink); }
+.lot-label.bub.warn, .lot-label.bub.plus {
+  width: 28px; height: 28px; padding: 0; justify-content: center; font: 800 16px var(--display); color: #fff;
+}
+.lot-label.bub.warn { background: #e8862c; }
+.lot-label.bub.plus { background: var(--green); font-size: 20px; }
+@keyframes bob { 50% { margin-top: -4px; } }
+.pop.big { font-size: 22px; color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+
+/* manager row in the factory panel */
+.mgr { display: flex; align-items: center; gap: 10px; background: var(--mint); border-radius: 14px; padding: 9px 10px; font-size: 13px; line-height: 1.35; }
+.mgr.on { background: #e7f6ec; }
+.mgr-ic { width: 36px; height: 36px; border-radius: 12px; background: var(--paper); display: grid; place-items: center; flex-shrink: 0; color: var(--ink); }
+.mgr-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; color: var(--ink-soft); }
+.mgr-txt b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.btn.small { min-height: 44px; font-size: 15px; padding: 0 12px; border-radius: 14px; flex-shrink: 0; background: var(--green); color: #fff; box-shadow: 0 3px 0 var(--green-d); }
+.btn.small:disabled { background: var(--mint-2); color: var(--ink-soft); box-shadow: none; }
+
+/* world map */
+.hud-right { display: flex; gap: 8px; align-items: flex-start; pointer-events: none; }
+.map-btn {
+  pointer-events: auto; min-height: 48px; border-radius: 16px; background: var(--paper); border: none; box-shadow: 0 4px 0 rgba(0,0,0,.15);
+  display: flex; align-items: center; gap: 6px; padding: 0 12px; font: 800 13px var(--body); color: var(--ink);
+}
+.w-list { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.w-card { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 10px; background: var(--mint); }
+.w-card.here { outline: 3px solid var(--sel); }
+.w-card.locked { opacity: .6; }
+.w-swatch { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; box-shadow: inset 0 -3px 0 rgba(0,0,0,.15); }
+.w-colorado .w-swatch { background: #8cc65f; }
+.w-desert .w-swatch { background: #e2c58f; }
+.w-moon .w-swatch { background: #9c9ca2; }
+.w-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.w-info b { font: 800 16px var(--display); }
+.w-info small { font-size: 12px; color: var(--ink-soft); line-height: 1.3; }
+.w-info .w-rate { color: var(--green); font-weight: 800; }
+.w-here, .w-lock { font: 800 12px var(--body); color: var(--ink-soft); flex-shrink: 0; }

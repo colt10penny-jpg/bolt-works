@@ -57,9 +57,9 @@ export function capacity(def, level) {
 // Actual flow through the town given everyone's levels.
 // Returns chain entries { id, cap, made, util, starved, used, surplus }, support entries,
 // the compute speed multiplier, and total income per second.
-export function flow(levels, mult = 1) {
+export function flow(levels, mult = 1, perks = {}) {
   const pw = SUPPORT[0], dc = SUPPORT[1];
-  const powerMade = capacity(pw, levels.power || 0);
+  const powerMade = capacity(pw, levels.power || 0) * (perks.power || 1);
   const dcCap = capacity(dc, levels.datacenter || 0);
   const compute = Math.min(dcCap, powerMade / dc.need);
   const powerUsed = compute * dc.need;
@@ -74,7 +74,7 @@ export function flow(levels, mult = 1) {
   let upstream = Infinity;
   for (let i = 0; i < FACTORIES.length; i++) {
     const d = FACTORIES[i];
-    const cap = capacity(d, levels[d.id] || 0) * speed;
+    const cap = capacity(d, levels[d.id] || 0) * speed * (perks[d.id] || 1);
     const canFeed = d.need ? upstream / d.need : Infinity;
     const made = Math.min(cap, canFeed);
     out.push({ id: d.id, cap, made, util: cap ? made / cap : 0, starved: cap > 0 && made < cap * 0.98 });
@@ -109,6 +109,21 @@ export function epForRun(runEarned) {
   return Math.floor(Math.sqrt(Math.max(0, runEarned) / 1e7));
 }
 export const THEMES = ['colorado', 'desert', 'moon'];
+
+// Each world is its own town. Launching a rocket unlocks the next one, and you can
+// travel back and forth. Each has a perk so it's worth revisiting.
+export const WORLDS = [
+  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Power Plant makes 3× electricity.', perks: { power: 3 } },
+  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 } },
+];
+export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
+
+// Factories store the money they make until you tap to collect it.
+// Storage holds this many seconds of the building's earnings.
+export const BIN_SECONDS = 300;
+// A manager collects automatically for one building.
+export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };
 export const themeFor = launches => THEMES[Math.min(launches, THEMES.length - 1)];
 

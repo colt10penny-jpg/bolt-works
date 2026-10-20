@@ -1,7 +1,7 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
-  FACTORIES, ALL, SUPPORT, isSupport, speedFromCompute, capacity, FACTS, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable,
+  FACTORIES, ALL, SUPPORT, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, managerCost, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable,
   nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES,
 } from './economy.js';
 import { Game } from './state.js';
@@ -40,52 +40,46 @@ const ICON = {
   rocket: '<svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 2.5 4.5 6 4.5 10v5h-9v-5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.8"/><path d="M7.5 14 4.5 17v3h3M16.5 14l3 3v3h-3M10 20.5c.5 1 1.2 1.5 2 1.5s1.5-.5 2-1.5"/></svg>',
   gift: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="9" width="18" height="12" rx="1.5"/><path d="M2 9h20v-3H2zM12 6v15M12 6C10 2 6.5 2.5 7 5c.3 1.3 3 1 5 1zm0 0c2-4 5.5-3.5 5-1-.3 1.3-3 1-5 1z"/></svg>',
   chip: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg>',
+  person: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/></svg>',
+  globe: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
   clip: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/></svg>',
 };
 
-// ---------- labels above lots ----------
+// ---------- small bubbles over buildings ----------
+// Nothing shows unless it needs you: money waiting (tap to collect), a supply
+// problem, or an empty lot you can afford.
 const pctSpeed = () => Math.round((game.baseFlow().speed - 1) * 100);
-function supportLabel(id, d, lv) {
-  const f = game.info(id);
-  const canUp = game.canAfford(upgradeCost(d, lv, 1));
-  const stars = milestoneCount(lv);
-  let sub = '', starved = false;
-  if (id === 'power') sub = `${fmtRate(f.made)} MW`;
-  else { starved = f.starved; sub = starved ? 'Short on power' : `+${pctSpeed()}% speed`; }
-  return {
-    cls: 'support' + (starved ? ' starved' : ''),
-    html: `<span class="lv" style="background:${tint(d)}">${lv}</span><span class="name">${d.name}${stars ? `<span class="stars" aria-hidden="true">${'\u2605'.repeat(Math.min(stars, 5))}</span>` : ''}<span class="${starved ? 'need' : 'perk'}">${sub}</span><span class="bar"><i></i></span></span>${canUp ? `<span class="up">${ICON.up}</span>` : ''}`,
-    progress: f.util,
-    aria: `${d.name}, level ${lv}, ${sub}${canUp ? ', upgrade available' : ''}`,
-  };
-}
-
+const COIN = '<span class="b-coin" aria-hidden="true">$</span>';
 function labelFor(id) {
   const d = def(id), lv = game.level(id);
-  if (lv > 0 && isSupport(id)) return supportLabel(id, d, lv);
-  if (lv > 0) {
-    const f = game.info(id);
-    const canUp = game.canAfford(upgradeCost(d, lv, 1));
-    const stars = milestoneCount(lv);
-    const prev = idx(id) > 0 ? FACTORIES[idx(id) - 1] : null;
-    const starved = f.starved;
-    const needTxt = starved ? (prev && game.built(prev.id) ? `Short on ${prev.unit}` : `Needs ${prev.unit}`) : '';
+  if (lv <= 0) {
+    const ok = game.canAfford(d.unlock);
+    return ok
+      ? { cls: 'bub plus', html: '<span aria-hidden="true">+</span>', aria: `Empty lot. You can build a ${d.name}.` }
+      : { cls: '', html: '', aria: '' };
+  }
+  const f = game.info(id);
+  if (isSupport(id)) {
+    return f.starved ? { cls: 'bub warn', html: '!', aria: `${d.name} is short on power` } : { cls: '', html: '', aria: '' };
+  }
+  const amount = game.bin(id);
+  if (!game.hasManager(id) && amount >= 1) {
+    const full = game.binFull(id);
     return {
-      cls: starved ? 'starved' : '',
-      html: `<span class="lv" style="background:${tint(d)}">${lv}</span><span class="name">${d.name}${stars ? `<span class="stars" aria-hidden="true">${'★'.repeat(Math.min(stars, 5))}</span>` : ''}${starved ? `<span class="need">${needTxt}</span>` : ''}<span class="bar"><i></i></span></span>${canUp ? `<span class="up">${ICON.up}</span>` : ''}`,
-      progress: f.util,
-      aria: `${d.name}, level ${lv}${starved ? ', ' + needTxt : ''}${canUp ? ', upgrade available' : ''}`,
+      cls: 'bub cash' + (full ? ' full' : '') + (f.starved ? ' warn-dot' : ''),
+      html: `${COIN}<b>${fmt(amount)}</b>${full ? '<i>FULL</i>' : ''}`,
+      aria: `${d.name}: $${fmt(amount)} ready. Tap to collect.`,
     };
   }
-  const ok = game.canAfford(d.unlock);
-  return { cls: 'lot' + (ok ? ' ok' : ''), html: `Build · $${fmtCost(d.unlock)}`, progress: 0, aria: `Empty lot. Build ${d.name} for $${fmtCost(d.unlock)}` };
+  if (f.starved) return { cls: 'bub warn', html: '!', aria: `${d.name} is short on supplies` };
+  return { cls: '', html: '', aria: '' };
 }
 
 // ---------- bottom sheet ----------
 let buyMode = 1;
 const sheet = $('sheet');
 let sheetKey = '';
-const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.s.run.cash)) : buyMode;
+const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.run.cash)) : buyMode;
 
 function supplyBlock(d) {
   const i = idx(d.id);
@@ -130,7 +124,7 @@ function renderSupportSheet(d, lv) {
   const n = buyCount(d, lv);
   const cost = upgradeCost(d, lv, n);
   const afford = game.canAfford(cost);
-  const short = cost - game.s.run.cash;
+  const short = cost - game.run.cash;
   const fl = game.baseFlow();
   const f = game.info(d.id);
   const nm = nextMilestone(lv);
@@ -165,6 +159,18 @@ function renderSupportSheet(d, lv) {
     <p class="fact"><b>Good to know:</b> ${FACTS[d.id]}</p>`;
 }
 
+function managerBlock(d) {
+  if (game.hasManager(d.id)) return `<div class="mgr on"><span class="mgr-ic" aria-hidden="true">${ICON.person}</span><span><b>Manager on duty.</b> Collects this building's money automatically.</span></div>`;
+  const cost = managerCost(d);
+  const ok = game.canAfford(cost);
+  const stored = game.bin(d.id), cap = game.binCap(d.id);
+  return `<div class="mgr">
+      <span class="mgr-ic" aria-hidden="true">${ICON.person}</span>
+      <span class="mgr-txt"><b>Storage: $${fmt(stored)} of $${fmt(cap)}</b>Tap the building to collect. A manager collects for you.</span>
+      <button class="btn small" data-act="manager" ${ok ? '' : 'disabled'}>Hire · $${fmtCost(cost)}</button>
+    </div>`;
+}
+
 function renderSheet(force = false) {
   const id = world.selected;
   if (!id) { sheet.hidden = true; sheetKey = ''; return; }
@@ -180,10 +186,10 @@ function renderSheet(force = false) {
     const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 0;
     const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
     const afford = game.canAfford(cost);
-    const short = cost - game.s.run.cash;
+    const short = cost - game.run.cash;
     const rocketBlock = id === 'rocket' ? `
       <div class="launch-box">
-        <div><b>${Math.floor(game.s.run.rocketsBuilt)}</b> rocket${Math.floor(game.s.run.rocketsBuilt) === 1 ? '' : 's'} built</div>
+        <div><b>${Math.floor(game.run.rocketsBuilt)}</b> rocket${Math.floor(game.run.rocketsBuilt) === 1 ? '' : 's'} built</div>
         <button class="btn red" data-act="launch" ${game.canLaunch() ? '' : 'disabled'}>${game.canLaunch() ? `Launch · +${Math.max(1, game.launchPreview())} Engineering Points` : 'First rocket still in the shop'}</button>
       </div>` : '';
     html = `
@@ -197,6 +203,7 @@ function renderSheet(force = false) {
         <div class="stat"><small>Earns</small><b>$${fmt(earnNow)}/s</b></div>
       </div>
       ${supplyBlock(d)}
+      ${managerBlock(d)}
       ${rocketBlock}
       <div class="mile">
         <div class="mile-row"><span>${nm ? `Level ${nm}: runs twice as fast` : 'All speed bonuses earned'}</span><span>${nm ? `${lv}/${nm}` : ''}</span></div>
@@ -212,7 +219,7 @@ function renderSheet(force = false) {
       <p class="fact"><b>How it’s made:</b> ${FACTS[id]}</p>`;
   } else {
     const afford = game.canAfford(d.unlock);
-    const short = d.unlock - game.s.run.cash;
+    const short = d.unlock - game.run.cash;
     const prev = idx(id) > 0 ? FACTORIES[idx(id) - 1] : null;
     if (isSupport(id)) {
       html = `
@@ -276,12 +283,34 @@ sheet.addEventListener('click', async e => {
   if (act === 'cash-ad') {
     const d = def(id), lv = game.level(id);
     const need = lv > 0 ? upgradeCost(d, lv, buyCount(d, lv)) : d.unlock;
-    const amount = cashAdAmount(need - game.s.run.cash);
+    const amount = cashAdAmount(need - game.run.cash);
     if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`); }
   }
   if (act === 'launch') openLaunch();
+  if (act === 'manager' && game.hireManager(id)) { sfx.milestone(); toast(`Manager hired at the ${def(id).name}`); track('manager_hired', { factory: id }); }
   renderSheet(true);
 });
+
+// Tapping a coin bubble collects that building's money. Tapping the building itself
+// collects too and opens its panel (tap it again, or the ground, to close).
+function collectAt(id) {
+  const amount = !isSupport(id) && game.built(id) && !game.hasManager(id) ? game.bin(id) : 0;
+  if (amount < 1) return 0;
+  game.collect(id);
+  world.pop(id, `+$${fmt(amount)}`, 'big');
+  world.bounce(id);
+  sfx.coin();
+  if (!game.s.tutorial.collected) track('tutorial_step', { step: 'collected' });
+  return amount;
+}
+world.onBubble = id => {
+  if (!collectAt(id)) world.select(id);
+  else if (world.selected) world.select(id);
+};
+world.onTap = id => {
+  collectAt(id);
+  world.select(world.selected === id ? null : id);
+};
 
 world.onPick = id => {
   if (id) {
@@ -431,18 +460,19 @@ game.on('contract', c => {
 
 // ---------- rocket launch ----------
 function openLaunch() {
-  const gain = Math.max(1, game.launchPreview());
-  const nextTheme = themeFor(game.s.launches + 1);
+  const gain = game.launchPreview();
   const totalAfter = (game.s.ep + gain) * EP_BONUS * 100;
+  const w = game.world, next = game.nextWorld();
+  const unlocks = next && !game.s.worlds[next.id];
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch the rocket?</h2>
-    <p>Your town resets, but you keep <b>Engineering Points</b>. Each one adds ${EP_BONUS * 100}% income forever. Next stop: <b>${THEME_NAMES[nextTheme]}</b>.</p>
+    <p>Your ${w.short} town resets, but you keep <b>Engineering Points</b>. Each one adds ${EP_BONUS * 100}% income in every world, forever.${unlocks ? ` This launch unlocks <b>${next.name}</b>.` : ''}</p>
     <div class="stats">
       <div class="stat"><small>Points from launch</small><b><em>+${gain}</em></b></div>
       <div class="stat"><small>Income bonus after</small><b>+${fmt(totalAfter)}%</b></div>
     </div>
-    <p class="small">Launching later gives more points: they grow with the cash you earn this run.</p>
+    <p class="small">Launching later gives more points: they grow with the cash you earn in this town.${w.perks.ep ? ' Low gravity here doubles them.' : ''}</p>
     <button class="btn gold" data-act="l2">${AD} Launch with 2× points (+${gain * 2})</button>
     <button class="btn red" data-act="l1">Launch now</button>
     <button class="btn plain" data-act="dismiss">Not yet</button>`, async act => {
@@ -450,6 +480,14 @@ function openLaunch() {
     if (act === 'l2' && await watch('launch_double', 'double Engineering Points')) mult = 2;
     if (act === 'l1' || act === 'l2') await doLaunch(mult);
   });
+}
+
+function rebuildTown() {
+  world.select(null);
+  world.clearDeliveries();
+  world.setTheme(game.theme());
+  syncBuilt();
+  world.target.set(7, 0, 12);
 }
 
 let launching = false;
@@ -464,25 +502,77 @@ async function doLaunch(mult) {
   flash.hidden = false;
   await new Promise(r => setTimeout(r, 450));
   const before = game.s.ep;
-  const gained = game.launch(mult);
-  track('rocket_launched', { ep_gained: gained, launches: game.s.launches, doubled: mult === 2 });
-  world.clearDeliveries();
-  world.setTheme(game.theme());
-  syncBuilt();
-  world.target.set(7, 0, 12);
+  const { gained, unlocked, from } = game.launch(mult);
+  track('rocket_launched', { ep_gained: gained, launches: game.s.launches, doubled: mult === 2, world: from, unlocked: unlocked || '' });
+  rebuildTown();
   save();
   setTimeout(() => { flash.hidden = true; document.body.classList.remove('launching'); }, 600);
   launching = false;
+  const next = game.nextWorld();
+  const here = worldById(from);
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch successful!</h2>
-    <p>Welcome to <b>${THEME_NAMES[game.theme()]}</b>. Your new town starts with a permanent income bonus.</p>
+    <p>${unlocked ? `You unlocked <b>${worldById(unlocked).name}</b>. ${worldById(unlocked).perk}` : `Your ${here.short} town is ready to rebuild, with a bigger income bonus.`}</p>
     <div class="stats">
       <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
       <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
     </div>
-    <button class="btn green" data-act="dismiss">Start building</button>`);
+    ${next && game.s.worlds[next.id] ? `<button class="btn green" data-act="go">Travel to ${next.short}</button><button class="btn plain" data-act="dismiss">Rebuild ${here.short}</button>` : `<button class="btn green" data-act="dismiss">Start rebuilding</button>`}
+    <p class="small">You can switch worlds any time with the map button.</p>`, act => {
+    if (act === 'go' && next) doTravel(next.id);
+  });
 }
+
+// ---------- world map ----------
+function openMap() {
+  sfx.tap();
+  const cards = WORLDS.map((w, i) => {
+    const open = !!game.s.worlds[w.id];
+    const here = w.id === game.s.current;
+    const prev = WORLDS[i - 1];
+    const fl = open ? game.flowFor(w.id) : null;
+    const status = here ? '<span class="w-here">You are here</span>'
+      : open ? `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`
+      : '<span class="w-lock">Locked</span>';
+    return `<div class="w-card ${here ? 'here' : ''} ${open ? '' : 'locked'} w-${w.id}">
+      <span class="w-swatch" aria-hidden="true"></span>
+      <span class="w-info">
+        <b>${w.name}</b>
+        <small>${open ? w.perk : `Launch a rocket from ${prev.short} to unlock.`}</small>
+        ${open ? `<small class="w-rate">${fl && fl.income > 0 ? `Earns $${fmt(fl.income)}/s` : 'Not built yet'}</small>` : ''}
+      </span>
+      ${status}
+    </div>`;
+  }).join('');
+  openModal(`
+    <div class="big-icon">${ICON.globe}</div>
+    <h2>Your worlds</h2>
+    <p>Each world is its own town. Towns you leave keep earning for up to ${GAME.offlineCapHours} hours.</p>
+    <div class="w-list">${cards}</div>
+    <button class="btn plain" data-act="dismiss">Close</button>`, act => {});
+  // travel buttons live inside the modal
+}
+modal.addEventListener('click', e => {
+  const b = e.target.closest('[data-act="travel"]');
+  if (b) { e.stopPropagation(); closeModal(false); doTravel(b.dataset.world); }
+}, true);
+
+async function doTravel(id) {
+  if (launching || id === game.s.current) return;
+  const flash = $('flash');
+  flash.hidden = false;
+  await new Promise(r => setTimeout(r, 350));
+  const res = game.travel(id);
+  if (!res) { flash.hidden = true; return; }
+  track('world_travel', { to: id });
+  rebuildTown();
+  save();
+  setTimeout(() => { flash.hidden = true; }, 600);
+  toast(res.earned > 0 ? `Welcome to ${game.world.short}! +$${fmt(res.earned)} while you were away` : `Welcome to ${game.world.name}`);
+}
+$('map-btn').addEventListener('click', openMap);
+
 $('launch-btn').addEventListener('click', () => { sfx.tap(); openLaunch(); });
 
 // ---------- daily reward ----------
@@ -556,7 +646,8 @@ function welcomeBack() {
 function hintText() {
   if (game.s.launches === 0 && !game.s.tutorial.done) {
     const t = game.s.tutorial;
-    if (!t.opened) return 'Tap the Ore Mine';
+    if (!t.collected) return game.bin('mine') >= 1 ? 'Tap the coin to collect your mine\u2019s money' : 'Your Ore Mine is digging\u2026';
+    if (!t.opened) return 'Tap the mine building to see upgrades';
     if (!t.upgraded) return 'Upgrade the mine to dig more ore';
     if (!game.built('furnace')) return game.canAfford(def('furnace').unlock) ? 'Build a Steel Furnace to turn ore into steel' : `Save $${fmtCost(def('furnace').unlock)} for a Steel Furnace`;
     if (game.info('furnace').starved && game.level('furnace') > 1) return 'The furnace is short on ore. Upgrade the mine!';
@@ -565,7 +656,9 @@ function hintText() {
     if (game.s.contractsDone > 0 || game.built('engine')) { t.done = true; track('tutorial_step', { step: 'done' }); }
     return '';
   }
-  // later tip: the power plant + data center combo
+  const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
+  if (full) return `Your ${full.name} is full. Tap it to collect!`;
+  if (!Object.keys(game.run.managers).length && game.canAfford(managerCost(def('mine')))) return 'Tip: hire a manager to collect automatically';
   if (!game.built('power') && game.canAfford(def('power').unlock)) return 'New: a Power Plant and Data Center speed up every factory';
   if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return 'Build the Data Center to turn power into speed';
   return '';
@@ -574,7 +667,6 @@ function hintText() {
 // ---------- events from the game ----------
 const popAcc = {};
 const popT = {};
-game.on('produce', (id, amount) => { popAcc[id] = (popAcc[id] || 0) + amount; });
 game.on('built', id => {
   world.setBuilt(id, true);
   sfx.build();
@@ -636,13 +728,8 @@ function loop(now) {
   if (!launching) game.tick(dt);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
-  $('cash').textContent = '$' + (game.s.run.cash < 1000 ? Math.floor(game.s.run.cash) : fmt(game.s.run.cash));
+  $('cash').textContent = '$' + (game.run.cash < 1000 ? Math.floor(game.run.cash) : fmt(game.run.cash));
   $('rate').textContent = `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`;
-  // floating "+$" over each factory
-  for (const f of FACTORIES) {
-    popT[f.id] = (popT[f.id] ?? Math.random() * 1.5) - dt;
-    if (popT[f.id] <= 0) { popT[f.id] = 1.6; if (popAcc[f.id] > 0) world.pop(f.id, `+$${fmt(popAcc[f.id])}`); popAcc[f.id] = 0; }
-  }
   uiT -= dt;
   if (uiT <= 0) {
     uiT = 0.2;
@@ -654,6 +741,8 @@ function loop(now) {
     if (game.s.ep > 0) { $('ep').hidden = false; $('ep').textContent = `+${fmt(game.s.ep * EP_BONUS * 100)}% · ${game.s.ep} EP`; }
     else $('ep').hidden = true;
     world.setRocketReady(game.canLaunch());
+    const mb = $('map-btn'); const wl = game.unlockedWorlds().length;
+    mb.hidden = wl < 2; $('map-name').textContent = game.world.short;
     const showLaunch = game.canLaunch() && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;
     const h = world.selected || showLaunch ? '' : hintText();

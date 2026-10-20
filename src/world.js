@@ -45,6 +45,8 @@ export class World {
     this.lots = {};
     this.selected = null;
     this.onPick = () => {};
+    this.onTap = id => this.select(id);      // tap on a building
+    this.onBubble = id => this.select(id);   // tap on its bubble
     this.onDelivery = () => {};
     this.smoke = [];
     this.pops = [];
@@ -197,7 +199,7 @@ export class World {
 
     const label = document.createElement('button');
     label.className = 'lot-label';
-    label.addEventListener('click', e => { e.stopPropagation(); this.select(def.id); });
+    label.addEventListener('click', e => { e.stopPropagation(); this.onBubble(def.id); });
     this.labelsEl.appendChild(label);
 
     this.lots[def.id] = { def, group, pad, ring, sale, crates, model: null, anim: null, top: 2.4, label, bounce: 0, grow: 1, speed: 1, at: 0 };
@@ -366,6 +368,10 @@ export class World {
   clearDeliveries() {
     for (const d of this.deliveries) { this.scene.remove(d.mesh); d.mesh.visible = false; this.truckPool.push(d.mesh); }
     this.deliveries = [];
+    for (const sm of this.smoke) { this.scene.remove(sm.m); sm.m.geometry.dispose(); sm.m.material.dispose(); }
+    this.smoke = [];
+    for (const p of this.pops) p.el.remove();
+    this.pops = [];
   }
 
   // ---------- rocket launch ----------
@@ -465,7 +471,7 @@ export class World {
     ray.setFromCamera(ndc, this.camera);
     const hits = ray.intersectObjects(Object.values(this.lots).map(l => l.group), true);
     const hit = hits.find(h => h.object.userData.lotId);
-    this.select(hit ? hit.object.userData.lotId : null);
+    if (hit) this.onTap(hit.object.userData.lotId); else this.select(null);
   }
 
   resize() {
@@ -578,7 +584,7 @@ export class World {
     for (const [id, L] of Object.entries(this.lots)) {
       const s = this.#project(new THREE.Vector3(L.group.position.x, L.top * L.grow + 0.15, L.group.position.z));
       const info = labelFor(id);
-      if (L.label._html !== info.html) { L.label.innerHTML = info.html; L.label._html = info.html; L.bar = L.label.querySelector('.bar i'); }
+      if (L.label._html !== info.html) { L.label.innerHTML = info.html; L.label._html = info.html; L.bar = L.label.querySelector('.bar i'); L.label.hidden = !info.html; }
       if (L.bar) L.bar.style.width = (info.progress * 100).toFixed(1) + '%';
       const cls = 'lot-label ' + info.cls + (this.selected === id ? ' sel' : '');
       if (L.label.className !== cls) L.label.className = cls;
@@ -590,7 +596,7 @@ export class World {
       p.age += dt;
       const L = this.lots[p.id];
       const s = this.#project(new THREE.Vector3(L.group.position.x, L.top * L.grow + 0.15, L.group.position.z));
-      const y = s.y - 44 - p.age * 36;
+      const y = s.y - 30 - p.age * 46;
       const off = y < 190 || y > this.canvas.clientHeight - 40 || s.x < 20 || s.x > this.canvas.clientWidth - 20;
       p.el.style.transform = `translate(${s.x}px, ${y}px) translate(-50%, -100%)`;
       p.el.style.opacity = off ? '0' : String(Math.max(0, 1 - p.age / 1.2));

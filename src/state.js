@@ -1,14 +1,19 @@
-// Game state: cash, factory levels, boosts, contracts, launches, and the per-frame tick.
-import { FACTORIES, ALL, flow, upgradeCost, epForRun, EP_BONUS, themeFor } from './economy.js';
+// Game state: worlds (each its own town), stored money, managers, boosts, contracts,
+// launches, and the per-frame tick.
+import {
+  FACTORIES, ALL, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, managerCost,
+} from './economy.js';
 import { GAME } from './config.js';
 import * as storage from './storage.js';
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
+const OLD_KEYS = ['boltworks.save.v3'];
 
 function freshRun() {
   const levels = {};
   for (const f of ALL) levels[f.id] = f.unlock === 0 ? 1 : 0;
-  return { cash: 0, runEarned: 0, levels, made: {}, rocketsBuilt: 0 };
+  // bins: money waiting in each building; managers: buildings that collect automatically
+  return { cash: 0, runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, lastActive: Date.now() };
 }
 
 export function freshState() {
@@ -18,19 +23,25 @@ export function freshState() {
     firstSeen: Date.now(),
     lastSeen: Date.now(),
     totalEarned: 0,
-    run: freshRun(),
-    ep: 0,               // Engineering Points (permanent)
+    current: 'colorado',
+    worlds: { colorado: freshRun() },
+    ep: 0,               // Engineering Points (permanent, shared by every world)
     launches: 0,
     boostUntil: 0,
-    contract: null,      // active order
+    contract: null,      // active order (in the current world)
     nextContractAt: Date.now() + 90_000,
     contractsDone: 0,
     daily: { lastDay: '', streak: 0 },
-    tutorial: { opened: false, upgraded: false, done: false },
+    tutorial: { opened: false, collected: false, upgraded: false, done: false },
     settings: { sound: true },
     adsWatched: 0,
     playDays: [],        // calendar days played, for retention stats
   };
+}
+
+function mergeRun(saved) {
+  const base = freshRun();
+  return { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) } };
 }
 
 export class Game {
@@ -43,12 +54,30 @@ export class Game {
   emit(evt, ...a) { for (const fn of this.listeners[evt] || []) fn(...a); }
 
   async load() {
-    const saved = await storage.load(GAME.saveKey);
+    let saved = await storage.load(GAME.saveKey);
+    // bring a version-3 save forward: its single town becomes the world it was on
+    if (!saved) {
+      for (const k of OLD_KEYS) {
+        const old = await storage.load(k);
+        if (old && old.v === 3 && old.run) {
+          const cur = WORLDS[Math.min(old.launches || 0, WORLDS.length - 1)].id;
+          const worlds = {};
+          for (const w of WORLDS.slice(0, WORLDS.findIndex(x => x.id === cur) + 1)) worlds[w.id] = freshRun();
+          worlds[cur] = mergeRun(old.run);
+          saved = { ...old, v: SAVE_VERSION, current: cur, worlds };
+          delete saved.run;
+          break;
+        }
+      }
+    }
     if (saved && saved.v === SAVE_VERSION) {
       const base = freshState();
+      const worlds = {};
+      for (const [k, v] of Object.entries(saved.worlds || {})) worlds[k] = mergeRun(v);
+      if (!Object.keys(worlds).length) worlds.colorado = freshRun();
       this.s = {
-        ...base, ...saved,
-        run: { ...base.run, ...saved.run, levels: { ...base.run.levels, ...(saved.run?.levels || {}) } },
+        ...base, ...saved, worlds,
+        current: worlds[saved.current] ? saved.current : Object.keys(worlds)[0],
         daily: { ...base.daily, ...saved.daily },
         tutorial: { ...base.tutorial, ...saved.tutorial },
         settings: { ...base.settings, ...saved.settings },
@@ -58,6 +87,7 @@ export class Game {
   }
   async save() {
     this.s.lastSeen = Date.now();
+    this.run.lastActive = Date.now();
     await storage.save(GAME.saveKey, this.s);
   }
   async reset() {
@@ -69,46 +99,79 @@ export class Game {
     this.emit('change');
   }
 
+  // ---- the current world ----
+  get run() { return this.s.worlds[this.s.current]; }
+  get world() { return worldById(this.s.current); }
+  theme() { return this.s.current; }
+  unlockedWorlds() { return WORLDS.filter(w => this.s.worlds[w.id]); }
+
   // ---- derived numbers ----
   invalidate() { this.cache = null; }
-  get levels() { return this.s.run.levels; }
+  get levels() { return this.run.levels; }
   level(id) { return this.levels[id] || 0; }
   built(id) { return this.level(id) > 0; }
+  hasManager(id) { return !!this.run.managers[id]; }
   boostLeft(now = Date.now()) { return Math.max(0, this.s.boostUntil - now) / 1000; }
   epMult() { return 1 + this.s.ep * EP_BONUS; }
   mult(now = Date.now()) { return (this.boostLeft(now) > 0 ? 2 : 1) * this.epMult(); }
-  theme() { return themeFor(this.s.launches); }
-  // flow without the ad boost (cached until levels or EP change)
+  // flow without the ad boost (cached until levels, EP or world change)
   baseFlow() {
-    if (!this.cache) this.cache = flow(this.levels, this.epMult());
+    if (!this.cache) this.cache = flow(this.levels, this.epMult(), this.world.perks);
     return this.cache;
+  }
+  flowFor(worldId) {
+    const r = this.s.worlds[worldId];
+    return r ? flow(r.levels, this.epMult(), worldById(worldId).perks) : null;
   }
   info(id) { const f = this.baseFlow(); return f.per.find(p => p.id === id) || f.support[id]; }
   baseRate() { return this.baseFlow().income; }
   rate() { return this.baseRate() * (this.boostLeft() > 0 ? 2 : 1); }
+  // money per second one factory earns (with boost)
+  earnRate(id) {
+    const d = FACTORIES.find(f => f.id === id);
+    const p = this.info(id);
+    return d && p ? p.made * d.value * this.mult() : 0;
+  }
+  bin(id) { return this.run.bins[id] || 0; }
+  binCap(id) { return Math.max(10, this.earnRate(id) * BIN_SECONDS); }
+  binFull(id) { return this.bin(id) >= this.binCap(id) - 1e-6; }
 
   // ---- per-frame production ----
   tick(dt) {
     const boost = this.boostLeft() > 0 ? 2 : 1;
     const per = this.baseFlow().per;
-    let earned = 0;
+    const run = this.run;
+    let direct = 0;
     for (let i = 0; i < per.length; i++) {
       const p = per[i];
       if (!p.made) continue;
       const d = FACTORIES[i];
       const units = p.made * dt;
-      this.s.run.made[d.id] = (this.s.run.made[d.id] || 0) + units;
+      run.made[d.id] = (run.made[d.id] || 0) + units;
+      if (d.id === 'rocket') run.rocketsBuilt += units;
       const amount = units * d.value * this.epMult() * boost;
-      earned += amount;
-      this.emit('produce', d.id, amount, units);
-      if (d.id === 'rocket') this.s.run.rocketsBuilt += units;
+      if (run.managers[d.id]) direct += amount;
+      else {
+        const cap = this.binCap(d.id);
+        run.bins[d.id] = Math.min(cap, (run.bins[d.id] || 0) + amount);
+      }
     }
-    this.addEarned(earned);
+    if (direct) this.addEarned(direct);
     this.tickContract(dt);
   }
-  addEarned(n) { this.s.run.cash += n; this.s.run.runEarned += n; this.s.totalEarned += n; }
+  addEarned(n) { this.run.cash += n; this.run.runEarned += n; this.s.totalEarned += n; }
 
-  canAfford(cost) { return this.s.run.cash >= cost - 1e-9; }
+  collect(id) {
+    const amount = this.bin(id);
+    if (amount <= 0) return 0;
+    this.run.bins[id] = 0;
+    this.addEarned(amount);
+    this.s.tutorial.collected = true;
+    this.emit('collected', id, amount);
+    return amount;
+  }
+
+  canAfford(cost) { return this.run.cash >= cost - 1e-9; }
 
   buyLevels(id, n) {
     const def = ALL.find(f => f.id === id);
@@ -116,7 +179,7 @@ export class Game {
     if (n <= 0 || lv <= 0) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
-    this.s.run.cash -= cost;
+    this.run.cash -= cost;
     this.levels[id] = lv + n;
     this.s.tutorial.upgraded = true;
     this.invalidate();
@@ -128,10 +191,23 @@ export class Game {
   build(id) {
     const def = ALL.find(f => f.id === id);
     if (this.built(id) || !this.canAfford(def.unlock)) return false;
-    this.s.run.cash -= def.unlock;
+    this.run.cash -= def.unlock;
     this.levels[id] = 1;
     this.invalidate();
     this.emit('built', id);
+    this.emit('change');
+    return true;
+  }
+
+  hireManager(id) {
+    const def = FACTORIES.find(f => f.id === id);
+    if (!def || !this.built(id) || this.hasManager(id)) return false;
+    const cost = managerCost(def);
+    if (!this.canAfford(cost)) return false;
+    this.run.cash -= cost;
+    this.run.managers[id] = true;
+    this.collect(id);
+    this.emit('manager', id);
     this.emit('change');
     return true;
   }
@@ -145,22 +221,50 @@ export class Game {
     this.emit('change');
   }
 
-  // ---- offline ----
+  // ---- offline (the warehouse keeps everything while the app is closed) ----
   offlineEarnings(now = Date.now()) {
     const from = this.s.lastSeen || now;
     const elapsed = Math.min(Math.max(0, (now - from) / 1000), GAME.offlineCapHours * 3600);
     const boosted = Math.min(elapsed, Math.max(0, (this.s.boostUntil - from) / 1000));
     return { seconds: elapsed, amount: this.baseRate() * (elapsed + boosted) };
   }
-  // production that happened while away also counts toward the active contract and rockets
   applyOfflineProduction(seconds) {
+    const run = this.run;
     for (const p of this.baseFlow().per) {
       if (!p.made) continue;
       const units = p.made * seconds;
-      this.s.run.made[p.id] = (this.s.run.made[p.id] || 0) + units;
-      if (p.id === 'rocket') this.s.run.rocketsBuilt += units;
+      run.made[p.id] = (run.made[p.id] || 0) + units;
+      if (p.id === 'rocket') run.rocketsBuilt += units;
     }
     this.tickContract(seconds);
+  }
+
+  // ---- travel between worlds ----
+  // Towns you're not in keep earning like they do while the app is closed
+  // (up to the warehouse limit); you collect it when you arrive.
+  travel(id) {
+    if (!this.s.worlds[id] || id === this.s.current) return null;
+    this.run.lastActive = Date.now();
+    this.s.current = id;
+    this.s.contract = null;
+    this.s.nextContractAt = Date.now() + 60_000;
+    this.invalidate();
+    const run = this.run;
+    const elapsed = Math.min(Math.max(0, (Date.now() - (run.lastActive || Date.now())) / 1000), GAME.offlineCapHours * 3600);
+    let earned = 0;
+    if (elapsed > 30) {
+      earned = this.baseRate() * elapsed;
+      for (const p of this.baseFlow().per) {
+        if (!p.made) continue;
+        run.made[p.id] = (run.made[p.id] || 0) + p.made * elapsed;
+        if (p.id === 'rocket') run.rocketsBuilt += p.made * elapsed;
+      }
+      this.addEarned(earned);
+    }
+    run.lastActive = Date.now();
+    this.emit('travel', id, earned, elapsed);
+    this.emit('change');
+    return { earned, elapsed };
   }
 
   // ---- contracts ----
@@ -181,12 +285,10 @@ export class Game {
   newContract() {
     const builtIds = FACTORIES.filter(f => this.built(f.id) && this.info(f.id).made > 0).map(f => f.id);
     if (!builtIds.length) { this.s.nextContractAt = Date.now() + 30_000; return; }
-    // favor the newest products
     const pick = builtIds[Math.max(0, builtIds.length - 1 - Math.floor(Math.random() * Math.min(2, builtIds.length)))];
     const d = FACTORIES.find(f => f.id === pick);
     const minutes = [5, 8, 10, 15][Math.floor(Math.random() * 4)];
     const rate = this.info(pick).made;
-    // a little more than current output, so the player has to upgrade to make it
     const stretch = 1.15 + Math.random() * 0.6;
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
     const reward = Math.max(50, target * d.value * this.epMult() * 2.5);
@@ -218,19 +320,29 @@ export class Game {
   }
 
   // ---- rocket launch ----
-  canLaunch() { return this.s.run.rocketsBuilt >= 1; }
-  launchPreview() { return epForRun(this.s.run.runEarned); }
-  launch(epMult = 1) {
-    const gained = Math.max(1, this.launchPreview()) * epMult;
+  canLaunch() { return this.run.rocketsBuilt >= 1; }
+  launchPreview() { return Math.max(1, epForRun(this.run.runEarned)) * (this.world.perks.ep || 1); }
+  nextWorld() {
+    const i = WORLDS.findIndex(w => w.id === this.s.current);
+    return WORLDS[i + 1] || null;
+  }
+  // Launching resets this world's town for Engineering Points and, the first time,
+  // unlocks the next world.
+  launch(adMult = 1) {
+    const gained = this.launchPreview() * adMult;
     this.s.ep += gained;
     this.s.launches++;
-    this.s.run = freshRun();
+    const from = this.s.current;
+    this.s.worlds[from] = freshRun();
+    const next = this.nextWorld();
+    let unlocked = null;
+    if (next && !this.s.worlds[next.id]) { this.s.worlds[next.id] = freshRun(); unlocked = next.id; }
     this.s.contract = null;
     this.s.nextContractAt = Date.now() + 90_000;
     this.invalidate();
-    this.emit('launched', gained);
+    this.emit('launched', gained, unlocked);
     this.emit('change');
-    return gained;
+    return { gained, unlocked, from };
   }
 
   // ---- daily reward ----
