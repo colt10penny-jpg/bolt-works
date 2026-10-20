@@ -27,7 +27,7 @@ const game = new Game();
 const world = new World($('world'), $('labels'));
 world.lookFor = id => def(id);
 game.unitOf = id => skin(game.s.current, id).unit;
-const def = id => { const base = BUILDINGS.find(f => f.id === id); return base ? { ...base, ...skin(game.s.current, id) } : base; };
+const def = id => { const base = game.defOf(id); return base ? { ...base, ...skin(game.s.current, id) } : base; };
 if (location.search.includes('debug')) Object.assign(window, { __game: game, __world: world });
 const idx = id => FACTORIES.findIndex(f => f.id === id);
 const hex = n => '#' + n.toString(16).padStart(6, '0');
@@ -96,7 +96,7 @@ let buyMode = 1;
 let factOpen = false;
 const sheet = $('sheet');
 let sheetKey = '';
-const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.run.cash)) : buyMode;
+const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode;
 const go = (id, label) => `<button class="link" data-goto="${id}">${label}</button>`;
 const one = u => u.replace(/s$/, '');
 
@@ -139,7 +139,7 @@ function mileBar(lv, word) {
   const nm = nextMilestone(lv);
   const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 0;
   const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
-  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${word}` : 'All bonuses earned'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : ''}</span></div>`;
+  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${word}` : 'Fully expanded'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : ''}</span></div>`;
 }
 function buyRow(d, lv) {
   const n = buyCount(d, lv);
@@ -148,12 +148,12 @@ function buyRow(d, lv) {
   return `<div class="sh-buy">
       <div class="amounts sm" role="group" aria-label="How many levels to buy">
         <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
-        <button data-buy="10" aria-pressed="${buyMode === 10}">×10</button>
+        <button data-buy="5" aria-pressed="${buyMode === 5}">×5</button>
         <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max</button>
       </div>
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `+${n} · $${fmtCost(cost)}` : `Need $${fmtCost(cost - game.run.cash)}`}</button>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `+${n} · $${fmtCost(cost)}` : `Need $${fmtCost(cost - game.cash)}`}</button>
     </div>
-    ${afford ? '' : cashAdButton(cost - game.run.cash)}`;
+    ${afford ? '' : cashAdButton(cost - game.cash)}`;
 }
 function managerRow(d) {
   if (game.hasManager(d.id)) return '';
@@ -182,8 +182,8 @@ function hqSheet(d) {
   }).join('');
   const sub = staff ? `${staff} manager${staff > 1 ? 's' : ''} · ${free} waiting for a job` : 'Hire managers to collect money for you';
   return head(d, ICON.hq, d.name, sub) + `
-    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${afford ? `Hire a manager · $${fmtCost(cost)}` : `Next manager · need $${fmtCost(cost - game.run.cash)}`}</button></div>
-    ${afford ? '' : cashAdButton(cost - game.run.cash)}
+    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${afford ? `Hire a manager · $${fmtCost(cost)}` : `Next manager · need $${fmtCost(cost - game.cash)}`}</button></div>
+    ${afford ? '' : cashAdButton(cost - game.cash)}
     <div class="hq-list">${rows}</div>`;
 }
 
@@ -201,7 +201,7 @@ function renderSheet(force = false) {
     const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
     const made = id === 'power' ? `${fmtRate(game.info('power').made)} MW` : `${fmtRate(fl.compute)} PFLOPS`;
     const sub = `Lv ${lv} · ${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
-    html = head(d, id === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus(d) + mileBar(lv, '2× output') + buyRow(d, lv);
+    html = head(d, id === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus(d) + mileBar(lv, 'bigger building') + buyRow(d, lv);
   } else if (lv > 0) {
     const f = game.info(id);
     const earn = f.made * d.value * game.mult();
@@ -212,7 +212,7 @@ function renderSheet(force = false) {
       return `<div class="sh-row"><span>${Math.floor(game.run.rocketsBuilt)} ${d.unit} ready</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + rocket + mileBar(lv, '2× speed') + buyRow(d, lv) + managerRow(d);
+    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + rocket + mileBar(lv, 'bigger building') + buyRow(d, lv) + managerRow(d);
   } else {
     const afford = game.canAfford(d.unlock);
     const prev = idx(id) > 0 ? def(FACTORIES[idx(id) - 1].id) : null;
@@ -227,8 +227,8 @@ function renderSheet(force = false) {
         <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
       </div>
       ${factOpen ? `<p class="sh-fact">${d.fact}</p>` : ''}
-      <button class="btn green" data-act="build" ${afford ? '' : 'disabled'}>${afford ? `Build · $${fmtCost(d.unlock)}` : `Build · $${fmtCost(d.unlock)} (need $${fmtCost(d.unlock - game.run.cash)} more)`}</button>
-      ${afford ? '' : cashAdButton(d.unlock - game.run.cash)}`;
+      <button class="btn green" data-act="build" ${afford ? '' : 'disabled'}>${afford ? `Build · $${fmtCost(d.unlock)}` : `Build · $${fmtCost(d.unlock)} (need $${fmtCost(d.unlock - game.cash)} more)`}</button>
+      ${afford ? '' : cashAdButton(d.unlock - game.cash)}`;
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   if (sheet.dataset.for !== id) { sheet.innerHTML = html; sheet.dataset.for = id; sheetKey = html; }
@@ -255,8 +255,8 @@ function morphKids(a, b) {
 // The cash ad covers what you're missing (plus a little), or a minute of income,
 // and is only offered when you're within ~10 minutes of affording it, so it speeds
 // you up without skipping the game.
-const cashAdAmount = short => Math.max(short * 1.05, game.baseRate() * 60 * GAME.cashAdMinutes, 25);
-const cashAdOffered = short => short <= Math.max(game.baseRate() * 600, 100);
+const cashAdAmount = short => Math.max(short * 1.05, game.totalRate() * 60 * GAME.cashAdMinutes, 25);
+const cashAdOffered = short => short <= Math.max(game.totalRate() * 600, 100);
 const cashAdButton = short => cashAdOffered(short) ? `<button class="btn gold" data-act="cash-ad">${AD} Watch ad for $${fmt(cashAdAmount(short))}</button>` : '';
 
 sheet.addEventListener('click', async e => {
@@ -276,7 +276,7 @@ sheet.addEventListener('click', async e => {
   if (act === 'cash-ad') {
     const d = def(id), lv = game.level(id);
     const need = id === 'hq' && lv > 0 ? game.nextHireCost() : lv > 0 ? upgradeCost(d, lv, buyCount(d, lv)) : d.unlock;
-    const amount = cashAdAmount(need - game.run.cash);
+    const amount = cashAdAmount(need - game.cash);
     if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`); }
   }
   if (act === 'launch') openLaunch();
@@ -575,7 +575,7 @@ async function doTravel(id, quiet = false) {
   rebuildTown();
   save();
   setTimeout(() => { flash.hidden = true; }, 600);
-  if (!quiet) toast(res.earned > 0 ? `Welcome to ${game.world.short}! +$${fmt(res.earned)} while you were away` : `Welcome to ${game.world.name}`);
+  if (!quiet) toast(`Welcome to ${game.world.name}`);
 }
 $('map-btn').addEventListener('click', openMap);
 
@@ -687,22 +687,25 @@ function achievementTick(silent = false) {
 
 // ---------- offline earnings ----------
 function welcomeBack() {
-  const { seconds, amount } = game.offlineEarnings();
+  const seconds = game.offlineSeconds();
   game.s.lastSeen = Date.now();
-  if (seconds < 60 || amount < 1) return;
-  game.applyOfflineProduction(seconds);
+  if (seconds < 60) return;
+  const amount = game.applyOffline(seconds);   // managers' takings go straight into the wallet
+  const capped = seconds >= GAME.offlineCapHours * 3600 - 1;
+  if (amount < 1) {
+    if (Object.keys(game.s.worlds).some(w => FACTORIES.some(f => (game.s.worlds[w].bins[f.id] || 0) > 0)))
+      toast(`Your factories filled up while you were away. Tap them to collect!`);
+    return;
+  }
   openModal(`
     <div class="big-icon">${ICON.moon}</div>
     <h2>Welcome back, boss</h2>
-    <p>Your factories kept running for ${fmtTime(seconds)} while you were away${seconds >= GAME.offlineCapHours * 3600 - 1 ? ` (the warehouse holds up to ${GAME.offlineCapHours} hours)` : ''}.</p>
+    <p>Your managers kept collecting for ${fmtTime(seconds)} while you were away${capped ? ` (they work up to ${GAME.offlineCapHours} hours)` : ''}. Factories without a manager filled their storage.</p>
     <div class="big-num">$${fmt(amount)}</div>
-    <button class="btn gold" data-act="o2">${AD} Collect 2× · $${fmt(amount * 2)}</button>
-    <button class="btn plain" data-act="o1">Collect $${fmt(amount)}</button>`, async act => {
-    let mult = 1;
-    if (act === 'o2' && await watch('offline_double', 'double offline earnings')) mult = 2;
-    game.addCash(amount * mult);
-    sfx.reward(); toast(`+$${fmt(amount * mult)}`);
-  }, () => game.addCash(amount));
+    <button class="btn gold" data-act="o2">${AD} Double it · +$${fmt(amount)}</button>
+    <button class="btn plain" data-act="o1">Nice!</button>`, async act => {
+    if (act === 'o2' && await watch('offline_double', 'double offline earnings')) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)} more`); }
+  });
 }
 
 // ---------- tutorial hints ----------
@@ -745,7 +748,7 @@ game.on('upgrade', (id, before, after) => {
   const crossed = MILESTONES.filter(m => before < m && after >= m);
   if (crossed.length) {
     sfx.milestone();
-    toast(`${def(id).name} hit level ${crossed[crossed.length - 1]}: twice as fast!`);
+    toast(`${def(id).name} expanded! Bigger and better at level ${crossed[crossed.length - 1]}`);
     track('milestone', { factory: id, level: crossed[crossed.length - 1] });
   } else sfx.upgrade();
 });
@@ -815,7 +818,7 @@ function loop(now) {
   perfCheck(now, dt);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
-  $('cash').textContent = '$' + (game.run.cash < 1000 ? Math.floor(game.run.cash) : fmt(game.run.cash));
+  $('cash').textContent = '$' + (game.cash < 1000 ? Math.floor(game.cash) : fmt(game.cash));
   $('rate').textContent = `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`;
   uiT -= dt;
   if (uiT <= 0) {
@@ -858,7 +861,9 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   const brandNew = game.s.totalEarned === 0 && !game.s.playDays.length;
   // no daily gift on the very first day; it starts tomorrow
   if (brandNew) { game.s.daily = { lastDay: game.today(), streak: 0 }; track('first_open'); }
+  world.ready = true;
   achievementTick(true);   // anything already done counts quietly
+  if (game.rebalanced) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Big update!</h2><p>Upgrades are now bigger steps: each one costs more but makes a real difference, and buildings grow as you upgrade them. Your towns were converted to the new levels, and all your worlds now share one wallet.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   welcomeBack();
   maybeDaily();
   dayCheck();

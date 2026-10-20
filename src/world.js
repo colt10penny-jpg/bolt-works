@@ -2,7 +2,8 @@
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
 import { FACTORIES, BUILDINGS } from './economy.js';
-import { BUILDERS, box, mat, truck, car, crate, powerPole } from './models.js';
+import { BUILDERS, box, cyl, mat, truck, car, crate, powerPole } from './models.js';
+const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLOW } from './models.js';
@@ -264,6 +265,7 @@ export class World {
   // look = { model, color } for this world's version of the building
   setBuilt(id, built, look) {
     const L = this.lots[id];
+    if (built && look) L.look = look;
     if (built && !L.model) {
       const color = look?.color ?? L.def.color;
       const m = (BUILDERS[look?.model] || BUILDERS[id])(color);
@@ -271,7 +273,8 @@ export class World {
       L.crates.children.forEach(c => { c.material = mat(crateColor); });
       m.group.position.y = 0.15;
       L.group.add(m.group);
-      this.#decorate(L, m, id);
+      L.color = color;
+      this.#decorate(L, m, id, L.tier || 0, color);
       bakeModel(m);
       m.group.traverse(o => { o.userData.lotId = id; });
       L.model = m.group; L.anim = m.anim || null; L.top = m.top;
@@ -289,7 +292,7 @@ export class World {
 
   // little touches that make each lot look lived in: rooftop units, a soft shadow
   // under the building, and a couple of parked cars where there's room
-  #decorate(L, m, id) {
+  #decorate(L, m, id, tier = 0, color = 0x888888) {
     let seed = [...id].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647 || 1;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
     const g = m.group;
@@ -317,6 +320,48 @@ export class World {
       unit.position.copy(local); unit.rotation.y = rnd() < 0.5 ? 0 : Math.PI / 2;
       g.add(unit);
     }
+    // upgrade tiers add bigger rooftop gear: a water tank, a radio mast, a lit sign
+    const roofSpot = (fw, fd, minY = 1.8) => {
+      for (let i = 0; i < 30; i++) {
+        const x = bb.min.x + fw + rnd() * Math.max(0, bb.max.x - bb.min.x - fw * 2), z = bb.min.z + fd + rnd() * Math.max(0, bb.max.z - bb.min.z - fd * 2);
+        const hit = topAt(x, z);
+        if (!hit || hit.point.y < minY || !hit.face) continue;
+        if (hit.face.normal.clone().transformDirection(hit.object.matrixWorld).y < 0.98) continue;
+        const ok = [[fw, fd], [-fw, fd], [fw, -fd], [-fw, -fd]].every(([dx, dz]) => { const h = topAt(x + dx, z + dz); return h && h.object === hit.object && Math.abs(h.point.y - hit.point.y) < 0.03; });
+        if (!ok || placed.some(p => Math.hypot(p.x - x, p.z - z) < fw + fd + 0.6)) continue;
+        placed.push(hit.point.clone());
+        return g.worldToLocal(hit.point.clone());
+      }
+      return null;
+    };
+    if (tier >= 2) {
+      const p = roofSpot(0.6, 0.6);
+      if (p) {
+        const tank = new THREE.Group();
+        for (const [dx, dz] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) tank.add(box(0.1, 0.7, 0.1, 0x5b5f66, dx, 0, dz));
+        tank.add(cylY(0.55, 0.9, 0x8a8f99, 0, 0.7, 0), cylY(0.6, 0.12, 0x5b5f66, 0, 1.6, 0));
+        tank.position.copy(p); g.add(tank);
+      }
+    }
+    if (tier >= 4) {
+      const p = roofSpot(0.3, 0.3, 2.5);
+      if (p) {
+        const mast = new THREE.Group();
+        mast.add(box(0.12, 3.2, 0.12, 0xdddddd, 0, 0, 0), box(0.5, 0.06, 0.06, 0xdddddd, 0, 2.2, 0), box(0.06, 0.06, 0.5, 0xdddddd, 0, 2.7, 0));
+        mast.add(box(0.14, 0.14, 0.14, 0xff3b2f, 0, 3.2, 0, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
+        mast.position.copy(p); g.add(mast);
+      }
+    }
+    if (tier >= 6) {
+      const p = roofSpot(1.2, 0.3);
+      if (p) {
+        const sign = new THREE.Group();
+        sign.add(box(0.1, 0.9, 0.1, 0x3a3f48, -0.9, 0, 0), box(0.1, 0.9, 0.1, 0x3a3f48, 0.9, 0, 0));
+        sign.add(box(2.2, 0.8, 0.12, 0xffd23f, 0, 0.8, 0, { emissive: 0xffb300, emissiveIntensity: 0.6 }));
+        sign.add(box(1.6, 0.3, 0.14, 0xffffff, 0, 1.05, 0, { emissive: 0xffffff, emissiveIntensity: 0.8 }));
+        sign.position.copy(p); sign.rotation.y = Math.PI / 4; g.add(sign);
+      }
+    }
     // on the lot itself
     const ex = new THREE.Group();
     const lx = L.group.position.x, lz = L.group.position.z;
@@ -325,11 +370,16 @@ export class World {
     shadow.rotation.x = -Math.PI / 2; shadow.position.set((bb.min.x + bb.max.x) / 2 - lx, 0.162, (bb.min.z + bb.max.z) / 2 - lz);
     shadow.renderOrder = 1;
     ex.add(shadow);
-    if (this.themeName !== 'moon') for (const [cx, cz] of [[3.5, 3.6], [-3.5, 3.6], [3.5, -3.6], [-3.5, -3.6]]) {
+    // loading bays with garage doors, on each side trucks use
+    for (const side of this.#baySides(id)) ex.add(this.#bay(side, color));
+    // free corners: an extra wing for each upgrade tier, parked cars in the rest
+    const corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
+      .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8))
+      .filter(([cx, cz]) => { const hit = topAt(lx + cx, lz + cz); return !(hit && hit.point.y > 0.6); });
+    const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
+    corners.slice(0, wings).forEach(([cx, cz], i) => ex.add(this.#wing(cx, cz, color, tier, i)));
+    if (this.themeName !== 'moon') for (const [cx, cz] of corners.slice(wings)) {
       if (rnd() < 0.45) continue;
-      const hit = topAt(lx + cx, lz + cz);
-      if (hit && hit.point.y > 0.6) continue;               // building there
-      if (L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.4 && Math.abs(c.position.z - cz) < 1.2)) continue;
       const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
       const c = car(colors[Math.floor(rnd() * colors.length)]);
       c.rotation.y = Math.PI / 2; c.position.set(cx, 0.15, cz);
@@ -339,6 +389,64 @@ export class World {
     L.group.add(ex);
     L.extras = ex;
   }
+  // which sides of a lot trucks drive in and out of
+  #baySides(id) {
+    if (!this.bayMap) {
+      const m = {};
+      const add = (lot, pt) => { const [lx, lz] = LOTS[lot]; const dx = Math.round(pt.x - lx), dz = Math.round(pt.z - lz); (m[lot] ||= new Set()).add(Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'x+' : 'x-') : (dz > 0 ? 'z+' : 'z-')); };
+      const pairs = [];
+      for (let i = 1; i < FACTORIES.length; i++) pairs.push([FACTORIES[i - 1].id, FACTORIES[i].id]);
+      for (const f of FACTORIES) pairs.push(['hq', f.id], [f.id, 'hq']);
+      for (const [a, b] of pairs) { const C = lotRoute(LOTS[a], LOTS[b]); if (C) { add(a, C[0]); add(b, C[C.length - 1]); } }
+      this.bayMap = m;
+    }
+    return this.bayMap[id] || new Set();
+  }
+  // a loading bay: open garage door the trucks come and go through
+  #bay(side, color) {
+    const g = new THREE.Group();
+    const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
+    const W = 2.1, H = 1.75, D = 1.7;
+    g.add(box(0.16, H, D, wall, -W / 2, 0, 0), box(0.16, H, D, wall, W / 2, 0, 0));      // side walls
+    g.add(box(W + 0.16, 0.18, D + 0.1, new THREE.Color(wall).multiplyScalar(0.75).getHex(), 0, H, 0));   // roof
+    g.add(box(W, H, 0.12, 0x1e2126, 0, 0, -D / 2 + 0.06));                                 // dark inside
+    g.add(box(W - 0.1, 0.4, 0.14, 0x9aa0a8, 0, H - 0.42, D / 2 - 0.05));                    // rolled-up door
+    for (let k = 0; k < 5; k++) g.add(box(0.36, 0.12, 0.16, k % 2 ? 0x2a2a2e : 0xffc23d, -0.8 + k * 0.4, H - 0.02, D / 2 + 0.02));   // hazard stripe
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
+    g.add(box(0.3, 0.3, 0.06, 0xfff1cf, W / 2 + 0.1, H - 0.35, D / 2 + 0.05, { emissive: 0xffd28a, night: 2.5 }));   // light by the door
+    // the open front faces the driveway
+    const dist = 2.75;
+    const rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    g.rotation.y = rot;
+    g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
+    return g;
+  }
+  // an extra wing added by an upgrade tier
+  #wing(cx, cz, color, tier, i) {
+    const g = new THREE.Group();
+    const c = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.12).getHex();
+    const h = 1.6 + Math.min(6, tier) * 0.45 + (i === 0 ? 0.5 : 0);
+    g.add(box(2.3, h, 2.2, c, 0, 0, 0));
+    g.add(box(2.45, 0.16, 2.35, new THREE.Color(color).multiplyScalar(0.6).getHex(), 0, h, 0));
+    const sx = Math.sign(cx), sz = Math.sign(cz);
+    for (let f = 0; f < Math.floor(h / 0.9); f++) {
+      g.add(box(1.7, 0.36, 0.06, 0x9fd6ff, 0, 0.45 + f * 0.85, sz * 1.11));
+      g.add(box(0.06, 0.36, 1.6, 0x9fd6ff, sx * 1.16, 0.45 + f * 0.85, 0));
+    }
+    if (tier >= 6) for (let k = 0; k < 2; k++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.7), mat(0x2a4f8f)); p.position.set(-0.45 + k * 0.9, h + 0.35, 0); p.rotation.x = -0.45; g.add(p); }
+    g.position.set(cx, 0.15, cz);
+    return g;
+  }
+  #dust(L) {
+    for (let i = 0; i < 14; i++) {
+      const m = this.#puff(0xcfc3ad, false, 1.6 + Math.random() * 1.6);
+      const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 2;
+      m.position.set(L.group.position.x + Math.cos(a) * r, 0.6 + Math.random(), L.group.position.z + Math.sin(a) * r);
+      this.scene.add(m);
+      this.smoke.push({ m, age: Math.random() * 0.3, life: 1.6 + Math.random(), spread: true });
+    }
+  }
+
   #aoMat() {
     if (this.ao) return this.ao;
     const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -357,12 +465,25 @@ export class World {
   // milestone levels make the building a bit taller and wider
   // fraction of the screen (from the top) that's free above an open panel
   setFreeTop(frac) {
-    const y = Math.max(0.12, frac * 0.5);           // aim at the middle of the free area
+    // put the building a little above the middle of the space left above the panel
+    const y = Math.min(0.5, Math.max(0.28, frac * 0.6));
     this.panelShift = Math.min(0.8, Math.max(0, 1 - 2 * y));
     if (this.selected) this.viewShiftTarget = this.panelShift;
   }
 
-  setGrowth(id, milestones) { this.lots[id].grow = 1 + Math.min(6, milestones) * 0.055; }
+  // upgrade tier: the building grows, gains wings and rooftop gear
+  setGrowth(id, tier) {
+    const L = this.lots[id];
+    L.grow = 1 + Math.min(7, tier) * 0.055;
+    if ((L.tier || 0) === tier) return;
+    const up = tier > (L.tier || 0);
+    L.tier = tier;
+    if (L.model && L.look) {
+      const look = L.look;
+      this.setBuilt(id, false); this.setBuilt(id, true, look);
+      if (up && this.ready) { L.bounce = 1; this.#dust(L); }
+    }
+  }
 
   setRocketReady(ready) {
     const L = this.lots.rocket;
@@ -378,6 +499,11 @@ export class World {
 
   select(id) {
     if (this.selected) this.lots[this.selected].ring.visible = false;
+    // remember the view before the first building was opened, and go back to it after
+    if (id && !this.selected && !this.savedView) this.savedView = { target: this.target.clone().setY(0), zoom: this.zoom };
+    if (!id && this.savedView) {
+      this.panTo = this.savedView.target; this.zoomTo = this.savedView.zoom; this.savedView = null;
+    }
     this.selected = id;
     if (id) { this.lots[id].ring.visible = true; this.lots[id].bounce = Math.max(this.lots[id].bounce, 0.6); }
     // with a panel open, raise the view so the chosen building sits above the panel
@@ -385,10 +511,14 @@ export class World {
     this.onPick(id);
   }
 
-  focus(id) {
+  // centre on a building and zoom in so it's easy to see (zoom: false just pans)
+  focus(id, { zoom = true } = {}) {
     const [x, z] = LOTS[id];
-    // aim a bit in front of the lot so it sits in the top half, above the panel
-    this.panTo = new THREE.Vector3(x, 0, z);
+    const L = this.lots[id];
+    // aim at the middle of the building, not its foot
+    const h = zoom ? Math.min(6, (L.top || 2.4) * (L.grow || 1) * 0.45) : 0;
+    this.panTo = new THREE.Vector3(x, h, z);
+    if (zoom) this.zoomTo = Math.max(this.zoom, 1.75);
   }
 
   // poles and a wire from the power plant to the data center, with pulses of power
@@ -520,7 +650,7 @@ export class World {
       if (!L.rocket) { resolve(); return; }
       this.launching = { L, t: 0, resolve, start: L.rocket.position.y };
       L.rocket.visible = true; L.scaffold.visible = false;
-      this.focus('rocket');
+      this.focus('rocket', { zoom: false });
     });
   }
   #updateLaunch(dt) {
@@ -559,7 +689,7 @@ export class World {
     c.addEventListener('pointerdown', e => {
       c.setPointerCapture(e.pointerId);
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size === 1) { downAt = performance.now(); moved = 0; this.panTo = null; }
+      if (pts.size === 1) { downAt = performance.now(); moved = 0; this.panTo = null; this.zoomTo = null; }
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = this.zoom; moved = 99; }
     });
     c.addEventListener('pointermove', e => {
@@ -677,6 +807,10 @@ export class World {
     if (this.panTo) {
       this.target.lerp(this.panTo, Math.min(1, dt * 6));
       if (this.target.distanceTo(this.panTo) < 0.05) this.panTo = null;
+    }
+    if (this.zoomTo) {
+      this.zoom += (this.zoomTo - this.zoom) * Math.min(1, dt * 5);
+      if (Math.abs(this.zoom - this.zoomTo) < 0.004) { this.zoom = this.zoomTo; this.zoomTo = null; }
       this.#clamp();
     }
     this.#updateCamera();

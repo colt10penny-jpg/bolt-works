@@ -1,7 +1,7 @@
 // Game state: worlds (each its own town), stored money, managers, boosts, contracts,
 // launches, and the per-frame tick.
 import {
-  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost,
+  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
 } from './economy.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
@@ -15,7 +15,7 @@ function freshRun() {
   for (const f of BUILDINGS) levels[f.id] = f.unlock === 0 ? 1 : 0;
   // bins: money waiting in each building; managers: factories a manager is working at;
   // staff: managers hired at headquarters (working or waiting for a job)
-  return { cash: 0, runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, lastActive: Date.now() };
+  return { runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, lastActive: Date.now() };
 }
 
 export function freshState() {
@@ -25,6 +25,8 @@ export function freshState() {
     firstSeen: Date.now(),
     lastSeen: Date.now(),
     totalEarned: 0,
+    cash: 0,             // one wallet shared by every world
+    econ: 2,             // economy version (2 = big, costly upgrades)
     current: 'colorado',
     worlds: { colorado: freshRun() },
     ep: 0,               // Engineering Points (permanent, shared by every world)
@@ -98,12 +100,32 @@ export class Game {
         settings: { ...base.settings, ...saved.settings },
         achievements: { ...(saved.achievements || {}) },
       };
+      this.#migrateEconomy(saved);
     }
     this.invalidate();
   }
+
+  // Saves from before the rebalance: one shared wallet, and levels squeezed onto the
+  // new, steeper upgrade scale (old Lv 10 -> 4, Lv 40 -> 8, Lv 128 -> 14).
+  #migrateEconomy(saved) {
+    const s = this.s;
+    if (saved.cash == null || isNaN(saved.cash)) s.cash = Object.values(saved.worlds || {}).reduce((a, r) => a + (r.cash || 0), 0);
+    for (const r of Object.values(s.worlds)) delete r.cash;
+    if ((saved.econ || 1) < 2) {
+      for (const r of Object.values(s.worlds)) {
+        for (const f of ALL) { const L = r.levels[f.id] || 0; if (L > 0) r.levels[f.id] = Math.max(1, Math.round(1.2 * Math.sqrt(L))); }
+        r.bins = {};
+      }
+      s.econ = 2;
+      s.contract = null;
+      this.invalidate();
+      // keep a sensible amount of cash for the new prices: about 10 minutes of income
+      s.cash = Math.min(s.cash, Math.max(200, this.totalRate() * 600));
+      this.rebalanced = true;
+    }
+  }
   async save() {
     this.s.lastSeen = Date.now();
-    this.run.lastActive = Date.now();
     await storage.save(GAME.saveKey, this.s);
   }
   async reset() {
@@ -122,7 +144,8 @@ export class Game {
   unlockedWorlds() { return WORLDS.filter(w => this.s.worlds[w.id]); }
 
   // ---- derived numbers ----
-  invalidate() { this.cache = null; }
+  invalidate() { this.cache = {}; }
+  get cash() { return this.s.cash; }
   get levels() { return this.run.levels; }
   level(id) { return this.levels[id] || 0; }
   built(id) { return this.level(id) > 0; }
@@ -130,52 +153,59 @@ export class Game {
   boostLeft(now = Date.now()) { return Math.max(0, this.s.boostUntil - now) / 1000; }
   epMult() { return 1 + this.s.ep * EP_BONUS; }
   mult(now = Date.now()) { return (this.boostLeft(now) > 0 ? 2 : 1) * this.epMult(); }
-  // flow without the ad boost (cached until levels, EP or world change)
-  baseFlow() {
-    if (!this.cache) this.cache = flow(this.levels, this.epMult(), this.world.perks);
-    return this.cache;
-  }
+  // a building's numbers in a world (later worlds cost more)
+  defOf(id, worldId = this.s.current) { return inWorld(BUILDINGS.find(f => f.id === id), worldById(worldId)); }
+  // flow without the ad boost, cached per world until levels or EP change
   flowFor(worldId) {
     const r = this.s.worlds[worldId];
-    return r ? flow(r.levels, this.epMult(), worldById(worldId).perks) : null;
+    if (!r) return null;
+    if (!this.cache) this.cache = {};
+    return (this.cache[worldId] ||= flow(r.levels, this.epMult(), worldById(worldId).perks));
   }
+  baseFlow() { return this.flowFor(this.s.current); }
   info(id) { const f = this.baseFlow(); return f.per.find(p => p.id === id) || f.support[id]; }
   baseRate() { return this.baseFlow().income; }
-  rate() { return this.baseRate() * (this.boostLeft() > 0 ? 2 : 1); }
+  // everything every world is making, per second (without the ad boost)
+  totalRate() { return Object.keys(this.s.worlds).reduce((a, w) => a + this.flowFor(w).income, 0); }
+  rate() { return this.totalRate() * (this.boostLeft() > 0 ? 2 : 1); }
   // money per second one factory earns (with boost)
-  earnRate(id) {
-    const d = FACTORIES.find(f => f.id === id);
-    const p = this.info(id);
+  earnRate(id, worldId = this.s.current) {
+    const d = this.defOf(id, worldId);
+    const p = this.flowFor(worldId)?.per.find(x => x.id === id);
     return d && p ? p.made * d.value * this.mult() : 0;
   }
   bin(id) { return this.run.bins[id] || 0; }
-  binCap(id) { return Math.max(10, this.earnRate(id) * BIN_SECONDS); }
+  binCap(id, worldId = this.s.current) { return Math.max(10, this.earnRate(id, worldId) * BIN_SECONDS); }
   binFull(id) { return this.bin(id) >= this.binCap(id) - 1e-6; }
 
   // ---- per-frame production ----
-  tick(dt) {
-    const boost = this.boostLeft() > 0 ? 2 : 1;
-    const per = this.baseFlow().per;
-    const run = this.run;
+  // Every world runs all the time. Factories with a manager pay straight into the
+  // wallet; the rest fill their storage until you come and tap them.
+  tick(dt) { this.#produce(dt, true); this.tickContract(dt); }
+  #produce(seconds, live) {
+    const boost = live ? (this.boostLeft() > 0 ? 2 : 1) : 1;
     let direct = 0;
-    for (let i = 0; i < per.length; i++) {
-      const p = per[i];
-      if (!p.made) continue;
-      const d = FACTORIES[i];
-      const units = p.made * dt;
-      run.made[d.id] = (run.made[d.id] || 0) + units;
-      if (d.id === 'rocket') run.rocketsBuilt += units;
-      const amount = units * d.value * this.epMult() * boost;
-      if (run.managers[d.id]) direct += amount;
-      else {
-        const cap = this.binCap(d.id);
-        run.bins[d.id] = Math.min(cap, (run.bins[d.id] || 0) + amount);
+    for (const [wId, run] of Object.entries(this.s.worlds)) {
+      const per = this.flowFor(wId).per;
+      const valueMult = worldById(wId).value || 1;
+      let mine = 0;
+      for (let i = 0; i < per.length; i++) {
+        const p = per[i];
+        if (!p.made) continue;
+        const d = FACTORIES[i];
+        const units = p.made * seconds;
+        run.made[d.id] = (run.made[d.id] || 0) + units;
+        if (d.id === 'rocket') run.rocketsBuilt += units;
+        const amount = units * d.value * valueMult * this.epMult() * boost;
+        if (run.managers[d.id]) mine += amount;
+        else run.bins[d.id] = Math.min(this.binCap(d.id, wId), (run.bins[d.id] || 0) + amount);
       }
+      if (mine) { run.runEarned += mine; direct += mine; }
     }
-    if (direct) this.addEarned(direct);
-    this.tickContract(dt);
+    if (direct) { this.s.cash += direct; this.s.totalEarned += direct; }
+    return direct;
   }
-  addEarned(n) { this.run.cash += n; this.run.runEarned += n; this.s.totalEarned += n; }
+  addEarned(n) { this.s.cash += n; this.run.runEarned += n; this.s.totalEarned += n; }
 
   collect(id) {
     const amount = this.bin(id);
@@ -187,15 +217,15 @@ export class Game {
     return amount;
   }
 
-  canAfford(cost) { return this.run.cash >= cost - 1e-9; }
+  canAfford(cost) { return this.s.cash >= cost - 1e-9; }
 
   buyLevels(id, n) {
-    const def = ALL.find(f => f.id === id);
+    const def = this.defOf(id);
     const lv = this.level(id);
     if (n <= 0 || lv <= 0) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
-    this.run.cash -= cost;
+    this.s.cash -= cost;
     this.levels[id] = lv + n;
     this.s.tutorial.upgraded = true;
     this.invalidate();
@@ -205,9 +235,9 @@ export class Game {
   }
 
   build(id) {
-    const def = BUILDINGS.find(f => f.id === id);
+    const def = this.defOf(id);
     if (this.built(id) || !this.canAfford(def.unlock)) return false;
-    this.run.cash -= def.unlock;
+    this.s.cash -= def.unlock;
     this.levels[id] = 1;
     this.invalidate();
     this.emit('built', id);
@@ -219,12 +249,12 @@ export class Game {
   staff() { return this.run.staff || 0; }
   working() { return FACTORIES.filter(f => this.run.managers[f.id]).length; }
   freeManagers() { return Math.max(0, this.staff() - this.working()); }
-  nextHireCost() { return hireCost(this.staff()); }
+  nextHireCost() { return hireCost(this.staff()) * (this.world.cost || 1); }
   hire() {
     if (!this.built('hq')) return false;
     const cost = this.nextHireCost();
     if (!this.canAfford(cost)) return false;
-    this.run.cash -= cost;
+    this.s.cash -= cost;
     this.run.staff = this.staff() + 1;
     this.emit('hired');
     this.emit('change');
@@ -256,22 +286,17 @@ export class Game {
     this.emit('change');
   }
 
-  // ---- offline (the warehouse keeps everything while the app is closed) ----
-  offlineEarnings(now = Date.now()) {
+  // ---- offline ----
+  // While the app is closed (up to the limit), managers keep collecting in every
+  // world and the other factories fill up their storage.
+  offlineSeconds(now = Date.now()) {
     const from = this.s.lastSeen || now;
-    const elapsed = Math.min(Math.max(0, (now - from) / 1000), GAME.offlineCapHours * 3600);
-    const boosted = Math.min(elapsed, Math.max(0, (this.s.boostUntil - from) / 1000));
-    return { seconds: elapsed, amount: this.baseRate() * (elapsed + boosted) };
+    return Math.min(Math.max(0, (now - from) / 1000), GAME.offlineCapHours * 3600);
   }
-  applyOfflineProduction(seconds) {
-    const run = this.run;
-    for (const p of this.baseFlow().per) {
-      if (!p.made) continue;
-      const units = p.made * seconds;
-      run.made[p.id] = (run.made[p.id] || 0) + units;
-      if (p.id === 'rocket') run.rocketsBuilt += units;
-    }
-    this.tickContract(seconds);
+  // runs the time away; returns what the managers collected (already in the wallet)
+  applyOffline(seconds) {
+    if (seconds <= 0) return 0;
+    return this.#produce(seconds, false);
   }
 
   // ---- travel between worlds ----
@@ -279,27 +304,12 @@ export class Game {
   // (up to the warehouse limit); you collect it when you arrive.
   travel(id) {
     if (!this.s.worlds[id] || id === this.s.current) return null;
-    this.run.lastActive = Date.now();
     this.s.current = id;
     this.s.contract = null;
     this.s.nextContractAt = Date.now() + 60_000;
-    this.invalidate();
-    const run = this.run;
-    const elapsed = Math.min(Math.max(0, (Date.now() - (run.lastActive || Date.now())) / 1000), GAME.offlineCapHours * 3600);
-    let earned = 0;
-    if (elapsed > 30) {
-      earned = this.baseRate() * elapsed;
-      for (const p of this.baseFlow().per) {
-        if (!p.made) continue;
-        run.made[p.id] = (run.made[p.id] || 0) + p.made * elapsed;
-        if (p.id === 'rocket') run.rocketsBuilt += p.made * elapsed;
-      }
-      this.addEarned(earned);
-    }
-    run.lastActive = Date.now();
-    this.emit('travel', id, earned, elapsed);
+    this.emit('travel', id);
     this.emit('change');
-    return { earned, elapsed };
+    return { earned: 0 };
   }
 
   // ---- contracts ----
@@ -326,7 +336,7 @@ export class Game {
     const rate = this.info(pick).made;
     const stretch = 1.15 + Math.random() * 0.6;
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
-    const reward = Math.max(50, target * d.value * this.epMult() * 2.5);
+    const reward = Math.max(50, target * d.value * (this.world.value || 1) * this.epMult() * 2.5);
     const list = (CUSTOMERS[this.s.current] || CUSTOMERS.colorado)[pick];
     this.s.contract = {
       id: pick, unit: this.unitOf ? this.unitOf(pick) : d.unit, customer: list[Math.floor(Math.random() * list.length)],
@@ -382,7 +392,7 @@ export class Game {
     const y = new Date(Date.now() - 86400000);
     const yesterday = `${y.getFullYear()}-${y.getMonth() + 1}-${y.getDate()}`;
     const streak = this.s.daily.lastDay === yesterday ? Math.min(7, this.s.daily.streak + 1) : 1;
-    const amount = Math.max(100 * streak, this.baseRate() * 120 * streak);
+    const amount = Math.max(60 * streak, this.totalRate() * 90 * streak);
     return { streak, amount };
   }
   claimDaily(mult = 1) {

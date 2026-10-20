@@ -98,10 +98,10 @@ function noUturn(C) {
 function exits(lx, lz) {
   const out = [];
   const sides = [
-    { road: { x: lx + 7, z: lz }, inLot: { x: lx + 3.2, z: lz }, along: 'z', ok: AVES.includes(lx + 7) },
-    { road: { x: lx - 7, z: lz }, inLot: { x: lx - 3.2, z: lz }, along: 'z', ok: AVES.includes(lx - 7) },
-    { road: { x: lx, z: lz + 7 }, inLot: { x: lx, z: lz + 3.2 }, along: 'x', ok: CROSS.includes(lz + 7) },
-    { road: { x: lx, z: lz - 7 }, inLot: { x: lx, z: lz - 3.2 }, along: 'x', ok: CROSS.includes(lz - 7) },
+    { road: { x: lx + 7, z: lz }, inLot: { x: lx + 2.6, z: lz }, along: 'z', ok: AVES.includes(lx + 7) },
+    { road: { x: lx - 7, z: lz }, inLot: { x: lx - 2.6, z: lz }, along: 'z', ok: AVES.includes(lx - 7) },
+    { road: { x: lx, z: lz + 7 }, inLot: { x: lx, z: lz + 2.6 }, along: 'x', ok: CROSS.includes(lz + 7) },
+    { road: { x: lx, z: lz - 7 }, inLot: { x: lx, z: lz - 2.6 }, along: 'x', ok: CROSS.includes(lz - 7) },
   ];
   for (const sd of sides) {
     if (!sd.ok) continue;
