@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Materials: physically based, so light, shadow and reflections look solid.
 // Glass and metal colours get shinier materials automatically; glass glows warm at night.
@@ -323,37 +324,138 @@ export function tree(scale = 1, color = 0x3f8f4a) {
   return g;
 }
 
-export function truck(color) {
-  const g = new THREE.Group();
-  g.add(box(1.5, 1, 0.95, 0xf3f0e8, -0.35, 0.25, 0));
-  g.add(box(0.7, 0.8, 0.95, color, 0.8, 0.25, 0));
-  g.add(box(0.06, 0.35, 0.8, 0x9fd6ff, 1.16, 0.6, 0));
-  for (const z of [-0.32, 0.32]) {
-    g.add(flatBox(0.05, 0.12, 0.16, 0xfff6d8, 1.17, 0.32, z, { emissive: 0xfff0c0, night: 3 }));
-    g.add(flatBox(0.05, 0.12, 0.14, 0x8a1f1f, -1.11, 0.32, z, { emissive: 0xff2a1a, night: 2 }));
+// ---- vehicles ----
+// Built from lots of small parts, then merged into one mesh per material so a town
+// full of traffic stays cheap to draw.
+const TINT = 0x223140, TIRE = 0x1d1e22, TRIM = 0x2b2d33, CHROME = 0xd9d9de;
+const glassMat = () => mat(TINT, { roughness: 0.12, metalness: 0.7 });
+function mergeVehicle(g) {
+  g.updateMatrixWorld(true);
+  const byMat = new Map();
+  g.traverse(o => {
+    if (!o.isMesh) return;
+    let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
+    if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    geo.applyMatrix4(o.matrixWorld);
+    if (!byMat.has(o.material)) byMat.set(o.material, { geos: [], shadow: o.castShadow });
+    byMat.get(o.material).geos.push(geo);
+  });
+  const out = new THREE.Group();
+  for (const [m, { geos, shadow }] of byMat) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos), m);
+    mesh.castShadow = shadow; mesh.receiveShadow = true;
+    out.add(mesh);
+    geos.forEach(x => x.dispose());
   }
-  for (const x of [-0.7, 0.75]) for (const z of [-0.45, 0.45]) {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.15, 10), mat(0x2a2a2e));
-    w.rotation.x = Math.PI / 2; w.position.set(x, 0.22, z); g.add(w);
+  return out;
+}
+function wheel(g, x, z, r = 0.21, w = 0.16) {
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 14), mat(TIRE, { roughness: 0.9 }));
+  t.rotation.x = Math.PI / 2; t.position.set(x, r, z); g.add(t);
+  const side = Math.sign(z);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.02, 10), mat(CHROME));
+  hub.rotation.x = Math.PI / 2; hub.position.set(x, r, z + side * (w / 2 + 0.005)); g.add(hub);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.2, r * 0.2, 0.03, 8), mat(TRIM));
+  cap.rotation.x = Math.PI / 2; cap.position.set(x, r, z + side * (w / 2 + 0.015)); g.add(cap);
+}
+// a slanted pane of glass across the car (front or back window)
+function pane(g, x, y, h, lean, width) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, h, width), glassMat());
+  m.position.set(x, y, 0); m.rotation.z = lean; g.add(m);
+}
+function lights(g, front, back, y, zs, w = 0.16) {
+  for (const z of zs) {
+    g.add(flatBox(0.05, 0.09, w, 0xfff6d8, front, y, z, { emissive: 0xfff0c0, night: 3 }));
+    g.add(flatBox(0.05, 0.09, w, 0x8a1f1f, back, y, z, { emissive: 0xff2a1a, night: 2 }));
   }
-  return g;
+}
+function mirrors(g, x, y, half, color) {
+  for (const sd of [-1, 1]) {
+    g.add(flatBox(0.1, 0.08, 0.1, color, x, y, sd * (half + 0.05)));
+  }
 }
 
-// a small car, pointing +x like the truck
-export function car(color) {
+// box truck that carries goods between factories, pointing +x
+// (flat = an open flatbed, for carrying goods you can see)
+export function truck(color, flat = false) {
   const g = new THREE.Group();
-  g.add(box(1.7, 0.45, 0.9, color, 0, 0.2, 0));
-  g.add(box(0.95, 0.4, 0.82, color, -0.1, 0.65, 0));
-  g.add(box(0.06, 0.3, 0.72, 0x9fd6ff, 0.39, 0.7, 0), box(0.06, 0.3, 0.72, 0x9fd6ff, -0.59, 0.7, 0));
-  for (const z of [-0.3, 0.3]) {
-    g.add(flatBox(0.05, 0.1, 0.16, 0xfff6d8, 0.86, 0.35, z, { emissive: 0xfff0c0, night: 3 }));
-    g.add(flatBox(0.05, 0.1, 0.14, 0x8a1f1f, -0.86, 0.35, z, { emissive: 0xff2a1a, night: 2 }));
+  const W = 0.96;
+  // chassis rail and bumpers
+  g.add(flatBox(2.3, 0.12, 0.8, TRIM, -0.05, 0.2, 0));
+  g.add(box(0.12, 0.16, W, TRIM, 1.2, 0.2, 0), box(0.1, 0.14, W - 0.1, TRIM, -1.2, 0.2, 0));
+  // cargo box with a coloured stripe and roll-up door ribs at the back
+  if (flat) {
+    g.add(box(1.55, 0.1, W, 0x6b5a48, -0.42, 0.3, 0));                       // wooden deck
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) g.add(flatBox(0.05, 0.22, 0.05, TRIM, -1.12 + i * 0.45, 0.4, sd * (W / 2 - 0.03)));   // stake posts
+    g.add(box(0.06, 0.55, W, TRIM, 0.33, 0.38, 0));                          // headboard
+  } else {
+    g.add(box(1.5, 1.02, W, 0xf3f0e8, -0.42, 0.32, 0));
+    for (const sd of [-1, 1]) g.add(flatBox(1.42, 0.14, 0.02, color, -0.42, 0.62, sd * (W / 2 + 0.005)));
+    for (let i = 0; i < 4; i++) g.add(flatBox(0.02, 0.025, W - 0.16, 0xc9c5ba, -1.175, 0.45 + i * 0.2, 0));
   }
-  for (const x of [-0.55, 0.55]) for (const z of [-0.44, 0.44]) {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.14, 10), mat(0x2a2a2e));
-    w.rotation.x = Math.PI / 2; w.position.set(x, 0.2, z); g.add(w);
+  // cab
+  g.add(box(0.72, 0.62, W, color, 0.78, 0.3, 0));
+  g.add(box(0.5, 0.36, W - 0.04, color, 0.66, 0.9, 0));
+  pane(g, 0.97, 1.06, 0.36, 0.32, W - 0.16);
+  for (const sd of [-1, 1]) g.add(flatBox(0.34, 0.24, 0.02, TINT, 0.7, 0.96, sd * (W / 2 - 0.01)));
+  g.add(flatBox(0.03, 0.22, 0.5, TRIM, 1.15, 0.38, 0));                       // grille
+  for (let i = 0; i < 3; i++) g.add(flatBox(0.035, 0.02, 0.46, CHROME, 1.155, 0.42 + i * 0.06, 0));
+  mirrors(g, 1.0, 0.95, W / 2, TRIM);
+  g.add(cyl(0.035, 0.035, 0.75, CHROME, 0.4, 0.55, W / 2 - 0.08, 8));           // exhaust stack
+  g.add(flatBox(0.04, 0.1, 0.3, 0xf2f2f2, -1.205, 0.24, 0));                  // plate
+  lights(g, 1.165, -1.2, 0.5, [-0.34, 0.34], 0.14);
+  g.add(flatBox(0.16, 0.05, 0.16, 0xffa31a, 0.66, 1.26, 0, { emissive: 0xff8a00, night: 1.5 }));   // roof beacon
+  for (const x of [-0.75, -0.3, 0.8]) for (const z of [-0.42, 0.42]) wheel(g, x, z, 0.23, 0.17);
+  return mergeVehicle(g);
+}
+
+// a passenger car, pointing +x: sedans, hatchbacks, SUVs and pickups
+const BODY = ['sedan', 'sedan', 'hatch', 'suv', 'pickup'];
+let carN = 0;
+export function car(color, kind = BODY[carN++ % BODY.length]) {
+  const g = new THREE.Group();
+  const W = 0.9, L = kind === 'hatch' ? 1.55 : kind === 'sedan' ? 1.8 : 1.85;
+  const lift = kind === 'suv' || kind === 'pickup' ? 0.06 : 0;
+  const base = 0.15 + lift, bodyH = kind === 'suv' ? 0.42 : 0.36;
+  const f = L / 2, r = -L / 2;
+  // body, with a dark sill and bumpers
+  g.add(box(L, bodyH, W, color, 0, base + 0.04, 0));
+  g.add(flatBox(L - 0.5, 0.06, W + 0.01, TRIM, 0, base + 0.02, 0));
+  g.add(box(0.1, 0.12, W, TRIM, f - 0.02, base, 0), box(0.1, 0.12, W, TRIM, r + 0.02, base, 0));
+  const top = base + 0.04 + bodyH;
+  // the cabin: roof, windows all round, a slanted windscreen and rear window
+  let cx, cl, ch = kind === 'suv' ? 0.4 : 0.34;
+  if (kind === 'sedan') { cx = -0.1; cl = 0.82; }
+  else if (kind === 'hatch') { cx = -0.18; cl = 0.82; }
+  else if (kind === 'suv') { cx = -0.18; cl = 1.15; }
+  else { cx = 0.18; cl = 0.62; }
+  g.add(box(cl, ch, W - 0.06, TINT, cx, top - 0.02, 0, { roughness: 0.12, metalness: 0.7 }));
+  g.add(box(cl - 0.08, 0.06, W - 0.04, color, cx, top + ch - 0.05, 0));       // roof
+  for (const sd of [-1, 1]) g.add(flatBox(0.05, ch - 0.06, 0.02, color, cx + 0.02, top, sd * (W / 2 - 0.03)));   // door pillar
+  pane(g, cx + cl / 2 + 0.07, top + ch / 2 - 0.02, ch * 0.95, 0.5, W - 0.14);
+  if (kind === 'sedan') pane(g, cx - cl / 2 - 0.08, top + ch / 2 - 0.03, ch * 0.9, -0.55, W - 0.14);
+  // details: door seams, handles, mirrors, grille, plate
+  for (const sd of [-1, 1]) {
+    g.add(flatBox(0.015, bodyH - 0.1, 0.01, TRIM, cx + 0.02, base + 0.09, sd * (W / 2 + 0.003)));
+    for (const hx of [cx + 0.18, cx - 0.22]) g.add(flatBox(0.09, 0.025, 0.012, CHROME, hx, top - 0.1, sd * (W / 2 + 0.005)));
   }
-  return g;
+  mirrors(g, cx + cl / 2 - 0.02, top + 0.02, W / 2, color);
+  g.add(flatBox(0.02, 0.1, 0.36, TRIM, f + 0.035, base + 0.12, 0));
+  g.add(flatBox(0.02, 0.07, 0.22, 0xf2f2f2, r - 0.035, base + 0.05, 0));
+  if (kind === 'pickup') {
+    // open bed behind the cab
+    const bx = (r + cx - cl / 2) / 2, bl = cx - cl / 2 - r - 0.04;
+    g.add(flatBox(bl, 0.03, W - 0.14, TRIM, bx, top - 0.01, 0));
+    for (const sd of [-1, 1]) g.add(flatBox(bl, 0.12, 0.05, color, bx, top, sd * (W / 2 - 0.03)));
+    g.add(flatBox(0.05, 0.12, W - 0.06, color, r + 0.03, top, 0));
+  }
+  if (kind === 'suv') for (const sd of [-1, 1]) g.add(flatBox(cl - 0.2, 0.04, 0.04, TRIM, cx, top + ch + 0.01, sd * (W / 2 - 0.12)));   // roof rails
+  if (kind === 'sedan' && carN % 3 === 0) g.add(flatBox(0.06, 0.04, W - 0.2, color, r + 0.08, top, 0));   // little spoiler
+  lights(g, f + 0.03, r - 0.03, base + 0.22, [-0.3, 0.3], 0.16);
+  const wz = W / 2 - 0.05, wr = kind === 'suv' || kind === 'pickup' ? 0.22 : 0.19;
+  for (const x of [f - 0.36, r + 0.36]) for (const z of [-wz, wz]) wheel(g, x, z, wr, 0.15);
+  return mergeVehicle(g);
 }
 
 // ---- scenery for each map theme ----

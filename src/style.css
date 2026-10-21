@@ -66,8 +66,9 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 
 .hint {
   position: absolute; left: 50%; bottom: calc(24px + var(--sa-b)); transform: translateX(-50%);
-  background: var(--ink); color: #fff; border-radius: 999px; padding: 9px 18px; font-weight: 800; font-size: 14px;
-  white-space: nowrap; pointer-events: none; box-shadow: 0 4px 0 rgba(0,0,0,.2);
+  background: var(--ink); color: #fff; border-radius: 18px; padding: 8px 16px; font-weight: 800; font-size: 14px; line-height: 1.25;
+  width: max-content; max-width: calc(100vw - 32px - var(--sa-l) - var(--sa-r)); text-align: center; box-sizing: border-box;
+  white-space: normal; pointer-events: none; box-shadow: 0 4px 0 rgba(0,0,0,.2);
 }
 
 /* labels over buildings */
@@ -183,19 +184,22 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   background: var(--ink); color: #fff; border-radius: 999px; padding: 4px 10px; font: 800 12px var(--body); font-variant-numeric: tabular-nums;
 }
 .contract {
-  position: absolute; left: max(12px, var(--sa-l)); top: calc(108px + var(--sa-t)); width: min(250px, calc(100% - 120px));
-  border: none; border-radius: 18px; background: var(--paper); box-shadow: 0 4px 0 rgba(0,0,0,.15); padding: 9px 12px 10px;
+  position: absolute; left: max(12px, var(--sa-l)); top: calc(108px + var(--sa-t)); width: min(190px, calc(100% - 120px));
+  border: none; border-radius: 14px; background: var(--paper); box-shadow: 0 3px 0 rgba(0,0,0,.15); padding: 6px 10px 7px;
   display: flex; flex-direction: column; gap: 4px; text-align: left; color: var(--ink);
 }
-.contract .c-top { display: flex; justify-content: space-between; gap: 8px; font: 800 13px var(--body); }
+.contract .c-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font: 800 12px var(--body); }
+.contract .c-bot { display: flex; align-items: center; gap: 6px; }
+.contract .c-bot .c-bar { flex: 1; }
 .contract .c-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.contract .c-time { color: var(--ink-soft); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.contract .c-what { font: 800 12px var(--body); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.contract .c-bar { height: 7px; border-radius: 999px; background: var(--mint); overflow: hidden; display: block; }
+.contract .c-time { color: var(--ink-soft); font: 800 11px var(--body); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.contract .c-what { font: 800 11px var(--body); color: var(--ink-soft); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.contract .c-bar { height: 5px; border-radius: 999px; background: var(--mint); overflow: hidden; display: block; }
 .contract .c-bar i { display: block; height: 100%; width: 0; background: var(--green); border-radius: 999px; transition: width .2s; }
 .contract.done { background: var(--gold); box-shadow: 0 4px 0 var(--gold-d); animation: pulse 1.4s ease-in-out infinite; }
 .contract.done .c-what { color: var(--gold-ink); }
-.contract.done .c-bar { display: none; }
+.contract.done .c-bot { display: none; }
+.contract.done .c-what { font-size: 12px; }
 
 .lot-label.starved { background: #fff1e0; }
 .lot-label.starved .bar i { background: #e8862c; }
@@ -264,8 +268,9 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .hud-right { display: flex; gap: 8px; align-items: flex-start; pointer-events: none; }
 .map-btn {
   pointer-events: auto; min-height: 48px; border-radius: 16px; background: var(--paper); border: none; box-shadow: 0 4px 0 rgba(0,0,0,.15);
-  display: flex; align-items: center; gap: 6px; padding: 0 12px; font: 800 13px var(--body); color: var(--ink);
+  display: flex; align-items: center; justify-content: center; width: 48px; padding: 0; color: var(--ink);
 }
+.map-btn svg { width: 24px; height: 24px; }
 .w-list { display: flex; flex-direction: column; gap: 8px; text-align: left; }
 .w-card { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 10px; background: var(--mint); }
 .w-card.here { outline: 3px solid var(--sel); }
@@ -278,7 +283,8 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .w-info b { font: 800 16px var(--display); }
 .w-info small { font-size: 12px; color: var(--ink-soft); line-height: 1.3; }
 .w-info .w-rate { color: var(--green); font-weight: 800; }
-.w-here, .w-lock { font: 800 12px var(--body); color: var(--ink-soft); flex-shrink: 0; }
+.w-here, .w-lock { font: 800 13px var(--body); color: var(--ink-soft); flex-shrink: 0; display: flex; }
+.w-here { color: var(--green); }
 
 /* ---- v5: compact building panel ---- */
 .sheet { gap: 8px; padding: 12px max(14px, var(--sa-r)) calc(12px + var(--sa-b)) max(14px, var(--sa-l)); border-radius: 22px 22px 0 0; }

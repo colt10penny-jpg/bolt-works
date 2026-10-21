@@ -668,14 +668,17 @@ export class World {
   #spawnDelivery(fromId, toId) {
     let mesh = this.truckPool.pop();
     if (!mesh) {
-      mesh = truck(0xffffff);
+      mesh = truck(0x2f6fb5, true);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      const cargo = box(0.9, 0.55, 0.8, 0xffffff, -0.35, 1.25, 0);
+      const cargo = new THREE.Group();
+      for (const [x, z, h] of [[-0.75, -0.2, 0.42], [-0.75, 0.2, 0.42], [-0.3, -0.2, 0.42], [-0.3, 0.2, 0.36], [-0.75, 0, 0.3]]) cargo.add(box(0.42, h, 0.38, 0xffffff, x, z === 0 && h === 0.3 ? 0.82 : 0.4, z));
+      cargo.children.forEach(c => { c.name = 'crate'; });
       cargo.name = 'cargo';
       mesh.add(cargo);
     }
     const color = this.lookFor?.(fromId)?.color ?? 0xb9b4a8;
-    mesh.getObjectByName('cargo').material = mat([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(color) ? 0xb9b4a8 : color);
+    const cm = mat([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(color) ? 0xb9b4a8 : color);
+    mesh.getObjectByName('cargo').children.forEach(c => { c.material = cm; });
     const ok = this.#drive(fromId, toId, mesh, 'delivery', 6, { to: toId }, c => {
       this.truckPool.push(c.mesh);
       this.lots[toId].bounce = Math.max(this.lots[toId].bounce, 0.35);

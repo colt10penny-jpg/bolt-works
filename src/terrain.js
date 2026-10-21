@@ -510,10 +510,13 @@ export function buildRoads(name, T, stateOf) {
   const group = new THREE.Group();
   const road = new Batch();
   const asphaltM = withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
-  const wornM = withClouds(std(new THREE.Color(T.road).lerp(new THREE.Color(0x938b78), 0.55).getHex(), { map: tx.asphalt, roughness: 0.98 }));
-  const crackM = std(0x3b3a36, { roughness: 1 });
+  // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
+  // with the odd patch of broken tarmac still showing through
+  const wornM = withClouds(std(0xa9b25f, { roughness: 1 }));
+  const crackM = std(0x8a8c66, { roughness: 1 });
+  const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
-  const mossM = withClouds(std(0x79ad4c, { roughness: 1 }));
+  const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
   const walkM = withClouds(std(T.walk, { roughness: 0.9 }));
   const curbM = std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
@@ -524,7 +527,9 @@ export function buildRoads(name, T, stateOf) {
   const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
   const good = [], worn = [];
   for (const [k, { a, b }] of NET.segs) { const st = stateOf(k); if (st === 'good') good.push({ a, b }); else if (st === 'worn') worn.push({ a, b }); }
-  for (const e of NET.exits) good.push({ a: e.node, b: exitFar(e), exit: true });
+  // a road out of town only shows once the town's roads reach the spot where it starts
+  const liveExits = NET.exits.filter(e => NET.adj.has(e.node.x + ',' + e.node.z));
+  for (const e of liveExits) good.push({ a: e.node, b: exitFar(e), exit: true });
   const span = ({ a, b }) => ({ along: a.z === b.z ? 'x' : 'z', line: a.z === b.z ? a.z : a.x, lo: Math.min(a.z === b.z ? a.x : a.z, a.z === b.z ? b.x : b.z), hi: Math.max(a.z === b.z ? a.x : a.z, a.z === b.z ? b.x : b.z) });
   const strip = (m, sp, lo, hi, y, w = ROAD_W) => road.add(m, sp.along === 'x' ? rect(lo, sp.line - w / 2, hi, sp.line + w / 2, y) : rect(sp.line - w / 2, lo, sp.line + w / 2, hi, y));
   // worn out: faded, cracked, weeds coming through
@@ -540,12 +545,19 @@ export function buildRoads(name, T, stateOf) {
         g.translate(sp.along === 'x' ? i : sp.line + sd * ins, 0.066 + r() * 0.004, sp.along === 'x' ? sp.line + sd * ins : i);
         road.add(mossM, g);
       }
-      if (r() < 0.18) {
+      if (r() < 0.35) {
         const g = new THREE.CircleGeometry(0.25 + r() * 0.35, 6); g.rotateX(-Math.PI / 2);
         const off = (r() - 0.5) * (ROAD_W - 1.4);
         g.translate(sp.along === 'x' ? i : sp.line + off, 0.067, sp.along === 'x' ? sp.line + off : i);
         road.add(mossM, g);
       }
+    }
+    // a few leftover chunks of tarmac
+    for (let i = sp.lo + 1.5; i < sp.hi - 1.5; i += 2.5 + r() * 3) {
+      const g = new THREE.CircleGeometry(0.35 + r() * 0.45, 5); g.rotateX(-Math.PI / 2); g.scale(1.6, 1, 1); g.rotateY(r() * 3);
+      const off = (r() - 0.5) * (ROAD_W - 1.6);
+      g.translate(sp.along === 'x' ? i : sp.line + off, 0.064, sp.along === 'x' ? sp.line + off : i);
+      road.add(tarM, g);
     }
     for (let i = sp.lo + 1; i < sp.hi - 1; i += 1.0 + r() * 1.2) {
       const off = (r() - 0.5) * (ROAD_W - 0.6), len = 0.6 + r() * 1.4;
@@ -584,7 +596,7 @@ export function buildRoads(name, T, stateOf) {
   const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const n of nodes.values()) {
     const { x, z } = n;
-    if (!NET.adj.has(x + ',' + z) && !NET.exits.some(e => e.node.x === x && e.node.z === z)) continue;
+    if (!NET.adj.has(x + ',' + z)) continue;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
     const ways = DIRS.filter(([hx, hz]) => hasRoad(x, z, { x: hx, z: hz }));
     for (const [hx, hz] of DIRS) {
@@ -634,7 +646,7 @@ export function buildRoads(name, T, stateOf) {
     if (!NET.adj.has(n.x + ',' + n.z)) continue;
     lamp(n.x + o, n.z + o, -0.7, -0.7); lamp(n.x - o, n.z - o, 0.7, 0.7);
   }
-  for (const e of NET.exits) for (let d = 14; d <= 110; d += 14) {
+  for (const e of liveExits) for (let d = 14; d <= 110; d += 14) {
     if (e.dir.x) lamp(e.node.x + e.dir.x * d, e.node.z + o, 0, -1);
     else lamp(e.node.x + o, e.node.z + e.dir.z * d, -1, 0);
   }

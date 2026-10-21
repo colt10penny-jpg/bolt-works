@@ -504,7 +504,7 @@ function renderContract() {
   const done = c.status === 'done';
   contractEl.classList.toggle('done', done);
   contractEl.querySelector('.c-who').textContent = done ? 'Order ready!' : c.customer;
-  contractEl.querySelector('.c-what').textContent = done ? `Tap to collect $${fmt(c.reward)}` : `${fmt(c.progress)} / ${fmt(c.target)} ${c.unit}`;
+  contractEl.querySelector('.c-what').textContent = done ? `+$${fmt(c.reward)}` : `${fmt(c.progress)}/${fmt(c.target)}`;
   contractEl.querySelector('.c-time').textContent = done ? '' : fmtTime(left);
   contractEl.querySelector('.c-bar i').style.width = pct.toFixed(1) + '%';
 }
@@ -638,25 +638,18 @@ function openMap() {
   const cards = WORLDS.map((w, i) => {
     const open = !!game.s.worlds[w.id];
     const here = w.id === game.s.current;
-    const prev = WORLDS[i - 1];
-    const fl = open ? game.flowFor(w.id) : null;
-    const status = here ? '<span class="w-here">You are here</span>'
+    const status = here ? '<span class="w-here">Here</span>'
       : open ? `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`
-      : '<span class="w-lock">Locked</span>';
+      : '<span class="w-lock" aria-label="Locked"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>';
     return `<div class="w-card ${here ? 'here' : ''} ${open ? '' : 'locked'} w-${w.id}">
       <span class="w-swatch" aria-hidden="true"></span>
-      <span class="w-info">
-        <b>${w.name}</b>
-        <small>${open ? w.perk : `Launch a rocket from ${prev.short} to unlock.`}</small>
-        ${open ? `<small class="w-rate">${fl && fl.income > 0 ? `Earns $${fmt(fl.income)}/s` : 'Not built yet'}</small>` : ''}
-      </span>
+      <span class="w-info"><b>${w.name}</b></span>
       ${status}
     </div>`;
   }).join('');
   openModal(`
     <div class="big-icon">${ICON.globe}</div>
     <h2>Your worlds</h2>
-    <p>Each world is its own town. Towns you leave keep earning for up to ${GAME.offlineCapHours} hours.</p>
     <div class="w-list">${cards}</div>
     <button class="btn plain" data-act="dismiss">Close</button>`, act => {});
   // travel buttons live inside the modal
@@ -951,7 +944,7 @@ function loop(now) {
     else $('ep').hidden = true;
     world.setRocketReady(game.canLaunch());
     const mb = $('map-btn'); const wl = game.unlockedWorlds().length;
-    mb.hidden = wl < 2; $('map-name').textContent = game.world.short;
+    mb.hidden = wl < 2; mb.setAttribute('aria-label', `Your worlds (now in ${game.world.short})`);
     const nxt = game.nextWorld();
     const showLaunch = game.canLaunch() && (game.launchPreview() >= 1 || (nxt && !game.s.worlds[nxt.id])) && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;

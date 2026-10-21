@@ -424,9 +424,25 @@ export class Traffic {
     return this.#laneClear(car, car.P.s[1] + 0.5, GAP + 0.5);
   }
 
+  // A rare knot: a ring of cars each waiting on the next, none able to move. Follow who
+  // each stopped car is waiting for; if the chain comes back round, one car in the ring
+  // squeezes through so the rest can carry on.
+  #untangle() {
+    const still = c => c.v < 0.05 && c.stillT > 15 && c.ghost <= 0;
+    const byId = new Map(this.cars.map(c => [c.id, c]));
+    const next = c => { const m = /:(\d+)/.exec(c.why || ''); return m ? byId.get(+m[1]) : null; };
+    for (const c of this.cars) {
+      if (!still(c)) continue;
+      const seen = new Set([c]);
+      let o = next(c);
+      while (o && still(o) && !seen.has(o)) { seen.add(o); o = next(o); }
+      if (o && seen.has(o)) { o.ghost = 2.5; o.stillT = 0; this.onGhost?.(o, o.P.stops[o.ai], null); return; }
+    }
+  }
   update(dt) {
     if (!dt) return;
     this.clock = (this.clock || 0) + dt;
+    if ((this.knotT = (this.knotT || 0) + dt) > 1) { this.knotT = 0; this.#untangle(); }
     for (const car of [...this.cars]) {
       let target = car.max;
       const stops = car.P.stops;
@@ -480,6 +496,7 @@ export class Traffic {
       // waiting your turn at a line is fine; only a car stuck in the open counts as jammed
       if (car.v < 0.05 && !car.waiting && !car.queued) car.stuck += dt; else car.stuck = 0;
       if (car.stuck > 12) { car.ghost = 2.5; car.stuck = 0; this.onGhost?.(car, st, this.#ahead(car).who); }  // last-resort unjam, almost never needed
+      car.stillT = car.v < 0.05 ? (car.stillT || 0) + dt : 0;
       // let go of each intersection once fully through it
       while (car.ri < car.ai && car.s - HALF > stops[car.ri].exit) {
         this.#release(car, stops[car.ri].key); car.ri++;
