@@ -339,6 +339,9 @@ export function buildLand(name, T, blocks) {
     place(500, S.bush, { pad: 0.3, blob: 0.6 });
     place(420, S.flowers, { pad: 0.2, blob: 0, maxH: 6 });
     place(160, S.rock, { pad: 0.3, blob: 0.7 });
+    // little touches so open ground doesn't look like a putting green
+    place(1500, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10 });
+    place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180 });
     place(40, S.boulder, { minH: 4, blob: 0 });
     // farm fields near the lake side
     const fields = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
@@ -355,10 +358,13 @@ export function buildLand(name, T, blocks) {
     place(260, S.joshua, { pad: 0.5 });
     place(600, S.shrub, { pad: 0.3, blob: 0.5 });
     place(220, S.barrel, { pad: 0.2, blob: 0.4 });
+    place(1100, (r, h) => S.tuft(r, h, [0xc9b06a, 0xb59a52, 0xa8a45c, 0xd6c07c]), { pad: 0.1, blob: 0, span: 180 });
+    place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180 });
     place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 0.3, blob: 0.7 });
     place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 1, blob: 0 });
   } else {
     place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 0.3, blob: 0.8 });
+    place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180 });
     place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 1, blob: 0.6 });
     place(40, S.antenna, { pad: 1, span: 160, blob: 0.6 });
     place(24, S.solarArray, { pad: 2, span: 180, blob: 0 });
@@ -422,6 +428,26 @@ function sceneryKit() {
       g.add(mesh(new THREE.IcosahedronGeometry(0.6 * s, 0), lm, 0, 0.35 * s, 0));
       g.add(mesh(new THREE.IcosahedronGeometry(0.45 * s, 0), lm, 0.45 * s, 0.25 * s, 0.1));
       g.userData.r = s;
+      return g;
+    },
+    // a clump of grass blades, a bit taller and darker (or drier) than the lawn
+    tuft(r, h, cols = [0x5f9e3c, 0x6fae44, 0x4f8c36, 0x86b84c]) {
+      const g = new THREE.Group(), c = m(cols[Math.floor(r() * cols.length)], {}, 1), n = 4 + Math.floor(r() * 4), s = 0.6 + r() * 0.6;
+      for (let i = 0; i < n; i++) {
+        const b = mesh(new THREE.ConeGeometry(0.07 * s, (0.35 + r() * 0.35) * s, 3), c, (r() - 0.5) * 0.4 * s, 0, (r() - 0.5) * 0.4 * s);
+        b.position.y = b.geometry.parameters.height / 2; b.rotation.set((r() - 0.5) * 0.6, r() * 3, (r() - 0.5) * 0.6);
+        g.add(b);
+      }
+      return g;
+    },
+    // a few small stones lying together
+    pebbles(r, h, color = 0x9a978f) {
+      const g = new THREE.Group(), n = 2 + Math.floor(r() * 3);
+      for (let i = 0; i < n; i++) {
+        const sz = 0.1 + r() * 0.16;
+        const o = mesh(new THREE.IcosahedronGeometry(sz, 0), m(r() < 0.5 ? color : new THREE.Color(color).multiplyScalar(0.85).getHex()), (r() - 0.5) * 0.9, sz * 0.35, (r() - 0.5) * 0.9);
+        o.scale.y = 0.55; o.rotation.y = r() * 3; g.add(o);
+      }
       return g;
     },
     flowers(r) {
@@ -513,7 +539,6 @@ export function buildRoads(name, T, stateOf) {
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
   const wornM = withClouds(std(0xa9b25f, { roughness: 1 }));
-  const crackM = std(0x8a8c66, { roughness: 1 });
   const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
@@ -561,7 +586,6 @@ export function buildRoads(name, T, stateOf) {
     }
     for (let i = sp.lo + 1; i < sp.hi - 1; i += 1.0 + r() * 1.2) {
       const off = (r() - 0.5) * (ROAD_W - 0.6), len = 0.6 + r() * 1.4;
-      road.add(crackM, sp.along === 'x' ? boxAt(len, 0.01, 0.07, i, 0.06, sp.line + off) : boxAt(0.07, 0.01, len, sp.line + off, 0.06, i));
       if (r() < 0.8) {
         const w = new THREE.IcosahedronGeometry(0.18 + r() * 0.26, 0); w.scale(1, 0.55, 1);
         const wx = sp.along === 'x' ? i + r() : sp.line + (r() < 0.5 ? -1 : 1) * (HW - 0.2 - r() * 0.6);

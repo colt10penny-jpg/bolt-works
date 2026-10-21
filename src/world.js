@@ -239,6 +239,25 @@ export class World {
       o.position.set(x, 0, z); o.rotation.y = r() * 6.28;
       g.add(o);
     }
+    // grass clumps and stones over the whole plot, merged into one piece each
+    const blades = [], stones = [];
+    for (let i = 0; i < 22; i++) {
+      const cx = (r() - 0.5) * 9.5, cz = (r() - 0.5) * 9.5, n = 3 + Math.floor(r() * 4);
+      for (let k = 0; k < n; k++) {
+        const h = 0.3 + r() * 0.35, b = new THREE.ConeGeometry(0.06, h, 3);
+        b.rotateX((r() - 0.5) * 0.6); b.rotateZ((r() - 0.5) * 0.6);
+        b.translate(cx + (r() - 0.5) * 0.35, h / 2, cz + (r() - 0.5) * 0.35); blades.push(b);
+      }
+    }
+    for (let i = 0; i < 9; i++) {
+      const sz = 0.12 + r() * 0.2, st = new THREE.IcosahedronGeometry(sz, 0);
+      st.scale(1, 0.55, 1); st.translate((r() - 0.5) * 9, sz * 0.3, (r() - 0.5) * 9); stones.push(st);
+    }
+    const grassC = theme === 'colorado' ? 0x5f9e3c : theme === 'desert' ? 0xc2a862 : null;
+    const stoneC = theme === 'colorado' ? 0x9a978f : theme === 'desert' ? 0xa87f58 : 0x8e8e94;
+    if (grassC) g.add(new THREE.Mesh(mergeGeometries(blades.map(b => b.toNonIndexed())), mat(grassC, { flatShading: true })));
+    g.add(new THREE.Mesh(mergeGeometries(stones.map(b => b.index ? b.toNonIndexed() : b)), mat(stoneC, { flatShading: true })));
+    blades.forEach(b => b.dispose());
     // the sign
     g.add(box(0.14, 1.5, 0.14, 0x7a5230, 2.6, 0, -2.6));
     const sign = box(1.7, 0.9, 0.1, 0xf4efe0, 2.6, 1.15, -2.53);
@@ -287,9 +306,10 @@ export class World {
       g.putImageData(img, 0, 0);
       return new THREE.CanvasTexture(c);
     };
-    this.poolTex ||= soft(128, r => r >= 1 ? 0 : Math.pow(1 - r * r, 2.2));
+    // a wide, gentle falloff: neighbouring lamps' light overlaps into one even wash
+    this.poolTex ||= soft(128, r => r >= 1 ? 0 : Math.exp(-r * r * 3.2) * (1 - r * r));
     this.haloTex ||= soft(64, r => r >= 1 ? 0 : Math.exp(-r * r * 5) * (1 - r));
-    const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 4.5 : 7.5, moon ? 4.5 : 7.5); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
+    const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 9 : 17, moon ? 9 : 17); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
     this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x4f9dff : 0xffc98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.pools.renderOrder = 2;
     this.scene.add(this.pools);
@@ -312,9 +332,28 @@ export class World {
     this.scene.add(this.cones);
     cones.forEach(g => g.dispose());
     const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().setY(p.y - 0.05)));
-    this.glow = new THREE.Points(geo, new THREE.PointsMaterial({ map: this.haloTex, color: 0xffe2b8, size: 22, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.glow = new THREE.Points(geo, new THREE.PointsMaterial({ map: this.haloTex, color: 0xffe2b8, size: 14, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.glow.renderOrder = 4;
     this.scene.add(this.glow);
+  }
+
+  // after dark, light spilling from each building's windows and yard lights warms the
+  // ground all round it, so the town glows as a whole rather than in spots
+  #buildingGlow() {
+    this.bldDirty = false;
+    if (this.bldPools) { this.scene.remove(this.bldPools); this.bldPools.geometry.dispose(); this.bldPools = null; }
+    const quads = [];
+    for (const L of Object.values(this.lots)) {
+      if (!L.model) continue;
+      const p = L.group.position, sz = 22 + (L.tier || 0) * 1.5;
+      const q = new THREE.PlaneGeometry(sz, sz); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.16, p.z); quads.push(q);
+    }
+    if (!quads.length || !this.poolTex) return;
+    const moon = this.themeName === 'moon';
+    this.bldPools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x8fb8ff : 0xffb877, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.bldPools.renderOrder = 2;
+    this.scene.add(this.bldPools);
+    quads.forEach(q => q.dispose());
   }
 
   // ---------- lots ----------
@@ -367,6 +406,7 @@ export class World {
   // look = { model, color } for this world's version of the building
   setBuilt(id, built, look) {
     const L = this.lots[id];
+    this.bldDirty = true;
     if (built && look) L.look = look;
     if (built && !L.model) {
       const color = look?.color ?? L.def.color;
@@ -947,9 +987,11 @@ export class World {
     const n = this.look.night;
     if (this.roadData?.lampMat) this.roadData.lampMat.emissiveIntensity = n * 2.4;
     if (this.roadData?.edgeMat) this.roadData.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
-    if (this.glow) { this.glow.material.opacity = n * 0.85; this.glow.material.size = 26 * this.zoom; }
-    if (this.pools) this.pools.material.opacity = n * 0.6;
-    if (this.cones) this.cones.material.opacity = n * 0.16;
+    if (this.glow) { this.glow.material.opacity = n * 0.5; this.glow.material.size = 15 * this.zoom; }
+    if (this.pools) this.pools.material.opacity = n * 0.34;
+    if (this.cones) this.cones.material.opacity = n * 0.07;
+    if (this.bldDirty) this.#buildingGlow();
+    if (this.bldPools) this.bldPools.material.opacity = n * 0.3;
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
     for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
     if (this.look.sunDir) {

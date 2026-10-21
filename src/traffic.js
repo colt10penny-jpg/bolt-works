@@ -136,22 +136,29 @@ function search(starts, goal, maxSteps = 400) {
   }
   return null;
 }
-// how a truck gets out of a lot: onto any side with good road, toward either end
-function lotStarts([lx, lz]) {
+// how a truck gets out of a lot: onto any side with good road, toward either end.
+// With `rightOnly`, only turning right out of the lot (into the near lane, crossing nobody).
+const same = (a, b) => a.x === b.x && a.z === b.z;
+function lotStarts([lx, lz], rightOnly = false) {
   const out = [];
   for (const sd of blockSides(lx, lz)) {
     if (!NET.good.has(sd.seg)) continue;
-    for (const e of sd.ends) out.push({ node: e, h: head(sd.road, e), pts: [sd.inLot, sd.road, e] });
+    for (const e of sd.ends) {
+      if (rightOnly && !same(head(sd.road, e), right(head(sd.inLot, sd.road)))) continue;
+      out.push({ node: e, h: head(sd.road, e), pts: [sd.inLot, sd.road, e] });
+    }
   }
   return out;
 }
-function lotGoal([lx, lz]) {
+// and in: with `rightOnly`, arriving so the lot is on your right (no turning across traffic)
+function lotGoal([lx, lz], rightOnly = false) {
   const sides = blockSides(lx, lz).filter(sd => NET.good.has(sd.seg));
   return (n, h) => {
     for (const sd of sides) for (const e of sd.ends) {
       if (e.x !== n.x || e.z !== n.z) continue;
       const g = head(e, sd.road);
       if (g.x === -h.x && g.z === -h.z) continue;
+      if (rightOnly && !same(head(sd.road, sd.inLot), right(g))) continue;
       return [sd.road, sd.inLot];
     }
     return null;
@@ -159,7 +166,8 @@ function lotGoal([lx, lz]) {
 }
 export function lotRoute(A, B) {
   if (A[0] === B[0] && A[1] === B[1]) return null;
-  const C = search(lotStarts(A), lotGoal(B));
+  // right in, right out where the roads allow it (much smoother traffic); otherwise any way
+  const C = search(lotStarts(A, true), lotGoal(B, true)) || search(lotStarts(A), lotGoal(B));
   return C && C.length > 3 ? C : null;
 }
 export function lotDriveways(lots) {
@@ -386,7 +394,7 @@ export class Traffic {
     if (t && t.car !== car && this.cars.includes(t.car)) {
       // the longest-waiting car goes next, but only for a few seconds: if it still
       // can't go, everyone else may carry on (so one blocked car can't jam the town)
-      if (this.clock - t.since < 3) { car.why = 'turn:' + t.car.id; return false; }
+      if (this.clock - t.since < 4) { car.why = 'turn:' + t.car.id; return false; }
       this.turn.delete(st.key); t.car.noTurnUntil = this.clock + 6;
     }
     if (st.kind === 'node') {
@@ -402,7 +410,8 @@ export class Traffic {
     // nobody pulls out into you; cars already on the road keep their right of way
     if (st.kind === 'pass') return true;
     // a truck turning in or pulling out waits for road cars already passing the driveway
-    if ([...(this.pass.get(st.key) || [])].some(o => o !== car)) { car.why = 'passing'; return false; }
+    const by = [...(this.pass.get(st.key) || [])].find(o => o !== car);
+    if (by) { car.why = 'passing:' + by.id; return false; }
     if (st.end) return true;
     if (st.kind === 'yield') {
       // a gap in oncoming traffic
@@ -439,6 +448,16 @@ export class Traffic {
       if (o && seen.has(o)) { o.ghost = 2.5; o.stillT = 0; this.onGhost?.(o, o.P.stops[o.ai], null); return; }
     }
   }
+  // (for testing) why is this car waiting at its next stop?
+  explain(car) {
+    const stops = car.P.stops, st = stops[car.ai]; if (!st) return 'no stop';
+    const group = [st];
+    while (stops[car.ai + group.length] && stops[car.ai + group.length].kind !== 'pass' && stops[car.ai + group.length].enter - HALF - 0.15 < group[group.length - 1].exit + HALF + 0.3) group.push(stops[car.ai + group.length]);
+    const why0 = car.why;
+    const out = group.map(g => { car.why = ''; const ok = this.#canEnter(car, g); return g.kind + ':' + g.key.slice(0, 10) + '=' + (ok ? 'ok' : car.why || '?'); });
+    car.why = why0;
+    return out.join(' ') + ' dist=' + (st.enter - HALF - 0.15 - car.s).toFixed(2) + ' wait=' + car.wait.toFixed(1);
+  }
   update(dt) {
     if (!dt) return;
     this.clock = (this.clock || 0) + dt;
@@ -448,14 +467,22 @@ export class Traffic {
       const stops = car.P.stops;
       const st = stops[car.ai];
       car.waiting = false; car.queued = false;
-      if (car.ghost > 0) car.ghost -= dt;
+      if (car.ghost > 0) {
+        car.ghost -= dt;
+        // don't come back to solid while still overlapping someone
+        if (car.ghost <= 0 && this.cars.some(o => o !== car && o.pos.distanceTo(car.pos) < 1.9)) car.ghost = 0.2;
+      }
       if (st && car.ghost <= 0 && st.kind === 'pass') {
         // passing a driveway: claim it as you approach; only slow down if a truck is pulling out
         const stopAt = st.enter - HALF - 0.15;
         const dist = stopAt - car.s;
-        if (dist < 7 && (!this.holds.has(st.key) || this.holds.get(st.key) === car)) { this.#take(car, st); car.ai++; }
+        const t = this.turn.get(st.key);
+        // (never stop with my tail still in the junction behind me)
+        const inJunction = [...car.held].some(k => /^-?\d/.test(k));
+        const giveWay = !inJunction && t && t.car !== car && t.car.waiting && this.cars.includes(t.car) && this.clock - t.since < 4 && car.s + HALF < st.enter;
+        if (dist < 7 && !giveWay && (!this.holds.has(st.key) || this.holds.get(st.key) === car)) { this.#take(car, st); car.ai++; }
         else if (car.s + HALF > st.enter + 0.3) car.ai++;
-        else if (dist <= 0.12) { target = 0; car.waiting = car.v < 0.3; car.why = 'held:' + this.holds.get(st.key)?.id; }
+        else if (dist <= 0.12) { target = 0; car.waiting = car.v < 0.3; car.why = giveWay ? 'turn:' + t.car.id : 'held:' + this.holds.get(st.key)?.id; }
         else target = Math.min(target, Math.sqrt(2 * DECEL * 0.8 * Math.max(0, dist)) + 0.05);
       } else if (st && car.ghost <= 0) {
         const stopAt = st.enter - HALF - 0.15;
@@ -465,9 +492,11 @@ export class Traffic {
           car.wait += dt;
           const pause = st.kind === 'node' ? 0.45 : st.kind === 'yield' || st.kind === 'pass' ? 0 : 0.25;   // a real stop before going
           // if the next stop comes before I'd be clear of this one, I need both at once
+          // (driveways I'm only driving past don't count: anyone may wait across one)
           const group = [st];
-          while (stops[car.ai + group.length] && stops[car.ai + group.length].enter - HALF - 0.15 < group[group.length - 1].exit + HALF + 0.3) group.push(stops[car.ai + group.length]);
-          if (car.wait > 2.5 && !this.turn.has(st.key) && !(car.noTurnUntil > this.clock)) this.turn.set(st.key, { car, since: this.clock });
+          while (stops[car.ai + group.length] && stops[car.ai + group.length].kind !== 'pass' && stops[car.ai + group.length].enter - HALF - 0.15 < group[group.length - 1].exit + HALF + 0.3) group.push(stops[car.ai + group.length]);
+          // waited a while: it's my turn next at everything I need to get through
+          if (car.wait > 2.5 && !(car.noTurnUntil > this.clock)) for (const g of group) if (!this.turn.has(g.key) || !this.cars.includes(this.turn.get(g.key).car)) this.turn.set(g.key, { car, since: this.clock });
           if (car.wait >= pause && group.every(g => this.#canEnter(car, g))) {
             for (const g of group) { this.#take(car, g); if (this.turn.get(g.key)?.car === car) this.turn.delete(g.key); }
             car.ai += group.length; car.wait = 0;
