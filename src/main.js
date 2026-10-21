@@ -1,7 +1,7 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
-  FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable,
+  FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, MAX_LEVEL,
   nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES,
 } from './economy.js';
 import { Game } from './state.js';
@@ -117,7 +117,7 @@ let buyMode = 1;
 let factOpen = false;
 const sheet = $('sheet');
 let sheetKey = '';
-const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode;
+const buyCount = () => 1;
 const go = (id, label) => lotOf(id) ? `<button class="link" data-goto="${lotOf(id)}">${label}</button>` : '';
 const one = u => /ss$/.test(u) ? u : /ies$/.test(u) ? u.replace(/ies$/, 'y') : u.replace(/s$/, '');
 
@@ -166,23 +166,18 @@ function head(d, badge, title, sub) {
     </div>
     ${factOpen ? `<p class="sh-fact">${d.fact}</p>` : ''}`;
 }
-function mileBar(lv, word) {
-  const nm = nextMilestone(lv);
-  const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 0;
-  const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
-  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${word}` : 'Fully expanded'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : ''}</span></div>`;
+// what each level adds to the building (index = the level it arrives at)
+const LOOKS = { 2: 'a new wing', 3: 'a water tower', 4: 'a second wing', 5: 'a radio mast', 6: 'a third wing and solar panels', 7: 'a lit rooftop sign', 8: 'rooftop gardens and a flag', 9: 'floodlights and taller wings', 10: 'a golden beacon' };
+function mileBar(lv) {
+  const pct = (lv / MAX_LEVEL) * 100;
+  return `<div class="sh-mile"><span>${lv < MAX_LEVEL ? `Next: ${LOOKS[lv + 1]}` : 'Fully built'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${lv}/${MAX_LEVEL}</span></div>`;
 }
 function buyRow(d, lv) {
-  const n = buyCount(d, lv);
-  const cost = upgradeCost(d, lv, n);
+  if (lv >= MAX_LEVEL) return `<div class="sh-buy"><button class="btn green" disabled>Max level</button></div>`;
+  const cost = upgradeCost(d, lv, 1);
   const afford = game.canAfford(cost);
   return `<div class="sh-buy">
-      <div class="amounts sm" role="group" aria-label="How many levels to buy">
-        <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
-        <button data-buy="5" aria-pressed="${buyMode === 5}">×5</button>
-        <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max</button>
-      </div>
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `+${n} · $${fmtCost(cost)}` : `Need $${fmtCost(cost - game.cash)}`}</button>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `Upgrade to Lv ${lv + 1} · $${fmtCost(cost)}` : `Lv ${lv + 1} · need $${fmtCost(cost - game.cash)}`}</button>
     </div>
     ${afford ? '' : cashAdButton(cost - game.cash)}`;
 }
@@ -286,7 +281,7 @@ function renderSheet(force = false) {
     const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
     const made = t === 'power' ? `${fmtRate(game.info(id).made)} MW` : `${fmtRate(game.info(id).made)} PFLOPS`;
     const sub = `Lv ${lv} · ${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
-    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus({ ...d, id: t }) + mileBar(lv, 'bigger building') + buyRow(d, lv);
+    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus({ ...d, id: t }) + mileBar(lv) + buyRow(d, lv);
   } else if (lv > 0) {
     const f = game.info(id);
     const earn = f.made * d.value * game.mult();
@@ -297,7 +292,7 @@ function renderSheet(force = false) {
       return `<div class="sh-row"><span>${Math.floor(game.run.rocketsBuilt)} ${d.unit} ready</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + supplyLine(d) + rocket + mileBar(lv, 'bigger building') + buyRow(d, lv) + managerRow(d);
+    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + supplyLine(d) + rocket + mileBar(lv) + buyRow(d, lv) + managerRow(d);
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   const key = lot + ':' + (id || '');
@@ -706,16 +701,55 @@ function openMenu() {
   openModal(`
     <h2>Menu</h2>
     <div class="menu-list">
+      <button class="menu-row" data-act="shop"><span class="m-ic gold">$</span><span class="m-t"><b>Shop</b><small>Get more cash</small></span>${ICON.chev}</button>
       <button class="menu-row" data-act="ach"><span class="m-ic gold">${ICON.trophy}</span><span class="m-t"><b>Achievements</b><small>${n} of ${ACHIEVEMENTS.length} earned</small></span>${fresh ? '<span class="m-new">New</span>' : ''}${ICON.chev}</button>
       ${game.unlockedWorlds().length > 1 ? `<button class="menu-row" data-act="worlds"><span class="m-ic blue">${ICON.map}</span><span class="m-t"><b>Your worlds</b><small>You're in ${game.world.short}</small></span>${ICON.chev}</button>` : ''}
       <button class="menu-row" data-act="settings"><span class="m-ic">${ICON.gear}</span><span class="m-t"><b>Settings</b><small>Sound, stats, start over</small></span>${ICON.chev}</button>
     </div>
     <button class="btn plain" data-act="dismiss">Close</button>`, act => {
+    if (act === 'shop') openShop();
     if (act === 'ach') openAchievements();
     if (act === 'worlds') openMap();
     if (act === 'settings') openSettings();
   });
 }
+// ---------- shop ----------
+// Placeholder in-app purchases: priced like the real ones will be, but free while
+// testing, so you can move through the game quickly. Each pack is worth a stretch of
+// your current income (with a floor, so they still matter early on).
+const PACKS = [
+  { id: 'cash_s', name: 'Handful of cash', price: '$0.99', minutes: 15, floor: 1e3, icon: '$' },
+  { id: 'cash_m', name: 'Bag of cash', price: '$4.99', minutes: 120, floor: 2.5e4, icon: '$$' },
+  { id: 'cash_l', name: 'Vault of cash', price: '$9.99', minutes: 480, floor: 2.5e5, icon: '$$$', best: true },
+  { id: 'cash_xl', name: 'Bank of cash', price: '$19.99', minutes: 1440, floor: 2.5e6, icon: '$$$$' },
+];
+const packAmount = k => Math.max(k.floor * (game.world.cost || 1), game.totalRate() * 60 * k.minutes);
+function openShop() {
+  sfx.tap();
+  const rows = PACKS.map(k => `<button class="shop-row" data-act="buy" data-pack="${k.id}">
+      <span class="s-ic">${k.icon}</span>
+      <span class="s-t"><b>${k.name}${k.best ? '<span class="shop-best">BEST</span>' : ''}</b><small>+$${fmt(packAmount(k))}</small></span>
+      <span class="s-price"><s>${k.price}</s><b>Free</b></span>
+    </button>`).join('');
+  openModal(`
+    <div class="big-icon">${ICON.gift}</div>
+    <h2>Shop</h2>
+    <p class="small">Free while the game is being tested.</p>
+    <div class="shop-list">${rows}</div>
+    <button class="btn plain" data-act="dismiss">Close</button>`, () => {});
+}
+modal.addEventListener('click', e => {
+  const b = e.target.closest('[data-act="buy"]');
+  if (!b) return;
+  e.stopPropagation();
+  const k = PACKS.find(p => p.id === b.dataset.pack);
+  const amount = packAmount(k);
+  game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`);
+  track('iap_placeholder', { pack: k.id });
+  closeModal(false);
+}, true);
+$('shop-btn').addEventListener('click', e => { e.stopPropagation(); openShop(); });
+
 function openAchievements() {
   seenAch = achCount(); $('menu-dot').hidden = true;
   const got = game.s.achievements || {};
@@ -853,12 +887,9 @@ game.on('manager', id => world.sendManager(lotOf('hq'), lotOf(id)));
 game.on('recall', id => world.sendManager(lotOf(id), lotOf('hq')));
 game.on('upgrade', (id, before, after) => {
   world.setGrowth(lotOf(id), milestoneCount(after));
-  const crossed = MILESTONES.filter(m => before < m && after >= m);
-  if (crossed.length) {
-    sfx.milestone();
-    toast(`${def(id).name} expanded! Bigger and better at level ${crossed[crossed.length - 1]}`);
-    track('milestone', { factory: id, level: crossed[crossed.length - 1] });
-  } else sfx.upgrade();
+  sfx.milestone();
+  toast(after >= MAX_LEVEL ? `${def(id).name} is fully built!` : `${def(id).name} level ${after}: ${LOOKS[after]}!`);
+  track('milestone', { factory: id, level: after });
 });
 
 function syncBuilt() {

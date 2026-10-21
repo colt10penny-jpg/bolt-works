@@ -59,10 +59,22 @@ export const FACTS = {
   datacenter: 'Data centers spend a big share of their electricity on cooling, because nearly all the power the servers use turns into heat.',
 };
 
-// Upgrade tiers: at these levels the building is rebuilt bigger and better.
-export const MILESTONES = [4, 8, 12, 16, 20, 25, 30];
-export const milestoneCount = level => MILESTONES.filter(m => level >= m).length;
-export const nextMilestone = level => MILESTONES.find(m => level < m) ?? null;
+// Ten levels per building, and every one is a big step that changes how it looks.
+// The numbers above are written per "small step"; each real level is three of them:
+// output x mult^3, and the price of a level is three small steps' worth.
+export const MAX_LEVEL = 10;
+for (const d of [...FACTORIES, ...SUPPORT]) {
+  const g = d.growth;
+  d.baseCost *= 1 + g + g * g;
+  d.growth = g * g * g;
+  d.mult = Math.pow(d.mult || 1.5, 3);
+}
+// how the building looks: one new look per level (0 at level 1, 9 at level 10)
+export const lookTier = level => Math.max(0, Math.min(MAX_LEVEL, level) - 1);
+// kept for older code: every level is a milestone now
+export const MILESTONES = Array.from({ length: MAX_LEVEL - 1 }, (_, i) => i + 2);
+export const milestoneCount = lookTier;
+export const nextMilestone = level => level < MAX_LEVEL ? level + 1 : null;
 
 // Units per second a building makes at a level (before the compute boost).
 export function capacity(def, level) {
@@ -123,7 +135,7 @@ export function upgradeCost(def, level, n = 1) {
   const r = def.growth;
   return def.baseCost * Math.pow(r, level - 1) * (Math.pow(r, n) - 1) / (r - 1);
 }
-export function maxAffordable(def, level, cash, cap = 100) {
+export function maxAffordable(def, level, cash, cap = MAX_LEVEL - level) {
   const r = def.growth;
   const first = def.baseCost * Math.pow(r, level - 1);
   if (cash < first) return 0;

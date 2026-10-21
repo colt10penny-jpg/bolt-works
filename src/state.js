@@ -2,7 +2,7 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
-  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff,
+  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, MAX_LEVEL,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT } from './layout.js';
 import { makeExits, townSegments, blockSides, segKey } from './traffic.js';
@@ -42,7 +42,7 @@ export function freshState() {
     lastSeen: Date.now(),
     totalEarned: 0,
     cash: 0,             // one wallet shared by every world
-    econ: 2,             // economy version (2 = big, costly upgrades)
+    econ: 3,             // economy version (3 = ten big levels per building)
     layout: 2,           // town layout version (2 = towns built plot by plot)
     current: 'colorado',
     worlds: { colorado: freshRun() },
@@ -244,6 +244,17 @@ export class Game {
       s.cash = Math.min(s.cash, Math.max(200, this.totalRate() * 600));
       this.rebalanced = true;
     }
+    // v3: ten levels per building, each one worth about three of the old ones
+    if ((saved.econ || 1) < 3) {
+      const squeeze = L => L > 0 ? Math.max(1, Math.min(MAX_LEVEL, Math.ceil((L + 2) / 3))) : 0;
+      for (const r of Object.values(s.worlds)) {
+        for (const f of ALL) if (r.levels[f.id] > 0 && f.id !== 'hq') r.levels[f.id] = squeeze(r.levels[f.id]);
+        for (const e of Object.values(r.extra || {})) if (e?.level > 0) e.level = squeeze(e.level);
+      }
+      s.econ = 3;
+      this.invalidate();
+      this.relevelled = true;
+    }
   }
   async save() {
     this.s.lastSeen = Date.now();
@@ -437,7 +448,7 @@ export class Game {
   buyLevels(id, n) {
     const def = this.slotDef(id);
     const lv = this.level(id);
-    if (!def || n <= 0 || lv <= 0) return false;
+    if (!def || n <= 0 || lv <= 0 || lv + n > MAX_LEVEL) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
     this.s.cash -= cost;

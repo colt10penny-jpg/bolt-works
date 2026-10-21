@@ -476,6 +476,7 @@ export class World {
       }
       return null;
     };
+    const later = [];   // rooftop gear with no room on the main roof goes on a wing instead
     if (tier >= 2) {
       const p = roofSpot(0.6, 0.6);
       if (p) {
@@ -483,7 +484,7 @@ export class World {
         for (const [dx, dz] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) tank.add(box(0.1, 0.7, 0.1, 0x5b5f66, dx, 0, dz));
         tank.add(cylY(0.55, 0.9, 0x8a8f99, 0, 0.7, 0), cylY(0.6, 0.12, 0x5b5f66, 0, 1.6, 0));
         tank.position.copy(p); g.add(tank);
-      }
+      } else later.push(() => { const t = new THREE.Group(); for (const [dx, dz] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) t.add(box(0.1, 0.7, 0.1, 0x5b5f66, dx, 0, dz)); t.add(cylY(0.55, 0.9, 0x8a8f99, 0, 0.7, 0), cylY(0.6, 0.12, 0x5b5f66, 0, 1.6, 0)); return t; });
     }
     if (tier >= 4) {
       const p = roofSpot(0.3, 0.3, 2.5);
@@ -492,7 +493,7 @@ export class World {
         mast.add(box(0.12, 3.2, 0.12, 0xdddddd, 0, 0, 0), box(0.5, 0.06, 0.06, 0xdddddd, 0, 2.2, 0), box(0.06, 0.06, 0.5, 0xdddddd, 0, 2.7, 0));
         mast.add(box(0.14, 0.14, 0.14, 0xff3b2f, 0, 3.2, 0, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
         mast.position.copy(p); g.add(mast);
-      }
+      } else later.push(() => { const m = new THREE.Group(); m.add(box(0.12, 3.2, 0.12, 0xdddddd, 0, 0, 0), box(0.5, 0.06, 0.06, 0xdddddd, 0, 2.2, 0), box(0.14, 0.14, 0.14, 0xff3b2f, 0, 3.2, 0, { emissive: 0xff2a1a, emissiveIntensity: 1.5 })); return m; });
     }
     if (tier >= 6) {
       const p = roofSpot(1.2, 0.3);
@@ -502,7 +503,30 @@ export class World {
         sign.add(box(2.2, 0.8, 0.12, 0xffd23f, 0, 0.8, 0, { emissive: 0xffb300, emissiveIntensity: 0.6 }));
         sign.add(box(1.6, 0.3, 0.14, 0xffffff, 0, 1.05, 0, { emissive: 0xffffff, emissiveIntensity: 0.8 }));
         sign.position.copy(p); sign.rotation.y = Math.PI / 4; g.add(sign);
-      }
+      } else later.push(() => { const sg = new THREE.Group(); sg.add(box(0.1, 0.7, 0.1, 0x3a3f48, -0.7, 0, 0), box(0.1, 0.7, 0.1, 0x3a3f48, 0.7, 0, 0), box(1.7, 0.7, 0.12, 0xffd23f, 0, 0.6, 0, { emissive: 0xffb300, emissiveIntensity: 0.6 })); sg.rotation.y = Math.PI / 4; return sg; });
+    }
+    if (tier >= 7) {
+      // a flag on the roof
+      const p = roofSpot(0.3, 0.3);
+      if (p) {
+        const flag = new THREE.Group();
+        flag.add(box(0.08, 2.6, 0.08, 0xdddddd, 0, 0, 0));
+        const cloth = box(0.9, 0.55, 0.04, color === 0xe8e4da ? 0xe85a3c : color, 0.48, 1.95, 0);
+        flag.add(cloth, box(0.14, 0.14, 0.14, 0xffc23d, 0, 2.6, 0));
+        flag.position.copy(p); g.add(flag);
+      } else later.push(() => { const f = new THREE.Group(); f.add(box(0.08, 2.6, 0.08, 0xdddddd, 0, 0, 0), box(0.9, 0.55, 0.04, color === 0xe8e4da ? 0xe85a3c : color, 0.48, 1.95, 0)); return f; });
+    }
+    if (tier >= 9) {
+      // fully built: a golden beacon on top
+      const p = roofSpot(0.5, 0.5);
+      if (p) {
+        const b = new THREE.Group();
+        b.add(cylY(0.45, 0.35, 0x5b5f66, 0, 0, 0), cylY(0.16, 2.2, 0xffc23d, 0, 0.35, 0));
+        b.add(cylY(0.32, 0.12, 0xffc23d, 0, 1.2, 0));
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), mat(0xffd76a, { emissive: 0xffb300, emissiveIntensity: 1.6 }));
+        orb.position.y = 2.75; b.add(orb);
+        b.position.copy(p); g.add(b);
+      } else later.push(() => { const bb2 = new THREE.Group(); bb2.add(cylY(0.16, 2.2, 0xffc23d, 0, 0, 0)); const o = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), mat(0xffd76a, { emissive: 0xffb300, emissiveIntensity: 1.6 })); o.position.y = 2.4; bb2.add(o); return bb2; });
     }
     // on the lot itself
     const ex = new THREE.Group();
@@ -519,7 +543,15 @@ export class World {
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8))
       .filter(([cx, cz]) => { const hit = topAt(lx + cx, lz + cz); return !(hit && hit.point.y > 0.6); });
     const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
-    corners.slice(0, wings).forEach(([cx, cz], i) => ex.add(this.#wing(cx, cz, color, tier, i)));
+    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { const wg = this.#wing(cx, cz, color, tier, i); ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
+    // anything that didn't fit on the main roof: on a wing roof, or on the ground in a free corner
+    const spare = corners.slice(wings);
+    later.forEach((make, i) => {
+      const it = make();
+      const at = wingTops[i % Math.max(1, wingTops.length)] || (spare[i] ? [spare[i][0], 0.15, spare[i][1]] : null);
+      if (!at) return;
+      it.position.set(at[0], at[1], at[2]); ex.add(it);
+    });
     if (this.themeName !== 'moon') for (const [cx, cz] of corners.slice(wings)) {
       if (rnd() < 0.45) continue;
       const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
@@ -565,7 +597,7 @@ export class World {
   #wing(cx, cz, color, tier, i) {
     const g = new THREE.Group();
     const c = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.12).getHex();
-    const h = 1.6 + Math.min(6, tier) * 0.45 + (i === 0 ? 0.5 : 0);
+    const h = 1.6 + Math.min(9, tier) * 0.32 + (tier >= 8 ? 0.7 : 0) + (i === 0 ? 0.5 : 0);
     g.add(box(2.3, h, 2.2, c, 0, 0, 0));
     g.add(box(2.45, 0.16, 2.35, new THREE.Color(color).multiplyScalar(0.6).getHex(), 0, h, 0));
     const sx = Math.sign(cx), sz = Math.sign(cz);
@@ -573,8 +605,18 @@ export class World {
       g.add(box(1.7, 0.36, 0.06, 0x9fd6ff, 0, 0.45 + f * 0.85, sz * 1.11));
       g.add(box(0.06, 0.36, 1.6, 0x9fd6ff, sx * 1.16, 0.45 + f * 0.85, 0));
     }
-    if (tier >= 6) for (let k = 0; k < 2; k++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.7), mat(0x2a4f8f)); p.position.set(-0.45 + k * 0.9, h + 0.35, 0); p.rotation.x = -0.45; g.add(p); }
+    if (tier >= 7) {
+      // a rooftop garden
+      g.add(box(1.9, 0.08, 1.8, 0x5f9e3c, 0, h + 0.16, 0));
+      for (const [bx, bz] of [[-0.5, -0.4], [0.5, 0.45]]) { const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), mat(0x3f8f4a, { flatShading: true })); b.position.set(bx, h + 0.45, bz); g.add(b); }
+    } else if (tier >= 5) for (let k = 0; k < 2; k++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.7), mat(0x2a4f8f)); p.position.set(-0.45 + k * 0.9, h + 0.35, 0); p.rotation.x = -0.45; g.add(p); }
+    if (tier >= 8) for (const [fx, fz] of [[sx * 1.05, sz * 1.0], [-sx * 1.05, sz * 1.0]]) {
+      // floodlights on the roof edge
+      g.add(box(0.08, 0.5, 0.08, 0x3a3f48, fx, h + 0.16, fz));
+      g.add(box(0.3, 0.2, 0.2, 0xfff1cf, fx, h + 0.62, fz, { emissive: 0xffe2a8, night: 3 }));
+    }
     g.position.set(cx, 0.15, cz);
+    g.userData.top = h + (tier >= 7 ? 0.24 : 0.16);
     return g;
   }
   #dust(L) {
@@ -614,7 +656,7 @@ export class World {
   // upgrade tier: the building grows, gains wings and rooftop gear
   setGrowth(id, tier) {
     const L = this.lots[id];
-    L.grow = 1 + Math.min(7, tier) * 0.055;
+    L.grow = 1 + Math.min(9, tier) * 0.04;
     if ((L.tier || 0) === tier) return;
     const up = tier > (L.tier || 0);
     L.tier = tier;
