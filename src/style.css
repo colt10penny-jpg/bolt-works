@@ -188,9 +188,9 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   border: none; border-radius: 14px; background: var(--paper); box-shadow: 0 3px 0 rgba(0,0,0,.15); padding: 6px 10px 7px;
   display: flex; flex-direction: column; gap: 4px; text-align: left; color: var(--ink);
 }
-.contract .c-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font: 800 12px var(--body); }
-.contract .c-bot { display: flex; align-items: center; gap: 6px; }
-.contract .c-bot .c-bar { flex: 1; }
+.contract .c-top { width: 100%; align-self: stretch; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font: 800 12px var(--body); }
+.contract .c-bot { display: flex; align-items: center; gap: 6px; width: 100%; align-self: stretch; }
+.contract .c-bot .c-bar { flex: 1 1 auto; min-width: 60px; }
 .contract .c-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .contract .c-time { color: var(--ink-soft); font: 800 11px var(--body); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .contract .c-what { font: 800 11px var(--body); color: var(--ink-soft); font-variant-numeric: tabular-nums; flex-shrink: 0; }
