@@ -4,7 +4,7 @@
 // baked into a few big meshes so it stays fast on phones.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE, NET, hasRoad, distToRoad, exitNode } from './traffic.js';
+import { ROAD_W, LANE, STOP_R, EDGE, NET, hasRoad, distToRoad, exitFar } from './traffic.js';
 
 export const SHARED = { time: { value: 0 }, cloudTex: { value: null }, cloudAmt: { value: 0.18 }, night: { value: 0 } };
 
@@ -186,9 +186,12 @@ class Batch {
 
 // ---------- the land ----------
 const TOWN = { x0: -38, x1: 38, z0: -38, z1: 38 };
+let BLOCKS = [];   // the town's plots, set when the land is built
 function townDist(x, z) {
-  const dx = Math.max(TOWN.x0 - x, 0, x - TOWN.x1), dz = Math.max(TOWN.z0 - z, 0, z - TOWN.z1);
-  return Math.hypot(dx, dz);
+  if (!BLOCKS.length) { const dx = Math.max(TOWN.x0 - x, 0, x - TOWN.x1), dz = Math.max(TOWN.z0 - z, 0, z - TOWN.z1); return Math.hypot(dx, dz); }
+  let d = Infinity;
+  for (const [cx, cz] of BLOCKS) d = Math.min(d, Math.hypot(Math.max(0, Math.abs(x - cx) - 9), Math.max(0, Math.abs(z - cz) - 9)));
+  return d;
 }
 const roadDist = (x, z) => distToRoad(x, z);
 const LAKE = { x: 66, z: 64, r: 15 };
@@ -250,7 +253,8 @@ const PAL = {
   moon: { grass: [0x9a9aa0, 0x77777f, 0xaeaeb4, 0x5f6068], rock: 0x86868d, snow: 0xc4c4ca, dirt: 0x8f8f96 },
 };
 
-export function buildLand(name, T, LOTS) {
+export function buildLand(name, T, blocks) {
+  BLOCKS = blocks;
   const tx = textures();
   const H = makeHeight(name);
   const P = PAL[name] || PAL.colorado;
@@ -296,115 +300,7 @@ export function buildLand(name, T, LOTS) {
     ground.userData.water = ripples;
   }
 
-  // roads: one asphalt mesh, curbs + sidewalks, paint, crosswalks. The grid inside
-  // town, plus the few roads that lead out.
-  const road = new Batch();
-  const asphaltM = withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
-  const walkM = withClouds(std(T.walk, { roughness: 0.9 }));
-  const curbM = std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
-  const paintM = std(0xf4efe0, { roughness: 0.7 });
-  const L = EDGE + 40;
   const HW = ROAD_W / 2, SW = 0.7;
-  const moon = name === 'moon';
-  const edgeM = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
-  edgeM.userData.night = 2.2; edgeM.userData.day = 0.4;
-  // every stretch of road between two junctions (or out to the edge)
-  const stretches = [];
-  for (const r of NET.roads) {
-    const along = r.z0 === r.z1 ? 'x' : 'z';
-    const a0 = along === 'x' ? r.x0 : r.z0, a1 = along === 'x' ? r.x1 : r.z1, line = along === 'x' ? r.z0 : r.x0;
-    const stops = (along === 'x' ? AVES : CROSS).filter(v => v >= a0 - 0.1 && v <= a1 + 0.1);
-    const pts = [...new Set([a0, ...stops, a1])].sort((p, q) => p - q);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const s0 = pts[i] + ((along === 'x' ? AVES : CROSS).includes(pts[i]) ? HW : 0);
-      const s1 = pts[i + 1] - ((along === 'x' ? AVES : CROSS).includes(pts[i + 1]) ? HW : 0);
-      stretches.push({ along, line, s0, s1: r.exit && Math.abs(pts[i + 1]) > 40 ? Math.sign(pts[i + 1]) * L : s1, s0x: r.exit && Math.abs(pts[i]) > 40 ? Math.sign(pts[i]) * L : s0 });
-    }
-    // the asphalt itself
-    if (along === 'x') road.add(asphaltM, rect(Math.max(-L, a0 - (r.exit ? 0 : HW)), line - HW, Math.min(L, a1 + (r.exit ? 0 : HW)), line + HW, 0.075));
-    else road.add(asphaltM, rect(line - HW, Math.max(-L, a0 - (r.exit ? 0 : HW)), line + HW, Math.min(L, a1 + (r.exit ? 0 : HW)), 0.07));
-  }
-  for (const st of stretches) {
-    const a = Math.min(st.s0x, st.s1), b = Math.max(st.s0x, st.s1);
-    if (b - a < 0.05) continue;
-    for (const side of [-1, 1]) {
-      if (st.along === 'x') {
-        road.add(walkM, boxAt(b - a, 0.14, SW, (a + b) / 2, 0, st.line + side * (HW + SW / 2)));
-        road.add(curbM, boxAt(b - a, 0.16, 0.12, (a + b) / 2, 0, st.line + side * (HW + 0.06)));
-      } else {
-        road.add(walkM, boxAt(SW, 0.14, b - a, st.line + side * (HW + SW / 2), 0, (a + b) / 2));
-        road.add(curbM, boxAt(0.12, 0.16, b - a, st.line + side * (HW + 0.06), 0, (a + b) / 2));
-      }
-    }
-    // centre dashes, or on the Moon blue edge lights like a runway
-    if (moon) for (let i = a + 1.5; i < b - 1; i += 3.5) for (const sd of [-1, 1])
-      road.add(edgeM, st.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, st.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, st.line + sd * (HW - 0.12), 0.07, i));
-    else for (let i = a + STOP_R + 0.2; i < b - STOP_R + 0.6; i += 2.4)
-      road.add(paintM, st.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.075, st.line) : boxAt(0.14, 0.02, 1.1, st.line, 0.07, i));
-  }
-  // junctions: corner squares, closed sides where no road leads on, stop lines and crosswalks
-  for (const x of AVES) for (const z of CROSS) {
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
-    for (const [hx, hz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      if (!hasRoad(x, z, { x: hx, z: hz })) {
-        // the edge of town: sidewalk and curb carry straight across
-        if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z)); }
-        else { road.add(walkM, boxAt(ROAD_W, 0.14, SW, x, 0, z + hz * (HW + SW / 2))); road.add(curbM, boxAt(ROAD_W, 0.16, 0.12, x, 0, z + hz * (HW + 0.06))); }
-        continue;
-      }
-      // traffic arriving from the (hx, hz) side heads the other way
-      const ax = -hx, az = -hz;
-      const cx = x - ax * STOP_R + (-az) * LANE, cz = z - az * STOP_R + ax * LANE;
-      road.add(paintM, ax ? boxAt(0.26, 0.022, HW - 0.15, cx, 0.075, cz) : boxAt(HW - 0.15, 0.022, 0.26, cx, 0.075, cz));
-      const zc = STOP_R - 0.62;
-      if (!moon) for (let k = -3; k <= 3; k++) {
-        const off = k * 0.5;
-        if (ax) road.add(paintM, boxAt(0.7, 0.022, 0.26, x - ax * zc, 0.075, z + off));
-        else road.add(paintM, boxAt(0.26, 0.022, 0.7, x + off, 0.075, z - az * zc));
-      }
-    }
-  }
-  road.build(ground);
-
-  // streetlights: a lamp at two corners of every junction, and along the roads out of town
-  const poles = new Batch();
-  const poleM = std(0x3a3f48, { roughness: 0.45, metalness: 0.6 });
-  const headM = std(0x2a2d33, { roughness: 0.5, metalness: 0.4 });
-  const lampM = new THREE.MeshStandardMaterial({ color: 0xfff6e2, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.3 });
-  lampM.userData.night = 2.4;
-  const lights = [];
-  const lamp = (x, z, ax, az) => {
-    if (moon) {   // short light posts instead of streetlamps
-      poles.add(poleM, boxAt(0.18, 0.7, 0.18, x, 0.14, z));
-      poles.add(edgeM, boxAt(0.26, 0.16, 0.26, x, 0.84, z));
-      lights.push(new THREE.Vector3(x, 0.9, z));
-      return;
-    }
-    // a slim tapered pole, a curved arm, and a flat lamp head with a glowing lens
-    const pole = new THREE.CylinderGeometry(0.05, 0.08, 3.0, 8); pole.translate(x, 0.14 + 1.5, z);
-    poles.add(poleM, pole);
-    const base = new THREE.CylinderGeometry(0.13, 0.15, 0.25, 8); base.translate(x, 0.14 + 0.12, z); poles.add(poleM, base);
-    const len = 0.95, ang = Math.atan2(az, ax);
-    const arm = new THREE.CylinderGeometry(0.035, 0.035, len, 6); arm.rotateZ(Math.PI / 2); arm.rotateY(-ang); arm.translate(x + ax * len / 2 / Math.hypot(ax, az), 3.08, z + az * len / 2 / Math.hypot(ax, az));
-    poles.add(poleM, arm);
-    const hx = x + ax / Math.hypot(ax, az) * len, hz = z + az / Math.hypot(ax, az) * len;
-    const head = new THREE.CylinderGeometry(0.26, 0.3, 0.12, 12); head.translate(hx, 3.0, hz); poles.add(headM, head);
-    const lens = new THREE.CylinderGeometry(0.22, 0.22, 0.03, 12); lens.translate(hx, 2.93, hz); poles.add(lampM, lens);
-    lights.push(new THREE.Vector3(hx, 2.9, hz));
-  };
-  const o = HW + SW / 2;
-  for (const x of AVES) for (const z of CROSS) { lamp(x + o, z + o, -0.7, -0.7); lamp(x - o, z - o, 0.7, 0.7); }
-  for (const e of NET.exits) {
-    const n = exitNode(e);
-    for (let d = 14; d <= 110; d += 14) {
-      if (e.axis === 'x') lamp(n.x + e.dir * d, n.z + o, 0, -1);
-      else lamp(n.x + o, n.z + e.dir * d, -1, 0);
-    }
-  }
-  poles.build(ground, { cast: true });
-  ground.userData.lamps = lights;
-  ground.userData.lampMat = lampM;
-  ground.userData.edgeMat = edgeM;
 
   // ---------- scenery ----------
   const near = new Batch(), far = new Batch(), blobs = [];
@@ -412,7 +308,7 @@ export function buildLand(name, T, LOTS) {
   const blocked = (x, z, pad) => {
     if (roadDist(x, z) < HW + SW + pad) return true;
     if (name === 'colorado' && H(x, z) < -0.3) return true;
-    return Object.values(LOTS).some(([lx, lz]) => Math.abs(x - lx) < 5.4 + pad * 0.3 && Math.abs(z - lz) < 5.4 + pad * 0.3);
+    return townDist(x, z) < 0.5 + pad * 0.3;
   };
   const SPAN = 270, NEAR = 60;
   const place = (count, make, { pad = 0.6, maxH = 99, minH = -0.3, span = SPAN, where = null, blob = 1 } = {}) => {
@@ -603,4 +499,145 @@ function sceneryKit() {
       return g;
     },
   };
+}
+
+// ---------- roads ----------
+// Built from the road network: stretches in good repair get asphalt, curbs, sidewalks,
+// paint and streetlights; Colorado's worn-out stretches are cracked, faded and
+// overgrown; stretches not built yet are just land. The roads out of town are good.
+export function buildRoads(name, T, stateOf) {
+  const tx = textures();
+  const group = new THREE.Group();
+  const road = new Batch();
+  const asphaltM = withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
+  const wornM = withClouds(std(new THREE.Color(T.road).lerp(new THREE.Color(0x938b78), 0.55).getHex(), { map: tx.asphalt, roughness: 0.98 }));
+  const crackM = std(0x3b3a36, { roughness: 1 });
+  const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
+  const mossM = withClouds(std(0x79ad4c, { roughness: 1 }));
+  const walkM = withClouds(std(T.walk, { roughness: 0.9 }));
+  const curbM = std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
+  const paintM = std(0xf4efe0, { roughness: 0.7 });
+  const HW = ROAD_W / 2, SW = 0.7, moon = name === 'moon';
+  const edgeM = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
+  edgeM.userData.night = 2.2;
+  let seed = 4242;
+  const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const good = [], worn = [];
+  for (const [k, { a, b }] of NET.segs) { const st = stateOf(k); if (st === 'good') good.push({ a, b }); else if (st === 'worn') worn.push({ a, b }); }
+  for (const e of NET.exits) good.push({ a: e.node, b: exitFar(e), exit: true });
+  const span = ({ a, b }) => ({ along: a.z === b.z ? 'x' : 'z', line: a.z === b.z ? a.z : a.x, lo: Math.min(a.z === b.z ? a.x : a.z, a.z === b.z ? b.x : b.z), hi: Math.max(a.z === b.z ? a.x : a.z, a.z === b.z ? b.x : b.z) });
+  const strip = (m, sp, lo, hi, y, w = ROAD_W) => road.add(m, sp.along === 'x' ? rect(lo, sp.line - w / 2, hi, sp.line + w / 2, y) : rect(sp.line - w / 2, lo, sp.line + w / 2, hi, y));
+  // worn out: faded, cracked, weeds coming through
+  for (const sg of worn) {
+    const sp = span(sg);
+    strip(wornM, sp, sp.lo - HW, sp.hi + HW, 0.06);
+    // grass creeping in from both edges, and patches pushing up through the middle
+    for (let i = sp.lo - HW + 0.4; i < sp.hi + HW - 0.4; i += 0.7 + r() * 0.9) {
+      for (const sd of [-1, 1]) {
+        const rad = 0.35 + r() * 0.55, ins = HW - rad * 0.35 - r() * 0.25;
+        const g = new THREE.CircleGeometry(rad, 7); g.rotateX(-Math.PI / 2); g.scale(1.4, 1, 1);
+        if (sp.along === 'z') g.rotateY(Math.PI / 2);
+        g.translate(sp.along === 'x' ? i : sp.line + sd * ins, 0.066 + r() * 0.004, sp.along === 'x' ? sp.line + sd * ins : i);
+        road.add(mossM, g);
+      }
+      if (r() < 0.18) {
+        const g = new THREE.CircleGeometry(0.25 + r() * 0.35, 6); g.rotateX(-Math.PI / 2);
+        const off = (r() - 0.5) * (ROAD_W - 1.4);
+        g.translate(sp.along === 'x' ? i : sp.line + off, 0.067, sp.along === 'x' ? sp.line + off : i);
+        road.add(mossM, g);
+      }
+    }
+    for (let i = sp.lo + 1; i < sp.hi - 1; i += 1.0 + r() * 1.2) {
+      const off = (r() - 0.5) * (ROAD_W - 0.6), len = 0.6 + r() * 1.4;
+      road.add(crackM, sp.along === 'x' ? boxAt(len, 0.01, 0.07, i, 0.06, sp.line + off) : boxAt(0.07, 0.01, len, sp.line + off, 0.06, i));
+      if (r() < 0.8) {
+        const w = new THREE.IcosahedronGeometry(0.18 + r() * 0.26, 0); w.scale(1, 0.55, 1);
+        const wx = sp.along === 'x' ? i + r() : sp.line + (r() < 0.5 ? -1 : 1) * (HW - 0.2 - r() * 0.6);
+        const wz = sp.along === 'x' ? sp.line + (r() < 0.5 ? -1 : 1) * (HW - 0.2 - r() * 0.6) : i + r();
+        w.translate(wx, 0.1, wz); road.add(weedM, w);
+      }
+    }
+  }
+  // in good repair
+  for (const sg of good) {
+    const sp = span(sg);
+    strip(asphaltM, sp, sp.lo - HW, sp.hi + HW, 0.075);
+    const lo = sp.lo + HW, hi = sp.hi - (sg.exit ? 0 : HW);
+    const a0 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.lo : lo, a1 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.hi - HW : hi;
+    for (const side of [-1, 1]) {
+      if (sp.along === 'x') {
+        road.add(walkM, boxAt(a1 - a0, 0.14, SW, (a0 + a1) / 2, 0, sp.line + side * (HW + SW / 2)));
+        road.add(curbM, boxAt(a1 - a0, 0.16, 0.12, (a0 + a1) / 2, 0, sp.line + side * (HW + 0.06)));
+      } else {
+        road.add(walkM, boxAt(SW, 0.14, a1 - a0, sp.line + side * (HW + SW / 2), 0, (a0 + a1) / 2));
+        road.add(curbM, boxAt(0.12, 0.16, a1 - a0, sp.line + side * (HW + 0.06), 0, (a0 + a1) / 2));
+      }
+    }
+    if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
+      road.add(edgeM, sp.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, sp.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, sp.line + sd * (HW - 0.12), 0.075, i));
+    else for (let i = a0 + STOP_R - 1.4; i < a1 - STOP_R + 1.8; i += 2.4)
+      road.add(paintM, sp.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.08, sp.line) : boxAt(0.14, 0.02, 1.1, sp.line, 0.08, i));
+  }
+  // junctions touched by a good road: corners, closed sides, stop lines, crosswalks
+  const nodes = new Map();
+  for (const sg of good) for (const n of [sg.a, sg.b]) if (!sg.exit || n === sg.a) nodes.set(n.x + ',' + n.z, n);
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const n of nodes.values()) {
+    const { x, z } = n;
+    if (!NET.adj.has(x + ',' + z) && !NET.exits.some(e => e.node.x === x && e.node.z === z)) continue;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
+    const ways = DIRS.filter(([hx, hz]) => hasRoad(x, z, { x: hx, z: hz }));
+    for (const [hx, hz] of DIRS) {
+      if (!ways.some(([a, b]) => a === hx && b === hz)) {
+        if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z)); }
+        else { road.add(walkM, boxAt(ROAD_W, 0.14, SW, x, 0, z + hz * (HW + SW / 2))); road.add(curbM, boxAt(ROAD_W, 0.16, 0.12, x, 0, z + hz * (HW + 0.06))); }
+        continue;
+      }
+      if (ways.length < 3) continue;   // a bend, not a junction: nobody stops here
+      const ax = -hx, az = -hz;
+      const cx = x - ax * STOP_R + (-az) * LANE, cz = z - az * STOP_R + ax * LANE;
+      road.add(paintM, ax ? boxAt(0.26, 0.022, HW - 0.15, cx, 0.08, cz) : boxAt(HW - 0.15, 0.022, 0.26, cx, 0.08, cz));
+      const zc = STOP_R - 0.62;
+      if (!moon) for (let k = -3; k <= 3; k++) {
+        const off = k * 0.5;
+        if (ax) road.add(paintM, boxAt(0.7, 0.022, 0.26, x - ax * zc, 0.08, z + off));
+        else road.add(paintM, boxAt(0.26, 0.022, 0.7, x + off, 0.08, z - az * zc));
+      }
+    }
+  }
+  road.build(group);
+
+  // streetlights at good junctions, and along the roads out of town
+  const poles = new Batch();
+  const poleM = std(0x3a3f48, { roughness: 0.45, metalness: 0.6 });
+  const headM = std(0x2a2d33, { roughness: 0.5, metalness: 0.4 });
+  const lampM = new THREE.MeshStandardMaterial({ color: 0xfff6e2, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.3 });
+  const lights = [];
+  const lamp = (x, z, ax, az) => {
+    if (moon) {
+      poles.add(poleM, boxAt(0.18, 0.7, 0.18, x, 0.14, z));
+      poles.add(edgeM, boxAt(0.26, 0.16, 0.26, x, 0.84, z));
+      lights.push(new THREE.Vector3(x, 0.9, z));
+      return;
+    }
+    const pole = new THREE.CylinderGeometry(0.05, 0.08, 3.0, 8); pole.translate(x, 0.14 + 1.5, z); poles.add(poleM, pole);
+    const base = new THREE.CylinderGeometry(0.13, 0.15, 0.25, 8); base.translate(x, 0.14 + 0.12, z); poles.add(poleM, base);
+    const len = 0.95, l = Math.hypot(ax, az), ang = Math.atan2(az, ax);
+    const arm = new THREE.CylinderGeometry(0.035, 0.035, len, 6); arm.rotateZ(Math.PI / 2); arm.rotateY(-ang); arm.translate(x + ax / l * len / 2, 3.08, z + az / l * len / 2); poles.add(poleM, arm);
+    const hx = x + ax / l * len, hz = z + az / l * len;
+    const head = new THREE.CylinderGeometry(0.26, 0.3, 0.12, 12); head.translate(hx, 3.0, hz); poles.add(headM, head);
+    const lens = new THREE.CylinderGeometry(0.22, 0.22, 0.03, 12); lens.translate(hx, 2.93, hz); poles.add(lampM, lens);
+    lights.push(new THREE.Vector3(hx, 2.9, hz));
+  };
+  const o = HW + SW / 2;
+  for (const n of nodes.values()) {
+    if (!NET.adj.has(n.x + ',' + n.z)) continue;
+    lamp(n.x + o, n.z + o, -0.7, -0.7); lamp(n.x - o, n.z - o, 0.7, 0.7);
+  }
+  for (const e of NET.exits) for (let d = 14; d <= 110; d += 14) {
+    if (e.dir.x) lamp(e.node.x + e.dir.x * d, e.node.z + o, 0, -1);
+    else lamp(e.node.x + o, e.node.z + e.dir.z * d, -1, 0);
+  }
+  poles.build(group, { cast: true });
+  return { group, lamps: lights, lampMat: lampM, edgeMat: edgeM };
 }

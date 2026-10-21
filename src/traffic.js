@@ -4,24 +4,195 @@
 // and checks for cars before pulling out of a driveway.
 import * as THREE from 'three';
 
-export const AVES = [-35, -21, -7, 7, 21, 35];   // roads running along z, at these x
-export const CROSS = [-35, -21, -7, 7, 21, 35];  // roads running along x, at these z
 export const ROAD_W = 3.6;
 export const LANE = 0.9;                 // lane centre offset from the road centre
 export const STOP_R = ROAD_W / 2 + 1.1;  // stop line distance from an intersection centre (crosswalk in between)
-export const EDGE = 130;                 // roads run this far out; cars appear/vanish there
+export const EDGE = 130;                 // roads out of town run this far; cars appear/vanish there
+export const BLOCK = 14;
 const HALF = 1.2;      // half a vehicle length
 const GAP = 2.7;       // centre-to-centre distance kept to the car in front
 const LOOK = 4.2;
 const ACCEL = 6, DECEL = 14;
-const BLOCK = 14;
 
-const isNode = (x, z) => AVES.includes(x) && CROSS.includes(z);
 const key = (x, z) => `${x},${z}`;
 const sgn = v => (v > 1e-6 ? 1 : v < -1e-6 ? -1 : 0);
 const head = (a, b) => ({ x: sgn(b.x - a.x), z: sgn(b.z - a.z) });
 const right = h => ({ x: -h.z, z: h.x });
-const inGrid = p => p.x >= AVES[0] - 0.1 && p.x <= AVES[AVES.length - 1] + 0.1 && p.z >= CROSS[0] - 0.1 && p.z <= CROSS[CROSS.length - 1] + 0.1;
+const DIRS = [{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }];
+
+// ---------- the road network ----------
+// Town is a set of blocks (plots); roads run along the edges of the blocks. Each
+// stretch of road between two junctions is a "segment", and is either in good
+// shape (cars use it), worn out, or not built yet. A few roads lead out of town.
+export const segKey = (a, b) => { const ka = key(a.x, a.z), kb = key(b.x, b.z); return ka < kb ? ka + '|' + kb : kb + '|' + ka; };
+export function blockSides(cx, cz) {
+  const h = BLOCK / 2;
+  return [
+    { side: 'x+', road: { x: cx + h, z: cz }, inLot: { x: cx + 2.6, z: cz }, ends: [{ x: cx + h, z: cz - h }, { x: cx + h, z: cz + h }] },
+    { side: 'x-', road: { x: cx - h, z: cz }, inLot: { x: cx - 2.6, z: cz }, ends: [{ x: cx - h, z: cz - h }, { x: cx - h, z: cz + h }] },
+    { side: 'z+', road: { x: cx, z: cz + h }, inLot: { x: cx, z: cz + 2.6 }, ends: [{ x: cx - h, z: cz + h }, { x: cx + h, z: cz + h }] },
+    { side: 'z-', road: { x: cx, z: cz - h }, inLot: { x: cx, z: cz - 2.6 }, ends: [{ x: cx - h, z: cz - h }, { x: cx + h, z: cz - h }] },
+  ].map(s => ({ ...s, seg: segKey(s.ends[0], s.ends[1]) }));
+}
+export const NET = { blocks: [], segs: new Map(), good: new Set(), exits: [], adj: new Map(), roads: [] };
+const nodeOf = k => { const [x, z] = k.split(',').map(Number); return { x, z }; };
+
+// every segment around every block: key -> { a, b }
+export function townSegments(blocks) {
+  const m = new Map();
+  for (const [cx, cz] of blocks) for (const s of blockSides(cx, cz)) m.set(s.seg, { a: s.ends[0], b: s.ends[1] });
+  return m;
+}
+// places a road could leave town: a junction on the edge, heading straight out
+// without running into any other part of town
+export function exitCandidates(blocks) {
+  const segs = townSegments(blocks), nodes = new Map();
+  for (const { a, b } of segs.values()) { nodes.set(key(a.x, a.z), a); nodes.set(key(b.x, b.z), b); }
+  const out = [];
+  for (const n of nodes.values()) for (const d of DIRS) {
+    const next = { x: n.x + d.x * BLOCK, z: n.z + d.z * BLOCK };
+    if (segs.has(segKey(n, next))) continue;
+    // the way out must be clear of town all the way to the edge
+    const blocked = blocks.some(([cx, cz]) => d.x ? Math.abs(cz - n.z) < BLOCK / 2 + 0.1 && (cx - n.x) * d.x > 0 : Math.abs(cx - n.x) < BLOCK / 2 + 0.1 && (cz - n.z) * d.z > 0);
+    // only straight out from a side, not off the tip of a corner
+    const along = DIRS.filter(e => e.x !== d.x || e.z !== d.z).filter(e => !(e.x === -d.x && e.z === -d.z));
+    const onEdge = along.some(e => segs.has(segKey(n, { x: n.x + e.x * BLOCK, z: n.z + e.z * BLOCK })));
+    if (!blocked && onEdge) out.push({ node: n, dir: d });
+  }
+  return out;
+}
+export function makeExits(blocks, seed) {
+  let s = (seed >>> 0) % 2147483647 || 1;
+  const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  const all = exitCandidates(blocks);
+  const n = 3 + Math.floor(r() * 3);
+  const out = [];
+  while (out.length < n && all.length) {
+    const e = all.splice(Math.floor(r() * all.length), 1)[0];
+    if (out.some(o => o.node.x === e.node.x && o.node.z === e.node.z)) continue;   // one per junction
+    out.push(e);
+  }
+  return out;
+}
+export const exitFar = e => ({ x: e.node.x + e.dir.x * (EDGE + 10 - Math.abs(e.dir.x ? e.node.x : e.node.z)), z: e.node.z + e.dir.z * (EDGE + 10 - Math.abs(e.dir.x ? e.node.x : e.node.z)) });
+
+// set up the network: town blocks, which segments are in good shape, the exits
+export function setNetwork(blocks, good, exits) {
+  NET.blocks = blocks;
+  NET.segs = townSegments(blocks);
+  NET.good = new Set([...good].filter(k => NET.segs.has(k)));
+  NET.exits = exits;
+  const adj = new Map();
+  const link = (a, b) => { const k = key(a.x, a.z); if (!adj.has(k)) adj.set(k, []); adj.get(k).push(b); };
+  for (const k of NET.good) { const { a, b } = NET.segs.get(k); link(a, b); link(b, a); }
+  NET.adj = adj;
+  // centre lines of every bit of road (built or not) and the exits, for flattening land
+  NET.roads = [...NET.segs.values()].map(({ a, b }) => ({ x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }));
+  for (const e of exits) { const f = exitFar(e); NET.roads.push({ x0: Math.min(e.node.x, f.x), z0: Math.min(e.node.z, f.z), x1: Math.max(e.node.x, f.x), z1: Math.max(e.node.z, f.z), exit: true }); }
+}
+const exitAt = n => NET.exits.find(e => e.node.x === n.x && e.node.z === n.z);
+const nbrs = n => NET.adj.get(key(n.x, n.z)) || [];
+const degree = n => nbrs(n).length + (exitAt(n) ? 1 : 0);
+// a real junction (three or more ways): cars stop and take turns here
+const isNode = (x, z) => degree({ x, z }) >= 3;
+// is there usable road leaving junction (x, z) in direction h?
+export function hasRoad(x, z, h) {
+  if (nbrs({ x, z }).some(m => sgn(m.x - x) === h.x && sgn(m.z - z) === h.z)) return true;
+  const e = exitAt({ x, z });
+  return !!e && e.dir.x === h.x && e.dir.z === h.z;
+}
+export const nodeDegree = (x, z) => degree({ x, z });
+export function distToRoad(x, z) {
+  let d = Infinity;
+  for (const r of NET.roads) {
+    const cx = Math.max(r.x0, Math.min(r.x1, x)), cz = Math.max(r.z0, Math.min(r.z1, z));
+    d = Math.min(d, Math.hypot(x - cx, z - cz));
+  }
+  return d;
+}
+
+// ---------- finding a way ----------
+// Breadth-first search over (junction, heading) so the route never U-turns.
+// starts: [{ node, h, pts }]; goal(node, h) returns extra end points or null.
+function search(starts, goal, maxSteps = 400) {
+  const seen = new Set();
+  let frontier = starts.map(st => ({ ...st }));
+  for (let step = 0; step < maxSteps && frontier.length; step++) {
+    const next = [];
+    for (const st of frontier) {
+      const k = key(st.node.x, st.node.z) + '/' + st.h.x + st.h.z;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const end = goal(st.node, st.h, st);
+      if (end) return [...st.pts, ...end];
+      for (const m of nbrs(st.node)) {
+        const d = head(st.node, m);
+        if (d.x === -st.h.x && d.z === -st.h.z) continue;          // no U-turns
+        if (st.pts.some(p => p.x === m.x && p.z === m.z)) continue; // never the same junction twice
+        next.push({ node: m, h: d, pts: [...st.pts, m] });
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+// how a truck gets out of a lot: onto any side with good road, toward either end
+function lotStarts([lx, lz]) {
+  const out = [];
+  for (const sd of blockSides(lx, lz)) {
+    if (!NET.good.has(sd.seg)) continue;
+    for (const e of sd.ends) out.push({ node: e, h: head(sd.road, e), pts: [sd.inLot, sd.road, e] });
+  }
+  return out;
+}
+function lotGoal([lx, lz]) {
+  const sides = blockSides(lx, lz).filter(sd => NET.good.has(sd.seg));
+  return (n, h) => {
+    for (const sd of sides) for (const e of sd.ends) {
+      if (e.x !== n.x || e.z !== n.z) continue;
+      const g = head(e, sd.road);
+      if (g.x === -h.x && g.z === -h.z) continue;
+      return [sd.road, sd.inLot];
+    }
+    return null;
+  };
+}
+export function lotRoute(A, B) {
+  if (A[0] === B[0] && A[1] === B[1]) return null;
+  const C = search(lotStarts(A), lotGoal(B));
+  return C && C.length > 3 ? C : null;
+}
+export function lotDriveways(lots) {
+  const seen = new Map();
+  for (const [lx, lz] of lots) for (const sd of blockSides(lx, lz)) if (NET.good.has(sd.seg)) seen.set(key(sd.road.x, sd.road.z), sd.road);
+  return [...seen.values()];
+}
+// can a lot be reached by road at all?
+export const lotConnected = pos => lotStarts(pos).length > 0;
+
+// a random drive: in along one road from out of town, across town, out along another
+function randomRoute(rnd) {
+  const ex = NET.exits.filter(e => nbrs(e.node).length);
+  if (ex.length < 2) return null;
+  for (let tries = 0; tries < 10; tries++) {
+    const a = ex[Math.floor(rnd() * ex.length)];
+    const others = ex.filter(e => e !== a);
+    const b = others[Math.floor(rnd() * others.length)];
+    const start = [{ node: a.node, h: { x: -a.dir.x, z: -a.dir.z }, pts: [exitFar(a), a.node] }];
+    const toB = (n, h) => (n.x === b.node.x && n.z === b.node.z && !(b.dir.x === -h.x && b.dir.z === -h.z)) ? [exitFar(b)] : null;
+    // usually via a random junction, for variety
+    const keys = [...NET.adj.keys()];
+    const w = nodeOf(keys[Math.floor(rnd() * keys.length)]);
+    if (rnd() < 0.75) {
+      let viaH = null;
+      const first = search(start, (n, h) => { if (n.x === w.x && n.z === w.z) { viaH = h; return []; } return null; });
+      if (first && viaH) { const C = search([{ node: w, h: viaH, pts: first }], toB); if (C) return C; }
+    }
+    const C = search(start, toB);
+    if (C) return C;
+  }
+  return null;
+}
 
 // Turn a list of road-centre points into lane points plus the intersections and
 // driveways along the way (where a car has to stop and check before going).
@@ -73,141 +244,12 @@ function buildPath(C, { driveStart = false, driveEnd = false } = {}) {
   return { W, s, len: s[n - 1], stops };
 }
 
-// expand a corner list so every intersection passed straight through is listed
-function expand(pts) {
-  const out = [pts[0]];
-  for (let i = 1; i < pts.length; i++) {
-    const a = out[out.length - 1], b = pts[i];
-    const h = head(a, b);
-    if (!h.x && !h.z) continue;
-    if (h.x && CROSS.includes(a.z)) for (const x of (h.x > 0 ? AVES : [...AVES].reverse())) if ((x - a.x) * h.x > 1e-6 && (b.x - x) * h.x > 1e-6) out.push({ x, z: a.z });
-    if (h.z && AVES.includes(a.x)) for (const z of (h.z > 0 ? CROSS : [...CROSS].reverse())) if ((z - a.z) * h.z > 1e-6 && (b.z - z) * h.z > 1e-6) out.push({ x: a.x, z });
-    out.push(b);
-  }
-  return out;
-}
-function noUturn(C) {
-  for (let i = 1; i < C.length - 1; i++) {
-    const a = head(C[i - 1], C[i]), b = head(C[i], C[i + 1]);
-    if (a.x === -b.x && a.z === -b.z) return false;
-  }
-  return true;
-}
-
-// ways out of a lot: a driveway onto each road beside it, heading to either end
-function exits(lx, lz) {
-  const out = [];
-  const sides = [
-    { road: { x: lx + 7, z: lz }, inLot: { x: lx + 2.6, z: lz }, along: 'z', ok: AVES.includes(lx + 7) && lx <= 0 },
-    { road: { x: lx - 7, z: lz }, inLot: { x: lx - 2.6, z: lz }, along: 'z', ok: AVES.includes(lx - 7) && lx > 0 },
-    { road: { x: lx, z: lz + 7 }, inLot: { x: lx, z: lz + 2.6 }, along: 'x', ok: CROSS.includes(lz + 7) && lz <= 0 },
-    { road: { x: lx, z: lz - 7 }, inLot: { x: lx, z: lz - 2.6 }, along: 'x', ok: CROSS.includes(lz - 7) && lz > 0 },
-  ];
-  // each lot's loading bays face the middle of town (two sides), so trucks always use them
-  for (const sd of sides) {
-    if (!sd.ok) continue;
-    for (const d of [-7, 7]) {
-      const n = sd.along === 'z' ? { x: sd.road.x, z: sd.road.z + d } : { x: sd.road.x + d, z: sd.road.z };
-      if (isNode(n.x, n.z)) out.push({ inLot: sd.inLot, road: sd.road, node: n });
-    }
-  }
-  return out;
-}
-
-export function lotDriveways(lots) {
-  const seen = new Map();
-  for (const [lx, lz] of Object.values(lots)) for (const e of exits(lx, lz)) seen.set(key(e.road.x, e.road.z), e.road);
-  return [...seen.values()];
-}
-export function lotRoute([ax, az], [bx, bz]) {
-  let best = null;
-  for (const A of exits(ax, az)) for (const B of exits(bx, bz)) {
-    const mids = [[A.node, { x: B.node.x, z: A.node.z }, B.node], [A.node, { x: A.node.x, z: B.node.z }, B.node]];
-    for (const m of mids) {
-      const C = expand([A.inLot, A.road, ...m, B.road, B.inLot]);
-      if (!noUturn(C)) continue;
-      let len = 0;
-      for (let i = 1; i < C.length; i++) len += Math.abs(C[i].x - C[i - 1].x) + Math.abs(C[i].z - C[i - 1].z);
-      if (!best || len < best.len) best = { C, len };
-    }
-  }
-  return best ? best.C : null;
-}
-
-// ---------- roads out of town ----------
-// The grid is closed in by a ring road; only a few roads (3-5) lead out of town,
-// picked at random for each world. An exit is { axis: 'x'|'z', line, dir }: a road
-// running along that axis at that line, out past the ring in direction dir.
-export const NET = { exits: [], roads: [] };
-const RING = AVES[AVES.length - 1];
-export function makeExits(seed) {
-  let s = (seed >>> 0) % 2147483647 || 1;
-  const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  const all = [];
-  for (const c of CROSS) for (const dir of [-1, 1]) all.push({ axis: 'x', line: c, dir });
-  for (const a of AVES) for (const dir of [-1, 1]) all.push({ axis: 'z', line: a, dir });
-  const n = 3 + Math.floor(r() * 3);
-  const out = [];
-  while (out.length < n && all.length) {
-    const e = all.splice(Math.floor(r() * all.length), 1)[0];
-    // no two exits from the same corner junction
-    const node = exitNode(e);
-    if (out.some(o => { const m = exitNode(o); return m.x === node.x && m.z === node.z; })) continue;
-    out.push(e);
-  }
-  return out;
-}
-export const exitNode = e => e.axis === 'x' ? { x: e.dir * RING, z: e.line } : { x: e.line, z: e.dir * RING };
-export const exitFar = e => e.axis === 'x' ? { x: e.dir * EDGE, z: e.line } : { x: e.line, z: e.dir * EDGE };
-export function setExits(exits) {
-  NET.exits = exits;
-  // road centre lines: the town grid, plus each exit
-  const roads = [];
-  for (const c of CROSS) roads.push({ x0: -RING, z0: c, x1: RING, z1: c });
-  for (const a of AVES) roads.push({ x0: a, z0: -RING, x1: a, z1: RING });
-  for (const e of exits) { const n = exitNode(e), f = exitFar(e); roads.push({ x0: Math.min(n.x, f.x), z0: Math.min(n.z, f.z), x1: Math.max(n.x, f.x), z1: Math.max(n.z, f.z), exit: true }); }
-  NET.roads = roads;
-}
-setExits(makeExits(1));
-// is there road leaving junction (x, z) in direction h?
-export function hasRoad(x, z, h) {
-  const nx = x + h.x * BLOCK, nz = z + h.z * BLOCK;
-  if (Math.abs(nx) <= RING + 0.1 && Math.abs(nz) <= RING + 0.1) return true;
-  return NET.exits.some(e => { const n = exitNode(e); return n.x === x && n.z === z && (e.axis === 'x' ? h.x === e.dir && !h.z : h.z === e.dir && !h.x); });
-}
-export function distToRoad(x, z) {
-  let d = Infinity;
-  for (const r of NET.roads) {
-    const cx = Math.max(r.x0, Math.min(r.x1, x)), cz = Math.max(r.z0, Math.min(r.z1, z));
-    d = Math.min(d, Math.hypot(x - cx, z - cz));
-  }
-  return d;
-}
-
-// a random drive: in along one road from out of town, across town, out along another
-function randomRoute(rnd) {
-  const ex = NET.exits;
-  if (ex.length < 2) return null;
-  for (let tries = 0; tries < 12; tries++) {
-    const a = ex[Math.floor(rnd() * ex.length)];
-    let b = ex[Math.floor(rnd() * ex.length)];
-    if (b === a) continue;
-    const na = exitNode(a), nb = exitNode(b);
-    // a random junction to pass through on the way, for variety
-    const mid = { x: AVES[Math.floor(rnd() * AVES.length)], z: CROSS[Math.floor(rnd() * CROSS.length)] };
-    const leg = (p, q) => rnd() < 0.5 ? [{ x: q.x, z: p.z }, q] : [{ x: p.x, z: q.z }, q];
-    const C = expand([exitFar(a), na, ...leg(na, mid), ...leg(mid, nb), exitFar(b)]);
-    const seen = new Set(C.map(p => key(p.x, p.z)));
-    if (noUturn(C) && seen.size === C.length) return C;   // no U-turns, no driving through a junction twice
-  }
-  return null;
-}
-
 export class Traffic {
   constructor(scene) {
     this.scene = scene;
     this.cars = [];
     this.holds = new Map();   // intersection key -> car holding it
+    this.pass = new Map();    // driveway key -> cars on the road driving past it (any number at once)
     this.turn = new Map();    // intersection key -> car that has waited longest (goes next)
     this.nextId = 1;
     this.rnd = Math.random;
@@ -247,7 +289,7 @@ export class Traffic {
   remove(car) {
     const i = this.cars.indexOf(car);
     if (i >= 0) this.cars.splice(i, 1);
-    for (const k of car.held) if (this.holds.get(k) === car) this.holds.delete(k);
+    for (const k of car.held) this.#release(car, k);
     for (const [k, c] of this.turn) if (c.car === car) this.turn.delete(k);
     car.held.clear();
     this.scene.remove(car.mesh); car.mesh.visible = false;
@@ -324,6 +366,19 @@ export class Traffic {
     return false;
   }
 
+  // claim a stop. Cars driving past a driveway share it with each other (they're in
+  // their own lanes); only a truck pulling in or out needs it to itself.
+  #take(car, st) {
+    car.held.add(st.key);
+    if (st.kind === 'pass') { if (!this.pass.has(st.key)) this.pass.set(st.key, new Set()); this.pass.get(st.key).add(car); }
+    else this.holds.set(st.key, car);
+  }
+  #release(car, k) {
+    if (this.holds.get(k) === car) this.holds.delete(k);
+    const ps = this.pass.get(k);
+    if (ps) { ps.delete(car); if (!ps.size) this.pass.delete(k); }
+    car.held.delete(k);
+  }
   #canEnter(car, st) {
     if (this.holds.has(st.key) && this.holds.get(st.key) !== car) { car.why = 'held:' + this.holds.get(st.key).id; return false; }
     // take turns: once someone has waited a while, they go next
@@ -345,11 +400,20 @@ export class Traffic {
     }
     // turning into a lot: you claim the driveway from back at the last junction, so
     // nobody pulls out into you; cars already on the road keep their right of way
-    if (st.end || st.kind === 'pass') return true;
+    if (st.kind === 'pass') return true;
+    // a truck turning in or pulling out waits for road cars already passing the driveway
+    if ([...(this.pass.get(st.key) || [])].some(o => o !== car)) { car.why = 'passing'; return false; }
+    if (st.end) return true;
     if (st.kind === 'yield') {
       // a gap in oncoming traffic
       const p = new THREE.Vector3(st.at.x, 0.06, st.at.z);
-      for (const o of this.cars) if (o !== car && (o.pos.distanceTo(p) < 2.4 || this.#willPass(o, p, 1.7, 14))) return false;
+      // (a truck waiting in the lot for the driveway I'm holding can't move until I'm in, so it doesn't count)
+      for (const o of this.cars) {
+        if (o === car || (o.waiting && this.holds.get(o.P.stops[o.ai]?.key) === car)) continue;
+        // a car standing still a good way off (waiting at a junction) can't reach me before I'm in
+        if (o.v < 0.1 && o.pos.distanceTo(p) > 6) continue;
+        if (o.pos.distanceTo(p) < 2.4 || this.#willPass(o, p, 1.7, 14)) { car.why = 'yield:' + o.id; return false; }
+      }
       return true;
     }
     // pulling out of a lot: no car close by on the road, and room in the lane I'm joining
@@ -373,7 +437,7 @@ export class Traffic {
         // passing a driveway: claim it as you approach; only slow down if a truck is pulling out
         const stopAt = st.enter - HALF - 0.15;
         const dist = stopAt - car.s;
-        if (dist < 7 && (!this.holds.has(st.key) || this.holds.get(st.key) === car)) { car.held.add(st.key); this.holds.set(st.key, car); car.ai++; }
+        if (dist < 7 && (!this.holds.has(st.key) || this.holds.get(st.key) === car)) { this.#take(car, st); car.ai++; }
         else if (car.s + HALF > st.enter + 0.3) car.ai++;
         else if (dist <= 0.12) { target = 0; car.waiting = car.v < 0.3; car.why = 'held:' + this.holds.get(st.key)?.id; }
         else target = Math.min(target, Math.sqrt(2 * DECEL * 0.8 * Math.max(0, dist)) + 0.05);
@@ -389,7 +453,7 @@ export class Traffic {
           while (stops[car.ai + group.length] && stops[car.ai + group.length].enter - HALF - 0.15 < group[group.length - 1].exit + HALF + 0.3) group.push(stops[car.ai + group.length]);
           if (car.wait > 2.5 && !this.turn.has(st.key) && !(car.noTurnUntil > this.clock)) this.turn.set(st.key, { car, since: this.clock });
           if (car.wait >= pause && group.every(g => this.#canEnter(car, g))) {
-            for (const g of group) { car.held.add(g.key); this.holds.set(g.key, car); if (this.turn.get(g.key)?.car === car) this.turn.delete(g.key); }
+            for (const g of group) { this.#take(car, g); if (this.turn.get(g.key)?.car === car) this.turn.delete(g.key); }
             car.ai += group.length; car.wait = 0;
           } else { target = 0; car.waiting = car.v < 0.3; }
         } else target = Math.min(target, Math.sqrt(2 * DECEL * 0.8 * Math.max(0, dist)) + 0.05);
@@ -409,9 +473,7 @@ export class Traffic {
       if (car.held.size && car.v < 0.05) car.heldStuck = (car.heldStuck || 0) + dt; else car.heldStuck = 0;
       if (car.heldStuck > 4) {
         while (car.ai > car.ri && car.s + HALF < stops[car.ai - 1].enter - 0.05) {
-          car.ai--; const k = stops[car.ai].key;
-          if (this.holds.get(k) === car) this.holds.delete(k);
-          car.held.delete(k);
+          car.ai--; this.#release(car, stops[car.ai].key);
         }
         car.heldStuck = 0;
       }
@@ -420,9 +482,7 @@ export class Traffic {
       if (car.stuck > 12) { car.ghost = 2.5; car.stuck = 0; this.onGhost?.(car, st, this.#ahead(car).who); }  // last-resort unjam, almost never needed
       // let go of each intersection once fully through it
       while (car.ri < car.ai && car.s - HALF > stops[car.ri].exit) {
-        const k = stops[car.ri].key;
-        if (this.holds.get(k) === car) this.holds.delete(k);
-        car.held.delete(k); car.ri++;
+        this.#release(car, stops[car.ri].key); car.ri++;
       }
       // after an unjam, don't stop in the middle of a junction: count ones I'm already in as passed
       if (car.ghost > 0) while (car.ai < stops.length && car.s + HALF > stops[car.ai].enter) { car.ai++; car.wait = 0; }

@@ -29,10 +29,12 @@ export const ALL = [...FACTORIES, ...SUPPORT];
 export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 400, baseCost: 400, growth: 1, perLevel: 0, need: 0 };
 export const BUILDINGS = [...ALL, HQ];
 // Open land around town: develop a plot, then build an extra factory of any kind on it.
-export const PLOTS = Array.from({ length: 15 }, (_, i) => 'p' + i);
-export const isPlot = id => /^p\d+$/.test(id);
-// each plot costs 6x the one before (and more in later worlds)
-export const landCost = (developed, world) => 400 * Math.pow(6, developed) * (world?.cost || 1);
+export { isPlot } from './layout.js';
+// land costs more for each plot you develop (and more in later worlds)
+// Every building now needs a plot, so land is cheap at first and rises gently.
+export const landCost = (developed, world) => 40 * Math.pow(2.3, developed) * (world?.cost || 1);
+// Roads: restoring an old one is cheaper than building one from scratch.
+export const roadCost = (kind, built, world) => (kind === 'none' ? 45 : 15) * (1 + built * 0.08) * (world?.cost || 1);
 // an extra copy costs more to build and upgrade than the first one
 export const EXTRA_BUILD = 2, EXTRA_UPGRADE = 3;
 // Each manager you hire costs 10× the one before. Managers can be moved between factories.

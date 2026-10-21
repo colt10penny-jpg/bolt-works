@@ -1,23 +1,39 @@
-// Where every building and plot sits in town (shared by the game rules and the 3D world).
-// 5x5 town grid with a block of open land between the factories. The chain snakes:
-// mine -> furnace -> press, gear -> engine, turbine -> rocket; power and the data
-// centre sit on the right, headquarters in the middle. The other 15 blocks are land
-// you can develop for extra factories.
-export const LOTS = {
-  mine: [28, 28], furnace: [0, 28], press: [-28, 28],
-  gear: [-28, 0], engine: [0, 0], power: [28, 0],
-  rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28],
-  hq: [14, 14],
+// Where the plots are in each world, and how big each town can grow.
+//   Colorado: 4 x 4 plots.   Mojave: 5 x 5.   Moon: 5 x 5 plus a row along the
+//   back-left and the back-right (35 plots).
+// Roads run around every plot. Plot ids are q0, q1, ... (nearest the camera first).
+import { BLOCK } from './traffic.js';
+
+const grid = vals => vals.flatMap(x => vals.map(z => [x, z]));
+const SHAPES = {
+  colorado: grid([-21, -7, 7, 21]),
+  desert: grid([-28, -14, 0, 14, 28]),
+  moon: [...grid([-28, -14, 0, 14, 28]), ...[-28, -14, 0, 14, 28].map(z => [-42, z]), ...[-28, -14, 0, 14, 28].map(x => [x, -42])],
 };
-{
-  const taken = new Set(Object.values(LOTS).map(p => p.join()));
-  let i = 0;
-  // plots nearest the starting corner come first
-  const all = [];
-  for (const x of [-28, -14, 0, 14, 28]) for (const z of [-28, -14, 0, 14, 28]) if (!taken.has(x + ',' + z)) all.push([x, z]);
-  all.sort((a, b) => Math.hypot(a[0] - 28, a[1] - 28) - Math.hypot(b[0] - 28, b[1] - 28));
-  for (const p of all) LOTS['p' + i++] = p;
+const cache = {};
+export function plotsOf(world) {
+  if (cache[world]) return cache[world];
+  const list = (SHAPES[world] || SHAPES.colorado).slice().sort((a, b) => (b[0] + b[1]) - (a[0] + a[1]) || b[0] - a[0]);
+  const m = {};
+  list.forEach((p, i) => { m['q' + i] = p; });
+  return (cache[world] = m);
 }
-export const START = [23, 24];   // where the camera starts: by the Ore Mine
-// blocks apart (along the roads) between two lots
-export const blocksApart = (a, b) => (Math.abs(LOTS[a][0] - LOTS[b][0]) + Math.abs(LOTS[a][1] - LOTS[b][1])) / 14;
+export const plotIds = world => Object.keys(plotsOf(world));
+export const isPlot = id => /^q\d+$/.test(id);
+// the plot the Ore Mine starts on in Colorado (the front corner, nearest the camera)
+export const START_PLOT = 'q0';
+export function startView(world) {
+  const [x, z] = plotsOf(world)[START_PLOT];
+  return [x - 5, z - 4];
+}
+export function boundsOf(world) {
+  const ps = Object.values(plotsOf(world));
+  const xs = ps.map(p => p[0]), zs = ps.map(p => p[1]);
+  return { minX: Math.min(...xs) - 6, maxX: Math.max(...xs) + 6, minZ: Math.min(...zs) - 6, maxZ: Math.max(...zs) + 6 };
+}
+// blocks apart (along the roads) between two plots
+export function blocksApart(world, a, b) {
+  const P = plotsOf(world);
+  if (!P[a] || !P[b]) return 99;
+  return (Math.abs(P[a][0] - P[b][0]) + Math.abs(P[a][1] - P[b][1])) / BLOCK;
+}

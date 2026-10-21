@@ -1,21 +1,20 @@
 // The 3D town: fixed-angle camera, lots, factories, supply trucks, crates, smoke,
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
-import { FACTORIES, BUILDINGS, PLOTS } from './economy.js';
+import { FACTORIES } from './economy.js';
 import { BUILDERS, box, cyl, mat, truck, car, crate, powerPole, tree, pine, cactus, rock } from './models.js';
 const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLOW } from './models.js';
 const NIGHT_LIST = () => GLOW.night;
-import { buildLand, withClouds, SHARED } from './terrain.js';
-import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setExits, makeExits, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
+import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
+import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, NET } from './traffic.js';
 
-import { LOTS, START } from './layout.js';
-export { LOTS, START };
+import { plotsOf, boundsOf, startView } from './layout.js';
 const LOT = 10;
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
-const BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
+let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
 const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
@@ -103,7 +102,7 @@ export class World {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene = new THREE.Scene();
-    this.target = new THREE.Vector3(START[0], 0, START[1]);
+    this.target = new THREE.Vector3(14, 0, 17);
     this.zoom = 1;
     this.shake = 0;
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
@@ -117,7 +116,6 @@ export class World {
     this.smoke = [];
     this.pops = [];
     this.traffic = new Traffic(this.scene);
-    DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(LOTS));
     this.idleCars = [];      // ambient cars waiting to re-enter town
     this.truckPool = [];
     this.carPool = [];
@@ -131,13 +129,12 @@ export class World {
     this.groundGroup = new THREE.Group();
     this.sceneryGroup = new THREE.Group();
     this.scene.add(this.groundGroup, this.sceneryGroup);
-    for (const f of BUILDINGS) this.#lot(f);
-    for (const id of PLOTS) this.#lot({ id, name: 'Open land', color: 0x8a8f99, plot: true });
-    this.typeOf = id => id;          // set by the game: what kind of building stands in a lot
-    this.slotsOf = type => [type];   // set by the game: every built lot of a kind
-    this.#powerLine();
+    // set by the game:
+    this.typeOf = lot => null;          // what kind of building stands on a plot
+    this.lotsOf = type => [];           // every plot with a building of that kind
+    this.roadInfo = () => ({ good: new Set(), exits: [], state: () => 'none' });   // the roads
+    this.P = {};
     this.#traffic();
-    this.setTheme('colorado');
     this.#input();
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -160,37 +157,70 @@ export class World {
   }
 
   // ---------- map themes ----------
-  // each player's worlds get their own random roads out of town
   setSeed(seed) { this.exitSeed = seed >>> 0; this.themeName = null; }
   setTheme(name) {
     if (this.themeName === name) return;
     this.themeName = name;
-    const h = [...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, this.exitSeed || 7);
-    setExits(makeExits(h));
+    // every world has its own plots and buildings: take the old town down
+    for (const L of Object.values(this.lots)) { this.scene.remove(L.group); L.label.remove(); }
+    this.lots = {}; this.selected = null;
+    this.P = plotsOf(name);
+    BOUNDS = boundsOf(name);
+    for (const id of Object.keys(this.P)) this.#lot({ id, name: 'Open land', color: 0x8a8f99, plot: true });
     // cars on the old roads go home; new ones come in on this world's roads
     for (const c of this.traffic.cars) if (c.kind === 'ambient') this.idleCars.push(c.mesh);
     this.traffic.clear('ambient');
-    // every world has its own buildings, so take the old ones down
-    for (const id of Object.keys(this.lots)) this.setBuilt(id, false);
+    this.clearDeliveries?.();
     const T = THEME[name] || THEME.colorado;
+    this.T = T;
+    const info = this.roadInfo();
+    setNetwork(Object.values(this.P), info.good, info.exits);
+    DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     for (const g of [this.groundGroup, this.sceneryGroup]) {
       for (const c of [...g.children]) { g.remove(c); c.traverse(o => o.geometry?.dispose()); }
     }
-    const land = buildLand(name, T, LOTS);
+    const land = buildLand(name, T, Object.values(this.P));
     for (const c of [...land.ground.children]) this.groundGroup.add(c);
     for (const c of [...land.scenery.children]) this.sceneryGroup.add(c);
     this.land = land.ground.userData;
     this.heightAt = land.height;
-    this.#lampGlow(this.land.lamps || [], name === 'moon');
+    this.#roads();
     this.scene.fog.near = name === 'moon' ? 260 : 165; this.scene.fog.far = name === 'moon' ? 600 : 430;
     if (!this.padMats) this.padMats = {};
     if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
     for (const L of Object.values(this.lots)) L.pad.material = this.padMats[name];
-    for (const L of Object.values(this.lots)) if (L.def.plot) this.#wild(L, name);
-    const idle = this.idleCars.splice(0);
-    for (const m of idle) { const c = this.traffic.spawnAmbient(m, true); if (c) this.#onAmbientEnd(c); else this.idleCars.push(m); }
+    for (const L of Object.values(this.lots)) this.#wild(L, name);
+    this.#respawnAmbient();
     this.look.groundBase = new THREE.Color(T.ground);
     this.look.setWorld(name);
+    const [sx, sz] = startView(name);
+    this.target.set(sx, 0, sz);
+  }
+  // the roads (and their lamps) for the current network; rebuilt when roads change
+  #roads() {
+    if (this.roadGroup) { this.scene.remove(this.roadGroup); this.roadGroup.traverse(o => o.geometry?.dispose()); }
+    const r = buildRoads(this.themeName, this.T, k => this.roadInfo().state(k));
+    this.roadGroup = r.group;
+    this.scene.add(r.group);
+    this.roadData = r;
+    this.#lampGlow(r.lamps, this.themeName === 'moon');
+  }
+  #respawnAmbient() {
+    const idle = this.idleCars.splice(0);
+    for (const m of idle) { const c = this.#ambientRoom() ? this.traffic.spawnAmbient(m, true) : null; if (c) this.#onAmbientEnd(c); else this.idleCars.push(m); }
+  }
+  // roads were fixed or built: update the network, the road meshes and the loading bays
+  roadsChanged() {
+    const info = this.roadInfo();
+    setNetwork(Object.values(this.P), info.good, info.exits);
+    DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
+    this.#roads();
+    for (const [id, L] of Object.entries(this.lots)) if (L.model && L.look) { const look = L.look; this.setBuilt(id, false); this.setBuilt(id, true, look); L.bounce = 0; }
+    // cars on the road planned their trips on the old roads (where to stop, where to turn),
+    // so they start fresh: ambient cars reappear on the new roads, trucks leave on the next run
+    for (const c of this.traffic.cars) (c.kind === 'delivery' ? this.truckPool : c.kind === 'manager' ? this.carPool : this.idleCars).push(c.mesh);
+    this.traffic.clear();
+    this.#respawnAmbient();
   }
 
   // untouched land on a plot nobody has developed yet, with a for-sale sign
@@ -220,7 +250,7 @@ export class World {
   }
   setLand(id, developed) {
     const L = this.lots[id];
-    if (!L || !L.def.plot) return;
+    if (!L) return;
     L.developed = developed;
     if (L.wild) L.wild.visible = !developed;
     L.pad.visible = developed;
@@ -289,7 +319,7 @@ export class World {
 
   // ---------- lots ----------
   #lot(def) {
-    const [x, z] = LOTS[def.id];
+    const [x, z] = this.P[def.id];
     const group = new THREE.Group();
     group.position.set(x, 0, z);
     const pad = box(LOT - 0.6, 0.15, LOT - 0.6, 0xd9d4c7, 0, 0, 0);
@@ -340,7 +370,7 @@ export class World {
     if (built && look) L.look = look;
     if (built && !L.model) {
       const color = look?.color ?? L.def.color;
-      const m = (BUILDERS[look?.model] || BUILDERS[id])(color);
+      const m = (BUILDERS[look?.model] || BUILDERS.mine)(color);
       const crateColor = color === 0xe8e4da || color === 0xd8d2c4 || color === 0xcfd3da ? 0xb9b4a8 : color;
       L.crates.children.forEach(c => { c.material = mat(crateColor); });
       m.group.position.y = 0.15;
@@ -355,7 +385,7 @@ export class World {
       L.sale.visible = false;
       L.bounce = 1;
     } else if (!built && L.model) {
-      L.group.remove(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = !L.def.plot || !!L.developed;
+      L.group.remove(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = !!L.developed;
       if (L.extras) { L.group.remove(L.extras); L.extras = null; }
       L.rocket = null; L.scaffold = null;
       L.crates.children.forEach(c => { c.visible = false; });
@@ -461,10 +491,16 @@ export class World {
     L.group.add(ex);
     L.extras = ex;
   }
-  // which sides of a lot trucks drive in and out of: the two facing the middle of town
+  // which sides of a lot trucks drive in and out of: every side with good road
   #baySides(id) {
-    const [lx, lz] = LOTS[id];
-    return new Set([lx > 0 ? 'x-' : 'x+', lz > 0 ? 'z-' : 'z+']);
+    const [lx, lz] = this.P[id];
+    const h = 7, sides = new Set();
+    const seg = (a, b) => { const ka = a.join(), kb = b.join(); return ka < kb ? ka + '|' + kb : kb + '|' + ka; };
+    if (NET.good.has(seg([lx + h, lz - h], [lx + h, lz + h]))) sides.add('x+');
+    if (NET.good.has(seg([lx - h, lz - h], [lx - h, lz + h]))) sides.add('x-');
+    if (NET.good.has(seg([lx - h, lz + h], [lx + h, lz + h]))) sides.add('z+');
+    if (NET.good.has(seg([lx - h, lz - h], [lx + h, lz - h]))) sides.add('z-');
+    return sides;
   }
   // a loading bay: open garage door the trucks come and go through
   #bay(side, color) {
@@ -550,8 +586,8 @@ export class World {
   }
 
   setRocketReady(ready) {
-    const L = this.lots.rocket;
-    if (!L.rocket) return;
+    const L = this.lots[this.lotsOf('rocket')[0]];
+    if (!L || !L.rocket) return;
     if (this.launching) return;
     L.rocket.visible = ready; L.scaffold.visible = !ready;
   }
@@ -577,36 +613,16 @@ export class World {
 
   // centre on a building and zoom in so it's easy to see (zoom: false just pans)
   focus(id, { zoom = true } = {}) {
-    const [x, z] = LOTS[id];
     const L = this.lots[id];
+    if (!L) return;
+    const [x, z] = this.P[id];
     // aim at the middle of the building, not its foot
     const h = zoom ? Math.min(6, (L.top || 2.4) * (L.grow || 1) * 0.45) : 0;
     this.panTo = new THREE.Vector3(x, h, z);
     if (zoom) this.zoomTo = Math.max(this.zoom, 1.75);
   }
 
-  // poles and a wire from the power plant to the data center, with pulses of power
-  #powerLine() {
-    const [px, pz] = LOTS.power, [dx, dz] = LOTS.datacenter;
-    const x = px + 4.85;
-    const g = new THREE.Group();
-    const z1 = pz - 3.4, z2 = dz + 3.4;
-    for (const z of [z1, z2]) { const p = powerPole(); p.position.set(x, 0, z); g.add(p); }
-    const len = Math.abs(z2 - z1);
-    for (const off of [-0.5, 0.5]) g.add(box(0.05, 0.05, len, 0x2a2a2e, x + off, 3.0, (z1 + z2) / 2));
-    this.pulses = [];
-    for (let i = 0; i < 3; i++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff27a }));
-      g.add(m); this.pulses.push({ m, u: i / 3 });
-    }
-    this.powerLineGroup = g; this.powerLine = { x, z1, z2 };
-    g.visible = false;
-    this.scene.add(g);
-  }
-  setPowerLine(on, rate) {
-    this.powerLineGroup.visible = on;
-    this.powerRate = rate;
-  }
+  setPowerLine() {}
 
   // ---------- traffic ----------
   #traffic() {
@@ -614,14 +630,16 @@ export class World {
     for (let i = 0; i < 15; i++) {
       const m = i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
       m.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      if (!this.traffic.spawnAmbient(m, true)) this.idleCars.push(m);
+      if (!this.#ambientRoom() || !this.traffic.spawnAmbient(m, true)) this.idleCars.push(m);
       else this.#onAmbientEnd(this.traffic.cars[this.traffic.cars.length - 1]);
     }
   }
   #onAmbientEnd(c) { c.onArrive = () => this.idleCars.push(c.mesh); }
+  // a small, run-down town has less traffic than a big one
+  #ambientRoom() { return this.traffic.count(c => c.kind === 'ambient') < Math.max(2, Math.min(15, Math.round(NET.good.size * 0.4))); }
   #refillAmbient(dt) {
     this.refillT = (this.refillT || 0) - dt;
-    if (this.refillT > 0 || !this.idleCars.length) return;
+    if (this.refillT > 0 || !this.idleCars.length || !this.#ambientRoom()) return;
     this.refillT = 0.7;
     const m = this.idleCars.shift();
     const c = this.traffic.spawnAmbient(m);
@@ -630,7 +648,8 @@ export class World {
 
   // a vehicle from one lot to another, by road, following the rules
   #drive(fromId, toId, mesh, kind, speed, data, onArrive) {
-    const C = lotRoute(LOTS[fromId], LOTS[toId]);
+    if (!this.P[fromId] || !this.P[toId]) return false;
+    const C = lotRoute(this.P[fromId], this.P[toId]);
     if (!C) return false;
     // wait for the driveway to be clear before the next truck pulls out
     const start = new THREE.Vector3(C[0].x, 0.06, C[0].z);
@@ -686,16 +705,16 @@ export class World {
     for (let i = 1; i < this.flowInfo.length; i++) {
       const p = this.flowInfo[i], prev = this.flowInfo[i - 1];
       if (!p.made || !prev.made) continue;
-      const suppliers = this.slotsOf(FACTORIES[i - 1].id);
+      const suppliers = this.lotsOf(FACTORIES[i - 1].id);
       if (!suppliers.length) continue;
-      for (const to of this.slotsOf(p.id)) {
+      for (const to of this.lotsOf(p.id)) {
         const key = 'spawn_' + to;
         this[key] = (this[key] ?? Math.random() * 3) - dt;
         const inFlight = this.traffic.count(c => c.kind === 'delivery' && c.data?.to === to);
         if (this[key] <= 0 && inFlight < 2) {
           // the nearest supplier sends the truck; busier links send them more often
-          const [tx, tz] = LOTS[to];
-          const from = suppliers.slice().sort((a, b) => Math.hypot(LOTS[a][0] - tx, LOTS[a][1] - tz) - Math.hypot(LOTS[b][0] - tx, LOTS[b][1] - tz))[Math.random() < 0.7 ? 0 : Math.floor(Math.random() * suppliers.length)];
+          const P = this.P, [tx, tz] = P[to];
+          const from = suppliers.slice().sort((a, b) => Math.hypot(P[a][0] - tx, P[a][1] - tz) - Math.hypot(P[b][0] - tx, P[b][1] - tz))[Math.random() < 0.7 ? 0 : Math.floor(Math.random() * suppliers.length)];
           if (this.#spawnDelivery(from, to)) this[key] = Math.max(2.2, 8 - Math.log2(1 + p.made * FACTORIES[i].need) * 0.9);
           else this[key] = 0.6;
         }
@@ -714,12 +733,12 @@ export class World {
 
   // ---------- rocket launch ----------
   launchRocket() {
-    const L = this.lots.rocket;
+    const id = this.lotsOf('rocket')[0], L = this.lots[id];
     return new Promise(resolve => {
-      if (!L.rocket) { resolve(); return; }
+      if (!L || !L.rocket) { resolve(); return; }
       this.launching = { L, t: 0, resolve, start: L.rocket.position.y };
       L.rocket.visible = true; L.scaffold.visible = false;
-      this.focus('rocket', { zoom: false });
+      this.focus(id, { zoom: false });
     });
   }
   #updateLaunch(dt) {
@@ -918,21 +937,13 @@ export class World {
       if (k >= 1) { this.scene.remove(s.m); s.m.material.dispose(); this.smoke.splice(i, 1); }
     }
     this.stepTraffic(dt);
-    if (this.powerLineGroup.visible) {
-      const { x, z1, z2 } = this.powerLine;
-      for (const p of this.pulses) {
-        p.u = (p.u + dt * 0.5 * (this.powerRate || 0)) % 1;
-        p.m.position.set(x + 0.5, 3.0, z1 + (z2 - z1) * p.u);
-        p.m.visible = (this.powerRate || 0) > 0;
-      }
-    }
     this.#updateLaunch(dt);
     // day/night, sun follows the view so shadows stay crisp where you're looking
     this.look.update(dt);
     SHARED.time.value = this.t;
     const n = this.look.night;
-    if (this.land?.lampMat) this.land.lampMat.emissiveIntensity = n * 2.4;
-    if (this.land?.edgeMat) this.land.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
+    if (this.roadData?.lampMat) this.roadData.lampMat.emissiveIntensity = n * 2.4;
+    if (this.roadData?.edgeMat) this.roadData.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
     if (this.glow) { this.glow.material.opacity = n * 0.85; this.glow.material.size = 26 * this.zoom; }
     if (this.pools) this.pools.material.opacity = n * 0.6;
     if (this.cones) this.cones.material.opacity = n * 0.16;

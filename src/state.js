@@ -2,9 +2,10 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
-  PLOTS, isPlot, landCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff,
+  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff,
 } from './economy.js';
-import { blocksApart } from './layout.js';
+import { blocksApart, plotsOf, plotIds, START_PLOT } from './layout.js';
+import { makeExits, townSegments, blockSides, segKey } from './traffic.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
 import * as storage from './storage.js';
@@ -12,14 +13,26 @@ import * as storage from './storage.js';
 const SAVE_VERSION = 5;
 const OLD_KEYS = ['boltworks.save.v4', 'boltworks.save.v3'];
 
+// A world's town. Everything is built on plots (q0, q1, ...):
+//   levels: the first building of each kind; pos: which plot it stands on; at: the reverse
+//   extra: further copies, keyed by their plot ({ type, level })
+//   land: developed plots; roads: segments in good repair (restored or built)
+//   bins: money waiting in each building; managers: buildings a manager runs
+//   staff: managers hired at headquarters
 function freshRun() {
   const levels = {};
-  for (const f of BUILDINGS) levels[f.id] = f.unlock === 0 ? 1 : 0;
-  // bins: money waiting in each building; managers: factories a manager is working at;
-  // staff: managers hired at headquarters (working or waiting for a job)
-  // land: developed plots; extra: the extra factory on a plot ({ type, level })
-  return { runEarned: 0, levels, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, land: {}, extra: {}, lastActive: Date.now() };
+  for (const f of BUILDINGS) levels[f.id] = 0;
+  return { runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, lastActive: Date.now() };
 }
+// the old fixed layout (before towns were built by hand), for bringing saves forward
+const OLD_CORE = { mine: [28, 28], furnace: [0, 28], press: [-28, 28], gear: [-28, 0], engine: [0, 0], power: [28, 0], rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28], hq: [14, 14] };
+const OLD_PLOTS = (() => {
+  const taken = new Set(Object.values(OLD_CORE).map(p => p.join()));
+  const all = [];
+  for (const x of [-28, -14, 0, 14, 28]) for (const z of [-28, -14, 0, 14, 28]) if (!taken.has(x + ',' + z)) all.push([x, z]);
+  all.sort((a, b) => Math.hypot(a[0] - 28, a[1] - 28) - Math.hypot(b[0] - 28, b[1] - 28));
+  const m = {}; all.forEach((p, i) => { m['p' + i] = p; }); return m;
+})();
 
 export function freshState() {
   return {
@@ -30,6 +43,7 @@ export function freshState() {
     totalEarned: 0,
     cash: 0,             // one wallet shared by every world
     econ: 2,             // economy version (2 = big, costly upgrades)
+    layout: 2,           // town layout version (2 = towns built plot by plot)
     current: 'colorado',
     worlds: { colorado: freshRun() },
     ep: 0,               // Engineering Points (permanent, shared by every world)
@@ -50,7 +64,7 @@ export function freshState() {
 
 function mergeRun(saved) {
   const base = freshRun();
-  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) }, land: { ...(saved?.land || {}) }, extra: { ...(saved?.extra || {}) } };
+  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) }, land: { ...(saved?.land || {}) }, extra: { ...(saved?.extra || {}) }, pos: { ...(saved?.pos || {}) }, at: { ...(saved?.at || {}) }, roads: { ...(saved?.roads || {}) } };
   // older saves hired managers without a headquarters: keep them, and give them an HQ
   const working = Object.keys(run.managers).filter(k => run.managers[k]).length;
   if (saved && saved.staff == null) run.staff = working;
@@ -104,8 +118,112 @@ export class Game {
         achievements: { ...(saved.achievements || {}) },
       };
       this.#migrateEconomy(saved);
-    }
+      if ((saved.layout || 1) < 2) this.#migrateLayout();
+    } else this.#startWorld('colorado');
     this.invalidate();
+  }
+
+  // ---- building a town ----
+  seedFor(w) { return [...(this.s.playerId + w)].reduce((h, c) => (h * 33 + c.charCodeAt(0)) >>> 0, 5381); }
+  exitsOf(w) {
+    this.exitCache ||= {};
+    return (this.exitCache[w + this.s.playerId] ||= makeExits(Object.values(plotsOf(w)), this.seedFor(w)));
+  }
+  // what shape a stretch of road is in: good, worn (Colorado's old roads), or none
+  roadState(k, w = this.s.current, run = this.s.worlds[w]) { return run?.roads[k] ? 'good' : w === 'colorado' ? 'worn' : 'none'; }
+  roadsBuilt(run = this.run) { return Object.keys(run.roads).length; }
+  // the cheapest roads to fix so a plot is joined to the town (or the way out) and has
+  // road on all four sides
+  roadsFor(plot, w = this.s.current, run = this.s.worlds[w], skipExit = null) {
+    const P = plotsOf(w), segs = townSegments(Object.values(P));
+    const k2 = (x, z) => x + ',' + z;
+    const adj = new Map();
+    for (const [k, { a, b }] of segs) {
+      const cost = run.roads[k] ? 0 : this.roadState(k, w, run) === 'worn' ? 1 : 3;
+      for (const [p, q] of [[a, b], [b, a]]) { const kk = k2(p.x, p.z); if (!adj.has(kk)) adj.set(kk, []); adj.get(kk).push({ to: k2(q.x, q.z), seg: k, cost }); }
+    }
+    // start from the ways out of town and everything already joined to them
+    const dist = new Map(), via = new Map(), todo = [];
+    for (const e of this.exitsOf(w)) { const kk = k2(e.node.x, e.node.z); if (kk === skipExit) continue; dist.set(kk, 0); todo.push(kk); }
+    while (todo.length) {
+      todo.sort((a, b) => dist.get(a) - dist.get(b));
+      const n = todo.shift();
+      for (const { to, seg, cost } of adj.get(n) || []) {
+        const d = dist.get(n) + cost;
+        if (d < (dist.get(to) ?? Infinity)) { dist.set(to, d); via.set(to, { from: n, seg }); todo.push(to); }
+      }
+    }
+    const [cx, cz] = P[plot];
+    const sides = blockSides(cx, cz);
+    const corners = sides.flatMap(sd => sd.ends.map(e => k2(e.x, e.z)));
+    let best = corners[0];
+    for (const c of corners) if ((dist.get(c) ?? Infinity) < (dist.get(best) ?? Infinity)) best = c;
+    const need = new Set();
+    let n = best;
+    for (; via.has(n); n = via.get(n).from) need.add(via.get(n).seg);
+    this.lastExit = n;   // which way out of town the road leads
+    for (const sd of sides) need.add(sd.seg);
+    return [...need].filter(k => !run.roads[k]).map(k => ({ k, kind: this.roadState(k, w, run) }));
+  }
+  developQuote(plot) {
+    const land = this.landPrice();
+    let built = this.roadsBuilt(), roads = 0;
+    const list = this.roadsFor(plot);
+    for (const r of list) roads += roadCost(r.kind, built++, this.world);
+    return { land, roads, total: land + roads, list };
+  }
+  #startWorld(w) {
+    const run = this.s.worlds[w] ||= freshRun();
+    if (w !== 'colorado') return;   // later worlds start as empty land
+    // Colorado starts with the Ore Mine on the front corner, and the roads round it fixed up
+    run.levels.mine = 1; run.pos.mine = START_PLOT; run.at[START_PLOT] = 'mine'; run.land[START_PLOT] = true;
+    for (const r of this.roadsFor(START_PLOT, w, run)) run.roads[r.k] = true;
+    // and the old main street through town, from one way out to another past the mine,
+    // is still in use, so there's a little traffic from day one
+    if (this.exitsOf(w).length > 1) for (const r of this.roadsFor(START_PLOT, w, run, this.lastExit)) run.roads[r.k] = true;
+  }
+  // older saves: put the buildings onto the new plots. Colorado (now 4x4) gets its
+  // production line laid out in order, side by side; the other worlds keep their places.
+  #migrateLayout() {
+    for (const [w, old] of Object.entries(this.s.worlds)) {
+      const P = plotsOf(w), at = new Map(Object.entries(P).map(([id, p]) => [p.join(), id]));
+      const order = [...FACTORIES.map(f => f.id), 'power', 'datacenter', 'hq'];
+      const items = [];
+      for (const t of order) if ((old.levels[t] || 0) > 0) items.push({ old: t, core: t });
+      for (const [id, e] of Object.entries(old.extra || {})) if (e && e.level > 0) items.push({ old: id, type: e.type, level: e.level });
+      const run = { ...old, pos: {}, at: {}, extra: {}, land: {}, roads: {}, bins: {}, managers: {} };
+      const place = (it, q) => {
+        if (it.core) { run.pos[it.core] = q; run.at[q] = it.core; } else run.extra[q] = { type: it.type, level: it.level };
+        const newId = it.core || q;
+        run.land[q] = true;
+        if (old.managers?.[it.old]) run.managers[newId] = true;
+        if (old.bins?.[it.old]) run.bins[newId] = old.bins[it.old];
+      };
+      if (w === 'colorado') {
+        // a snake through the 4x4 from the front corner, so each step is next door
+        const rows = [21, 7, -7, -21], snake = [];
+        rows.forEach((z, i) => (i % 2 ? [-21, -7, 7, 21] : [21, 7, -7, -21]).forEach(x => snake.push(at.get([x, z].join()))));
+        items.slice(0, snake.length).forEach((it, i) => place(it, snake[i]));
+        for (const it of items.slice(snake.length)) if (it.core) run.levels[it.core] = 0;
+        for (const k of townSegments(Object.values(P)).keys()) run.roads[k] = true;
+      } else {
+        const free = new Set(Object.keys(P));
+        for (const it of items) {
+          const xy = (it.core ? OLD_CORE[it.core] : OLD_PLOTS[it.old])?.join();
+          let q = at.get(xy);
+          if (!q || !free.has(q)) q = [...free][0];
+          if (!q) continue;
+          free.delete(q); place(it, q);
+        }
+        for (const [id, on] of Object.entries(old.land || {})) { const q = at.get(OLD_PLOTS[id]?.join()); if (on && q) run.land[q] = true; }
+        // roads were all there in the old 5x5 town
+        const inner = Object.values(P).filter(([x, z]) => Math.abs(x) <= 28 && Math.abs(z) <= 28);
+        for (const k of townSegments(inner).keys()) run.roads[k] = true;
+      }
+      this.s.worlds[w] = run;
+    }
+    this.s.layout = 2;
+    this.relaidOut = true;
   }
 
   // Saves from before the rebalance: one shared wallet, and levels squeezed onto the
@@ -135,6 +253,7 @@ export class Game {
     const keep = { playerId: this.s.playerId, firstSeen: this.s.firstSeen, playDays: this.s.playDays };
     await storage.clear(GAME.saveKey);
     this.s = { ...freshState(), ...keep };
+    this.#startWorld('colorado');
     this.invalidate();
     this.emit('reset');
     this.emit('change');
@@ -152,9 +271,12 @@ export class Game {
   get levels() { return this.run.levels; }
   // a "slot" is a core building id (mine, hq...) or a plot id (p0..p14)
   typeOf(id, run = this.run) { return isPlot(id) ? run.extra[id]?.type || null : id; }
+  // which building stands on a plot (its slot id), and which plot a building is on
+  slotAt(plot, run = this.run) { return run.at[plot] || (run.extra[plot]?.level > 0 ? plot : null); }
+  plotOf(id, run = this.run) { return isPlot(id) ? id : run.pos[id] || null; }
   level(id, run = this.run) { return isPlot(id) ? run.extra[id]?.level || 0 : run.levels[id] || 0; }
   built(id) { return this.level(id) > 0; }
-  developed(id) { return !isPlot(id) || !!this.run.land[id]; }
+  developed(plot) { return !!this.run.land[plot]; }
   hasManager(id) { return !!this.run.managers[id]; }
   boostLeft(now = Date.now()) { return Math.max(0, this.s.boostUntil - now) / 1000; }
   epMult() { return 1 + this.s.ep * EP_BONUS; }
@@ -172,15 +294,17 @@ export class Game {
   extrasOf(run) { return Object.entries(run.extra || {}).filter(([, e]) => e && e.level > 0).map(([id, e]) => ({ ...e, id, eff: this.effOf(id, run) })); }
   // how well a building is supplied: by distance (in blocks) to the nearest building
   // that makes what it needs. Mines (and support buildings) need nothing.
-  supplierOf(id, run = this.run, type = this.typeOf(id, run)) {
+  // `at`: the plot to measure from (defaults to where the building is)
+  supplierOf(id, run = this.run, type = this.typeOf(id, run), at = this.plotOf(id, run)) {
     const i = FACTORIES.findIndex(f => f.id === type);
     if (i <= 0) return null;
+    const w = Object.keys(this.s.worlds).find(k => this.s.worlds[k] === run) || this.s.current;
     let best = null;
-    for (const s of this.slotsOf(FACTORIES[i - 1].id, run)) { const b = blocksApart(id, s); if (!best || b < best.blocks) best = { id: s, blocks: b }; }
+    for (const s of this.slotsOf(FACTORIES[i - 1].id, run)) { const b = blocksApart(w, at, this.plotOf(s, run)); if (!best || b < best.blocks) best = { id: s, blocks: b }; }
     return best;
   }
-  effOf(id, run = this.run, type) {
-    const sup = this.supplierOf(id, run, type ?? this.typeOf(id, run));
+  effOf(id, run = this.run, type, at) {
+    const sup = this.supplierOf(id, run, type ?? this.typeOf(id, run), at ?? this.plotOf(id, run));
     return sup ? supplyEff(sup.blocks) : 1;
   }
   effCore(run) { const o = {}; for (const f of FACTORIES) if ((run.levels[f.id] || 0) > 0) o[f.id] = this.effOf(f.id, run); return o; }
@@ -231,24 +355,33 @@ export class Game {
   factorySlots(run = this.run) { return FACTORIES.flatMap(f => this.slotsOf(f.id, run)); }
 
   // ---- land ----
-  landPrice() { return landCost(Object.keys(this.run.land).length, this.world); }
-  develop(id) {
-    if (!isPlot(id) || this.run.land[id]) return false;
-    const cost = this.landPrice();
-    if (!this.canAfford(cost)) return false;
-    this.s.cash -= cost;
-    this.run.land[id] = true;
-    this.emit('developed', id);
+  // Colorado's mine plot came free, so it doesn't push the price up
+  landPrice() { return landCost(Math.max(0, Object.keys(this.run.land).length - (this.s.current === 'colorado' ? 1 : 0)), this.world); }
+  // develop a plot: buy the land and fix (or build) the roads it needs
+  develop(plot) {
+    if (!isPlot(plot) || this.run.land[plot]) return false;
+    const q = this.developQuote(plot);
+    if (!this.canAfford(q.total)) return false;
+    this.s.cash -= q.total;
+    this.run.land[plot] = true;
+    for (const r of q.list) this.run.roads[r.k] = true;
+    this.emit('developed', plot);
+    if (q.list.length) this.emit('roads', q.list);
     this.emit('change');
     return true;
   }
   extraCost(type) { const b = this.defOf(type); return (b.unlock || 150 * (this.world.cost || 1)) * EXTRA_BUILD; }
-  buildExtra(id, type) {
-    if (!isPlot(id) || !this.run.land[id] || this.built(id)) return false;
-    const cost = this.extraCost(type);
-    if (!this.canAfford(cost)) return false;
+  // what it costs to put a building of this type on a plot: the first of a kind is the
+  // main one (normal price); more copies cost extra. Only one headquarters.
+  buildCost(type) { return this.built(type) ? (type === 'hq' ? Infinity : this.extraCost(type)) : this.defOf(type).unlock; }
+  buildOn(plot, type) {
+    if (!isPlot(plot) || !this.run.land[plot] || this.slotAt(plot)) return false;
+    const cost = this.buildCost(type);
+    if (!isFinite(cost) || !this.canAfford(cost)) return false;
     this.s.cash -= cost;
-    this.run.extra[id] = { type, level: 1 };
+    let id;
+    if (!this.built(type)) { this.levels[type] = 1; this.run.pos[type] = plot; this.run.at[plot] = type; id = type; }
+    else { this.run.extra[plot] = { type, level: 1 }; id = plot; }
     this.invalidate();
     this.emit('built', id);
     this.emit('change');
@@ -312,17 +445,6 @@ export class Game {
     this.s.tutorial.upgraded = true;
     this.invalidate();
     this.emit('upgrade', id, lv, lv + n);
-    this.emit('change');
-    return true;
-  }
-
-  build(id) {
-    const def = this.defOf(id);
-    if (this.built(id) || !this.canAfford(def.unlock)) return false;
-    this.s.cash -= def.unlock;
-    this.levels[id] = 1;
-    this.invalidate();
-    this.emit('built', id);
     this.emit('change');
     return true;
   }
@@ -462,7 +584,7 @@ export class Game {
     const from = this.s.current;
     const next = this.nextWorld();
     let unlocked = null;
-    if (next && !this.s.worlds[next.id]) { this.s.worlds[next.id] = freshRun(); unlocked = next.id; }
+    if (next && !this.s.worlds[next.id]) { this.#startWorld(next.id); unlocked = next.id; }
     this.invalidate();
     this.emit('launched', gained, unlocked);
     this.emit('change');
