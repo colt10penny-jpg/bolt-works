@@ -134,32 +134,73 @@ export function lotRoute([ax, az], [bx, bz]) {
   return best ? best.C : null;
 }
 
-// a random drive across town: in from one edge, a few turns, out another edge
-function randomRoute(rnd) {
-  const horiz = rnd() < 0.5;
-  const dir = rnd() < 0.5 ? 1 : -1;
-  const line = (horiz ? CROSS : AVES)[Math.floor(rnd() * 4)];
-  let h = horiz ? { x: dir, z: 0 } : { x: 0, z: dir };
-  const start = horiz ? { x: -dir * EDGE, z: line } : { x: line, z: -dir * EDGE };
-  const first = horiz ? { x: dir > 0 ? AVES[0] : AVES[3], z: line } : { x: line, z: dir > 0 ? CROSS[0] : CROSS[3] };
-  const C = [start, first];
-  let p = first;
-  const visited = new Set([key(first.x, first.z)]);
-  for (let k = 0; k < 7; k++) {
-    const r = rnd();
-    let nh = h;
-    if (r < 0.25) nh = right(h);
-    else if (r < 0.5) nh = { x: h.z, z: -h.x };   // left
-    let nx = { x: p.x + nh.x * BLOCK, z: p.z + nh.z * BLOCK };
-    // never loop back through a junction already driven through
-    if (inGrid(nx) && visited.has(key(nx.x, nx.z))) { nh = h; nx = { x: p.x + h.x * BLOCK, z: p.z + h.z * BLOCK }; if (inGrid(nx) && visited.has(key(nx.x, nx.z))) break; }
-    h = nh;
-    if (!inGrid(nx)) break;
-    visited.add(key(nx.x, nx.z));
-    C.push(nx); p = nx;
+// ---------- roads out of town ----------
+// The grid is closed in by a ring road; only a few roads (3-5) lead out of town,
+// picked at random for each world. An exit is { axis: 'x'|'z', line, dir }: a road
+// running along that axis at that line, out past the ring in direction dir.
+export const NET = { exits: [], roads: [] };
+const RING = AVES[AVES.length - 1];
+export function makeExits(seed) {
+  let s = (seed >>> 0) % 2147483647 || 1;
+  const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  const all = [];
+  for (const c of CROSS) for (const dir of [-1, 1]) all.push({ axis: 'x', line: c, dir });
+  for (const a of AVES) for (const dir of [-1, 1]) all.push({ axis: 'z', line: a, dir });
+  const n = 3 + Math.floor(r() * 3);
+  const out = [];
+  while (out.length < n && all.length) {
+    const e = all.splice(Math.floor(r() * all.length), 1)[0];
+    // no two exits from the same corner junction
+    const node = exitNode(e);
+    if (out.some(o => { const m = exitNode(o); return m.x === node.x && m.z === node.z; })) continue;
+    out.push(e);
   }
-  C.push({ x: h.x ? h.x * EDGE : p.x, z: h.z ? h.z * EDGE : p.z });
-  return expand(C);
+  return out;
+}
+export const exitNode = e => e.axis === 'x' ? { x: e.dir * RING, z: e.line } : { x: e.line, z: e.dir * RING };
+export const exitFar = e => e.axis === 'x' ? { x: e.dir * EDGE, z: e.line } : { x: e.line, z: e.dir * EDGE };
+export function setExits(exits) {
+  NET.exits = exits;
+  // road centre lines: the town grid, plus each exit
+  const roads = [];
+  for (const c of CROSS) roads.push({ x0: -RING, z0: c, x1: RING, z1: c });
+  for (const a of AVES) roads.push({ x0: a, z0: -RING, x1: a, z1: RING });
+  for (const e of exits) { const n = exitNode(e), f = exitFar(e); roads.push({ x0: Math.min(n.x, f.x), z0: Math.min(n.z, f.z), x1: Math.max(n.x, f.x), z1: Math.max(n.z, f.z), exit: true }); }
+  NET.roads = roads;
+}
+setExits(makeExits(1));
+// is there road leaving junction (x, z) in direction h?
+export function hasRoad(x, z, h) {
+  const nx = x + h.x * BLOCK, nz = z + h.z * BLOCK;
+  if (Math.abs(nx) <= RING + 0.1 && Math.abs(nz) <= RING + 0.1) return true;
+  return NET.exits.some(e => { const n = exitNode(e); return n.x === x && n.z === z && (e.axis === 'x' ? h.x === e.dir && !h.z : h.z === e.dir && !h.x); });
+}
+export function distToRoad(x, z) {
+  let d = Infinity;
+  for (const r of NET.roads) {
+    const cx = Math.max(r.x0, Math.min(r.x1, x)), cz = Math.max(r.z0, Math.min(r.z1, z));
+    d = Math.min(d, Math.hypot(x - cx, z - cz));
+  }
+  return d;
+}
+
+// a random drive: in along one road from out of town, across town, out along another
+function randomRoute(rnd) {
+  const ex = NET.exits;
+  if (ex.length < 2) return null;
+  for (let tries = 0; tries < 12; tries++) {
+    const a = ex[Math.floor(rnd() * ex.length)];
+    let b = ex[Math.floor(rnd() * ex.length)];
+    if (b === a) continue;
+    const na = exitNode(a), nb = exitNode(b);
+    // a random junction to pass through on the way, for variety
+    const mid = { x: AVES[Math.floor(rnd() * AVES.length)], z: CROSS[Math.floor(rnd() * CROSS.length)] };
+    const leg = (p, q) => rnd() < 0.5 ? [{ x: q.x, z: p.z }, q] : [{ x: p.x, z: q.z }, q];
+    const C = expand([exitFar(a), na, ...leg(na, mid), ...leg(mid, nb), exitFar(b)]);
+    const seen = new Set(C.map(p => key(p.x, p.z)));
+    if (noUturn(C) && seen.size === C.length) return C;   // no U-turns, no driving through a junction twice
+  }
+  return null;
 }
 
 export class Traffic {
@@ -189,10 +230,11 @@ export class Traffic {
   spawnAmbient(mesh, midway = false) {
     for (let tries = 0; tries < 12; tries++) {
       const C = randomRoute(this.rnd);
+      if (!C) return null;
       const P = buildPath(C);
       let at = 0;
       if (midway) {
-        at = EDGE - 50 + this.rnd() * (P.len - 2 * (EDGE - 50));
+        at = (EDGE - 60) + this.rnd() * Math.max(1, P.len - 2 * (EDGE - 60));
         if (P.stops.some(st => at + HALF > st.enter - 1.5 && at - HALF < st.exit + 0.5)) continue;
       }
       const p = this.#pointAt(P, at);

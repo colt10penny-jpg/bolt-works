@@ -491,7 +491,7 @@ Object.assign(BUILDERS, {
     g.add(box(4.2, 0.2, 4.6, 0x8a8f99, -1.0, 2.2, -0.2));
     for (const [x, z] of [[2.3, -1.4], [2.3, 0.6], [2.3, 2.4]]) {
       g.add(cyl(0.75, 0.75, 2.6, 0x2a2d33, x, 0, z, 16));
-      g.add(cyl(0.77, 0.77, 0.6, color, x, 2.0, z, 16));
+      g.add(cyl(0.78, 0.78, 0.5, color, x, 1.95, z, 16));   // band stops short of the top, so the two don't flicker
       g.add(cyl(0.25, 0.25, 0.3, 0xd9d9d9, x, 2.6, z, 10));
     }
     const bolt = box(0.15, 1.2, 0.1, 0xffd23f, -1.0, 0.5, 2.03, { emissive: 0xffc23d, emissiveIntensity: 0.6 });

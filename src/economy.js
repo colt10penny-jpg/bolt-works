@@ -73,15 +73,20 @@ export function capacity(def, level) {
 // the compute speed multiplier, and total income per second.
 // `extras` are the extra buildings on developed land: [{ type, level }]; they add their
 // capacity to that product.
-export function totalCap(def, levels, extras = []) {
-  let c = capacity(def, levels[def.id] || 0);
-  for (const e of extras) if (e.type === def.id) c += capacity(def, e.level);
+// `effCore` / `e.eff`: how well each building is supplied, from its distance to the
+// nearest building that makes what it needs (see supplyEff).
+export function totalCap(def, levels, extras = [], effCore = {}) {
+  let c = capacity(def, levels[def.id] || 0) * (effCore[def.id] ?? 1);
+  for (const e of extras) if (e.type === def.id) c += capacity(def, e.level) * (e.eff ?? 1);
   return c;
 }
-export function flow(levels, mult = 1, perks = {}, extras = []) {
+// Closer suppliers mean shorter truck trips: next door 125%, two blocks 100%,
+// three blocks 75%, four or more 50%.
+export const supplyEff = blocks => Math.max(0.5, Math.min(1.25, 1 + 0.25 * (2 - blocks)));
+export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
   const pw = SUPPORT[0], dc = SUPPORT[1];
-  const powerMade = totalCap(pw, levels, extras) * (perks.power || 1);
-  const dcCap = totalCap(dc, levels, extras);
+  const powerMade = totalCap(pw, levels, extras, effCore) * (perks.power || 1);
+  const dcCap = totalCap(dc, levels, extras, effCore);
   const compute = Math.min(dcCap, powerMade / dc.need);
   const powerUsed = compute * dc.need;
   const speed = speedFromCompute(compute);
@@ -95,7 +100,7 @@ export function flow(levels, mult = 1, perks = {}, extras = []) {
   let upstream = Infinity;
   for (let i = 0; i < FACTORIES.length; i++) {
     const d = FACTORIES[i];
-    const cap = totalCap(d, levels, extras) * speed * (perks[d.id] || 1);
+    const cap = totalCap(d, levels, extras, effCore) * speed * (perks[d.id] || 1);
     const canFeed = d.need ? upstream / d.need : Infinity;
     const made = Math.min(cap, canFeed);
     out.push({ id: d.id, cap, made, util: cap ? made / cap : 0, starved: cap > 0 && made < cap * 0.98 });

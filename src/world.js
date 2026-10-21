@@ -9,29 +9,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLOW } from './models.js';
 const NIGHT_LIST = () => GLOW.night;
 import { buildLand, withClouds, SHARED } from './terrain.js';
-import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
+import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setExits, makeExits, AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
 
-// 5x5 town grid with a block of open land between the factories. The chain snakes:
-// mine -> furnace -> press, gear -> engine, turbine -> rocket; power and the data
-// centre sit on the right, headquarters in the middle. The other 15 blocks are land
-// you can develop for extra factories.
-export const LOTS = {
-  mine: [28, 28], furnace: [0, 28], press: [-28, 28],
-  gear: [-28, 0], engine: [0, 0], power: [28, 0],
-  rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28],
-  hq: [14, 14],
-};
-{
-  const taken = new Set(Object.values(LOTS).map(p => p.join()));
-  let i = 0;
-  // plots nearest the starting corner come first
-  const all = [];
-  for (const x of [-28, -14, 0, 14, 28]) for (const z of [-28, -14, 0, 14, 28]) if (!taken.has(x + ',' + z)) all.push([x, z]);
-  all.sort((a, b) => Math.hypot(a[0] - 28, a[1] - 28) - Math.hypot(b[0] - 28, b[1] - 28));
-  for (const p of all) LOTS['p' + i++] = p;
-}
+import { LOTS, START } from './layout.js';
+export { LOTS, START };
 const LOT = 10;
-export const START = [23, 24];   // where the camera starts: by the Ore Mine
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
 const BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
@@ -178,9 +160,16 @@ export class World {
   }
 
   // ---------- map themes ----------
+  // each player's worlds get their own random roads out of town
+  setSeed(seed) { this.exitSeed = seed >>> 0; this.themeName = null; }
   setTheme(name) {
     if (this.themeName === name) return;
     this.themeName = name;
+    const h = [...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, this.exitSeed || 7);
+    setExits(makeExits(h));
+    // cars on the old roads go home; new ones come in on this world's roads
+    for (const c of this.traffic.cars) if (c.kind === 'ambient') this.idleCars.push(c.mesh);
+    this.traffic.clear('ambient');
     // every world has its own buildings, so take the old ones down
     for (const id of Object.keys(this.lots)) this.setBuilt(id, false);
     const T = THEME[name] || THEME.colorado;
@@ -198,6 +187,8 @@ export class World {
     if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
     for (const L of Object.values(this.lots)) L.pad.material = this.padMats[name];
     for (const L of Object.values(this.lots)) if (L.def.plot) this.#wild(L, name);
+    const idle = this.idleCars.splice(0);
+    for (const m of idle) { const c = this.traffic.spawnAmbient(m, true); if (c) this.#onAmbientEnd(c); else this.idleCars.push(m); }
     this.look.groundBase = new THREE.Color(T.ground);
     this.look.setWorld(name);
   }
@@ -210,7 +201,7 @@ export class World {
     const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
     for (let i = 0; i < 7; i++) {
       const x = (r() - 0.5) * 8, z = (r() - 0.5) * 8;
-      if (Math.abs(x - 2.6) < 1.2 && Math.abs(z - 2.6) < 1.2) continue;
+      if (Math.abs(x - 2.6) < 1.3 && Math.abs(z + 2.6) < 1.3) continue;
       let o;
       if (theme === 'colorado') o = r() < 0.5 ? tree(0.8 + r() * 0.6, [0x3f8f4a, 0x4fa152, 0x357d40][Math.floor(r() * 3)]) : pine(0.8 + r() * 0.7);
       else if (theme === 'desert') o = r() < 0.6 ? cactus(0.7 + r() * 0.5) : rock(0.6 + r(), 0xb98b5c);
@@ -219,9 +210,9 @@ export class World {
       g.add(o);
     }
     // the sign
-    g.add(box(0.14, 1.5, 0.14, 0x7a5230, 2.6, 0, 2.6));
-    const sign = box(1.7, 0.9, 0.1, 0xf4efe0, 2.6, 1.15, 2.67);
-    g.add(sign, box(1.5, 0.22, 0.12, 0xd9482b, 2.6, 1.6, 2.7), box(1.1, 0.12, 0.12, 0x3a3f48, 2.6, 1.3, 2.7));
+    g.add(box(0.14, 1.5, 0.14, 0x7a5230, 2.6, 0, -2.6));
+    const sign = box(1.7, 0.9, 0.1, 0xf4efe0, 2.6, 1.15, -2.53);
+    g.add(sign, box(1.5, 0.22, 0.12, 0xd9482b, 2.6, 1.6, -2.5), box(1.1, 0.12, 0.12, 0x3a3f48, 2.6, 1.3, -2.5));
     g.traverse(o => { o.userData.lotId = L.def.id; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     L.group.add(g);
     L.wild = g;
@@ -250,36 +241,49 @@ export class World {
   }
 
   // soft halos round the streetlights after dark
+  // night lighting for the streetlights: a soft cone of light under each lamp, a small
+  // halo round the lamp itself, and a smooth pool of light on the ground
   #lampGlow(pts, moon = false) {
-    if (this.glow) { this.scene.remove(this.glow); this.glow.geometry.dispose(); }
-    if (this.pools) { this.scene.remove(this.pools); this.pools.geometry.dispose(); }
-    this.glow = null; this.pools = null;
+    for (const k of ['glow', 'pools', 'cones']) if (this[k]) { this.scene.remove(this[k]); this[k].geometry.dispose(); this[k] = null; }
     if (!pts.length) return;
-    // pools of light on the ground under every streetlight, so the town stays bright at night
-    if (!this.poolTex) {
-      const c = document.createElement('canvas'); c.width = c.height = 128;
-      const g = c.getContext('2d');
-      const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-      gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
-      this.poolTex = new THREE.CanvasTexture(c);
-    }
-    const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 5 : 8.5, moon ? 5 : 8.5); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
-    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x5aa8ff : 0xffc27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    const soft = (size, fn) => {
+      const c = document.createElement('canvas'); c.width = c.height = size;
+      const g = c.getContext('2d'), img = g.createImageData(size, size);
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const r = Math.hypot(x - size / 2 + 0.5, y - size / 2 + 0.5) / (size / 2);
+        const a = Math.max(0, Math.min(1, fn(r) + (Math.random() - 0.5) / 255 * 2));   // a touch of dither: no banding
+        const i = (y * size + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = a * 255;
+      }
+      g.putImageData(img, 0, 0);
+      return new THREE.CanvasTexture(c);
+    };
+    this.poolTex ||= soft(128, r => r >= 1 ? 0 : Math.pow(1 - r * r, 2.2));
+    this.haloTex ||= soft(64, r => r >= 1 ? 0 : Math.exp(-r * r * 5) * (1 - r));
+    const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 4.5 : 7.5, moon ? 4.5 : 7.5); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
+    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x4f9dff : 0xffc98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.pools.renderOrder = 2;
     this.scene.add(this.pools);
     quads.forEach(q => q.dispose());
     if (moon) return;
-    if (!this.glowTex) {
-      const c = document.createElement('canvas'); c.width = c.height = 64;
-      const g = c.getContext('2d');
-      const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-      gr.addColorStop(0, 'rgba(255,230,170,1)'); gr.addColorStop(0.25, 'rgba(255,210,140,0.55)'); gr.addColorStop(1, 'rgba(255,200,120,0)');
-      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-      this.glowTex = new THREE.CanvasTexture(c);
-    }
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    this.glow = new THREE.Points(geo, new THREE.PointsMaterial({ map: this.glowTex, size: 3.2, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    // light cones: bright under the lamp, fading out toward the ground and the edges
+    const cones = pts.map(p => {
+      const g = new THREE.CylinderGeometry(0.22, 1.9, p.y - 0.2, 20, 6, true);
+      const pos = g.attributes.position, col = new Float32Array(pos.count * 4);
+      for (let i = 0; i < pos.count; i++) {
+        const t = Math.min(1, Math.max(0, (pos.getY(i) + (p.y - 0.2) / 2) / (p.y - 0.2)));   // 0 at the ground, 1 at the lamp (clamped: a NaN here would blank the screen)
+        col[i * 4] = 1; col[i * 4 + 1] = 0.86; col[i * 4 + 2] = 0.62; col[i * 4 + 3] = Math.pow(t, 1.6);
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+      g.translate(p.x, 0.2 + (p.y - 0.2) / 2, p.z);
+      return g;
+    });
+    this.cones = new THREE.Mesh(mergeGeometries(cones), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0, fog: false }));
+    this.cones.renderOrder = 3;
+    this.scene.add(this.cones);
+    cones.forEach(g => g.dispose());
+    const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().setY(p.y - 0.05)));
+    this.glow = new THREE.Points(geo, new THREE.PointsMaterial({ map: this.haloTex, color: 0xffe2b8, size: 22, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.glow.renderOrder = 4;
     this.scene.add(this.glow);
   }
 
@@ -303,9 +307,10 @@ export class World {
       sale.add(box(0.6, 0.18, 0.14, 0x1f8a5b, p, 0.15, -3.9), box(0.6, 0.18, 0.14, 0x1f8a5b, p, 0.15, 3.9),
                box(0.14, 0.18, 0.6, 0x1f8a5b, -3.9, 0.15, p), box(0.14, 0.18, 0.6, 0x1f8a5b, 3.9, 0.15, p));
     }
-    sale.add(box(0.15, 1.6, 0.15, 0x7a5230, 2.6, 0.15, 2.6));
-    sale.add(box(1.6, 1, 0.1, 0xffffff, 2.6, 1.3, 2.68));
-    sale.add(box(1.2, 0.18, 0.12, 0x1f8a5b, 2.6, 1.72, 2.72));
+    // signs stand on the corner with no streetlight next to it
+    sale.add(box(0.15, 1.6, 0.15, 0x7a5230, 2.6, 0.15, -2.6));
+    sale.add(box(1.6, 1, 0.1, 0xffffff, 2.6, 1.3, -2.52));
+    sale.add(box(1.2, 0.18, 0.12, 0x1f8a5b, 2.6, 1.72, -2.48));
     group.add(sale);
     // yard crates (surplus that the next factory isn't using)
     const crates = new THREE.Group();
@@ -928,8 +933,9 @@ export class World {
     const n = this.look.night;
     if (this.land?.lampMat) this.land.lampMat.emissiveIntensity = n * 2.4;
     if (this.land?.edgeMat) this.land.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
-    if (this.glow) this.glow.material.opacity = n * 0.9;
-    if (this.pools) this.pools.material.opacity = n * 0.55;
+    if (this.glow) { this.glow.material.opacity = n * 0.85; this.glow.material.size = 26 * this.zoom; }
+    if (this.pools) this.pools.material.opacity = n * 0.6;
+    if (this.cones) this.cones.material.opacity = n * 0.16;
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
     for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
     if (this.look.sunDir) {

@@ -131,6 +131,15 @@ function statusLine(d) {
   if (next && has(next) && f.surplus > 0.15 && f.made > 0) return `<div class="sh-status info">${Math.round(f.surplus * 100)}% of ${d.unit} piling up ${go(next.id, next.name)}</div>`;
   return prev ? `<div class="sh-status ok">Fully supplied · ${d.need} ${prev.unit} per ${one(d.unit)}</div>` : '';
 }
+// how far the nearest supplier is, and what that does to output
+function supplyLine(d) {
+  const sup = game.supplierOf(d.id);
+  if (!sup) return '';
+  const eff = Math.round(game.effOf(d.id) * 100), s = def(sup.id);
+  const away = sup.blocks <= 1 ? 'right next door' : `${sup.blocks} blocks away`;
+  const cls = eff > 100 ? 'ok' : eff < 100 ? 'warn' : 'info';
+  return `<div class="sh-status ${cls}">${s.name} is ${away} · ${eff}% output${eff < 125 ? ' (closer is better)' : ''}</div>`;
+}
 function supportStatus(d) {
   const fl = game.baseFlow();
   const pw = fl.support.power, dc = fl.support.datacenter;
@@ -205,8 +214,10 @@ function plotSheet(id, d) {
   const kinds = FACTORIES.concat(SUPPORT).filter(f => game.built(f.id));
   const rows = kinds.map(f => {
     const k = def(f.id), cost = game.extraCost(f.id), ok = game.canAfford(cost);
+    const sup = game.supplierOf(id, game.run, f.id);
+    const here = sup ? `${Math.round(game.effOf(id, game.run, f.id) * 100)}% output here (${def(sup.id).name} ${sup.blocks <= 1 ? 'next door' : sup.blocks + ' blocks away'})` : `Adds to your ${k.unit} output`;
     return `<div class="hq-row"><span class="hq-dot" style="background:${tint(k)}"></span>
-      <span class="hq-name">Another ${k.name}<small>Adds to your ${k.unit} output</small></span>
+      <span class="hq-name">Another ${k.name}<small>${here}</small></span>
       <button class="btn small" data-act="extra" data-type="${f.id}" ${ok ? '' : 'disabled'}>$${fmtCost(cost)}</button></div>`;
   }).join('');
   return top('Empty lot', 'Build an extra factory: it adds to that product') + `<div class="hq-list">${rows}</div>`;
@@ -215,7 +226,8 @@ function plotSheet(id, d) {
 function hqSheet(d) {
   const free = game.freeManagers(), staff = game.staff();
   const cost = game.nextHireCost();
-  const afford = game.canAfford(cost);
+  const more = game.canHireMore();
+  const afford = more && game.canAfford(cost);
   const rows = game.factorySlots().map(sid => ({ id: sid })).map(f => {
     const fd = def(f.id), on = game.hasManager(f.id);
     return `<div class="hq-row ${on ? 'on' : ''}">
@@ -227,8 +239,8 @@ function hqSheet(d) {
   }).join('');
   const sub = staff ? `${staff} manager${staff > 1 ? 's' : ''} · ${free} waiting for a job` : 'Hire managers to collect money for you';
   return head(d, ICON.hq, d.name, sub) + `
-    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${afford ? `Hire a manager · $${fmtCost(cost)}` : `Next manager · need $${fmtCost(cost - game.cash)}`}</button></div>
-    ${afford ? '' : cashAdButton(cost - game.cash)}
+    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${!more ? 'One manager per factory: build more to hire more' : afford ? `Hire a manager · $${fmtCost(cost)}` : `Next manager · need $${fmtCost(cost - game.cash)}`}</button></div>
+    ${afford || !more ? '' : cashAdButton(cost - game.cash)}
     <div class="hq-list">${rows}</div>`;
 }
 
@@ -260,7 +272,7 @@ function renderSheet(force = false) {
       return `<div class="sh-row"><span>${Math.floor(game.run.rocketsBuilt)} ${d.unit} ready</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + rocket + mileBar(lv, 'bigger building') + buyRow(d, lv) + managerRow(d);
+    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + supplyLine(d) + rocket + mileBar(lv, 'bigger building') + buyRow(d, lv) + managerRow(d);
   } else {
     const afford = game.canAfford(d.unlock);
     const prev = idx(id) > 0 ? def(FACTORIES[idx(id) - 1].id) : null;
@@ -803,7 +815,7 @@ function hintText() {
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
   if (full) return `Your ${def(full.id).name} is full. Tap it to collect!`;
-  if (game.built('gear') && !Object.keys(game.run.land).length && game.canAfford(game.landPrice() * 3)) return 'Tip: tap open land with a for-sale sign to build extra factories';
+  if (game.built('gear') && !Object.keys(game.run.land).length && game.canAfford(game.landPrice() * 3)) return 'Tip: tap land with a for-sale sign to expand';
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
   if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;
@@ -938,6 +950,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   const gfx = game.s.settings.graphics || 'auto';
   world.look.setQuality(gfx === 'low' ? 'low' : 'high');
   world.look.cycle = game.s.settings.daynight !== false;
+  world.setSeed([...game.s.playerId].reduce((h, c) => (h * 33 + c.charCodeAt(0)) >>> 0, 5381));
   world.setTheme(game.theme());
   syncBuilt();
   const brandNew = game.s.totalEarned === 0 && !game.s.playDays.length;

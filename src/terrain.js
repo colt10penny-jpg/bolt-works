@@ -4,7 +4,7 @@
 // baked into a few big meshes so it stays fast on phones.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE } from './traffic.js';
+import { AVES, CROSS, ROAD_W, LANE, STOP_R, EDGE, NET, hasRoad, distToRoad, exitNode } from './traffic.js';
 
 export const SHARED = { time: { value: 0 }, cloudTex: { value: null }, cloudAmt: { value: 0.18 }, night: { value: 0 } };
 
@@ -190,12 +190,7 @@ function townDist(x, z) {
   const dx = Math.max(TOWN.x0 - x, 0, x - TOWN.x1), dz = Math.max(TOWN.z0 - z, 0, z - TOWN.z1);
   return Math.hypot(dx, dz);
 }
-function roadDist(x, z) {
-  let d = Infinity;
-  for (const a of AVES) d = Math.min(d, Math.abs(x - a));
-  for (const c of CROSS) d = Math.min(d, Math.abs(z - c));
-  return d;
-}
+const roadDist = (x, z) => distToRoad(x, z);
 const LAKE = { x: 66, z: 64, r: 15 };
 
 // the shape of the land, before flattening it for town and roads
@@ -301,7 +296,8 @@ export function buildLand(name, T, LOTS) {
     ground.userData.water = ripples;
   }
 
-  // roads: one asphalt mesh, curbs + sidewalks, paint, crosswalks
+  // roads: one asphalt mesh, curbs + sidewalks, paint, crosswalks. The grid inside
+  // town, plus the few roads that lead out.
   const road = new Batch();
   const asphaltM = withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
   const walkM = withClouds(std(T.walk, { roughness: 0.9 }));
@@ -309,54 +305,74 @@ export function buildLand(name, T, LOTS) {
   const paintM = std(0xf4efe0, { roughness: 0.7 });
   const L = EDGE + 40;
   const HW = ROAD_W / 2, SW = 0.7;
-  for (const x of AVES) road.add(asphaltM, rect(x - HW, -L, x + HW, L, 0.07));
-  for (const z of CROSS) road.add(asphaltM, rect(-L, z - HW, L, z + HW, 0.075));
-  // sidewalks run between intersections, with corner squares
-  const segs = vals => { const out = []; const s = [...vals].sort((a, b) => a - b); let prev = -L; for (const v of s) { out.push([prev, v - HW]); prev = v + HW; } out.push([prev, L]); return out; };
-  for (const x of AVES) for (const side of [-1, 1]) for (const [a, b] of segs(CROSS)) {
-    road.add(walkM, boxAt(SW, 0.14, b - a, x + side * (HW + SW / 2), 0, (a + b) / 2));
-    road.add(curbM, boxAt(0.12, 0.16, b - a, x + side * (HW + 0.06), 0, (a + b) / 2));
-  }
-  for (const z of CROSS) for (const side of [-1, 1]) for (const [a, b] of segs(AVES)) {
-    road.add(walkM, boxAt(b - a, 0.14, SW, (a + b) / 2, 0, z + side * (HW + SW / 2)));
-    road.add(curbM, boxAt(b - a, 0.16, 0.12, (a + b) / 2, 0, z + side * (HW + 0.06)));
-  }
-  for (const x of AVES) for (const z of CROSS) for (const sx of [-1, 1]) for (const sz of [-1, 1])
-    road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
   const moon = name === 'moon';
-  // centre dashes (not inside junctions); the Moon gets blue edge lights instead, like a runway
   const edgeM = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
   edgeM.userData.night = 2.2; edgeM.userData.day = 0.4;
-  if (moon) for (let i = -L; i < L; i += 3.5) {
-    if (!CROSS.some(z => Math.abs(i - z) < STOP_R + 0.6)) for (const x of AVES) for (const sd of [-1, 1]) road.add(edgeM, boxAt(0.16, 0.1, 0.16, x + sd * (HW - 0.12), 0.07, i));
-    if (!AVES.some(x => Math.abs(i - x) < STOP_R + 0.6)) for (const z of CROSS) for (const sd of [-1, 1]) road.add(edgeM, boxAt(0.16, 0.1, 0.16, i, 0.075, z + sd * (HW - 0.12)));
+  // every stretch of road between two junctions (or out to the edge)
+  const stretches = [];
+  for (const r of NET.roads) {
+    const along = r.z0 === r.z1 ? 'x' : 'z';
+    const a0 = along === 'x' ? r.x0 : r.z0, a1 = along === 'x' ? r.x1 : r.z1, line = along === 'x' ? r.z0 : r.x0;
+    const stops = (along === 'x' ? AVES : CROSS).filter(v => v >= a0 - 0.1 && v <= a1 + 0.1);
+    const pts = [...new Set([a0, ...stops, a1])].sort((p, q) => p - q);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const s0 = pts[i] + ((along === 'x' ? AVES : CROSS).includes(pts[i]) ? HW : 0);
+      const s1 = pts[i + 1] - ((along === 'x' ? AVES : CROSS).includes(pts[i + 1]) ? HW : 0);
+      stretches.push({ along, line, s0, s1: r.exit && Math.abs(pts[i + 1]) > 40 ? Math.sign(pts[i + 1]) * L : s1, s0x: r.exit && Math.abs(pts[i]) > 40 ? Math.sign(pts[i]) * L : s0 });
+    }
+    // the asphalt itself
+    if (along === 'x') road.add(asphaltM, rect(Math.max(-L, a0 - (r.exit ? 0 : HW)), line - HW, Math.min(L, a1 + (r.exit ? 0 : HW)), line + HW, 0.075));
+    else road.add(asphaltM, rect(line - HW, Math.max(-L, a0 - (r.exit ? 0 : HW)), line + HW, Math.min(L, a1 + (r.exit ? 0 : HW)), 0.07));
   }
-  if (!moon) for (let i = -L; i < L; i += 2.4) {
-    if (!CROSS.some(z => Math.abs(i - z) < STOP_R + 0.6)) for (const x of AVES) road.add(paintM, boxAt(0.14, 0.02, 1.1, x, 0.07, i));
-    if (!AVES.some(x => Math.abs(i - x) < STOP_R + 0.6)) for (const z of CROSS) road.add(paintM, boxAt(1.1, 0.02, 0.14, i, 0.075, z));
+  for (const st of stretches) {
+    const a = Math.min(st.s0x, st.s1), b = Math.max(st.s0x, st.s1);
+    if (b - a < 0.05) continue;
+    for (const side of [-1, 1]) {
+      if (st.along === 'x') {
+        road.add(walkM, boxAt(b - a, 0.14, SW, (a + b) / 2, 0, st.line + side * (HW + SW / 2)));
+        road.add(curbM, boxAt(b - a, 0.16, 0.12, (a + b) / 2, 0, st.line + side * (HW + 0.06)));
+      } else {
+        road.add(walkM, boxAt(SW, 0.14, b - a, st.line + side * (HW + SW / 2), 0, (a + b) / 2));
+        road.add(curbM, boxAt(0.12, 0.16, b - a, st.line + side * (HW + 0.06), 0, (a + b) / 2));
+      }
+    }
+    // centre dashes, or on the Moon blue edge lights like a runway
+    if (moon) for (let i = a + 1.5; i < b - 1; i += 3.5) for (const sd of [-1, 1])
+      road.add(edgeM, st.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, st.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, st.line + sd * (HW - 0.12), 0.07, i));
+    else for (let i = a + STOP_R + 0.2; i < b - STOP_R + 0.6; i += 2.4)
+      road.add(paintM, st.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.075, st.line) : boxAt(0.14, 0.02, 1.1, st.line, 0.07, i));
   }
-  // crosswalks and stop lines on every approach
+  // junctions: corner squares, closed sides where no road leads on, stop lines and crosswalks
   for (const x of AVES) for (const z of CROSS) {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
     for (const [hx, hz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      // stop line across the lane coming in (heading hx,hz arrives from -h side)
-      const cx = x - hx * STOP_R + (-hz) * LANE, cz = z - hz * STOP_R + hx * LANE;
-      road.add(paintM, hx ? boxAt(0.26, 0.022, HW - 0.15, cx, 0.075, cz) : boxAt(HW - 0.15, 0.022, 0.26, cx, 0.075, cz));
-      // zebra stripes between the stop line and the junction
+      if (!hasRoad(x, z, { x: hx, z: hz })) {
+        // the edge of town: sidewalk and curb carry straight across
+        if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z)); }
+        else { road.add(walkM, boxAt(ROAD_W, 0.14, SW, x, 0, z + hz * (HW + SW / 2))); road.add(curbM, boxAt(ROAD_W, 0.16, 0.12, x, 0, z + hz * (HW + 0.06))); }
+        continue;
+      }
+      // traffic arriving from the (hx, hz) side heads the other way
+      const ax = -hx, az = -hz;
+      const cx = x - ax * STOP_R + (-az) * LANE, cz = z - az * STOP_R + ax * LANE;
+      road.add(paintM, ax ? boxAt(0.26, 0.022, HW - 0.15, cx, 0.075, cz) : boxAt(HW - 0.15, 0.022, 0.26, cx, 0.075, cz));
       const zc = STOP_R - 0.62;
       if (!moon) for (let k = -3; k <= 3; k++) {
         const off = k * 0.5;
-        if (hx) road.add(paintM, boxAt(0.7, 0.022, 0.26, x - hx * zc, 0.075, z + off));
-        else road.add(paintM, boxAt(0.26, 0.022, 0.7, x + off, 0.075, z - hz * zc));
+        if (ax) road.add(paintM, boxAt(0.7, 0.022, 0.26, x - ax * zc, 0.075, z + off));
+        else road.add(paintM, boxAt(0.26, 0.022, 0.7, x + off, 0.075, z - az * zc));
       }
     }
   }
   road.build(ground);
 
-  // streetlights at junction corners, and along roads out of town
+  // streetlights: a lamp at two corners of every junction, and along the roads out of town
   const poles = new Batch();
-  const poleM = std(0x3a3f48, { roughness: 0.5, metalness: 0.5 });
-  const lampM = new THREE.MeshStandardMaterial({ color: 0xfff1cf, emissive: 0xffd28a, emissiveIntensity: 0, roughness: 0.4 });
+  const poleM = std(0x3a3f48, { roughness: 0.45, metalness: 0.6 });
+  const headM = std(0x2a2d33, { roughness: 0.5, metalness: 0.4 });
+  const lampM = new THREE.MeshStandardMaterial({ color: 0xfff6e2, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.3 });
   lampM.userData.night = 2.4;
+  const lights = [];
   const lamp = (x, z, ax, az) => {
     if (moon) {   // short light posts instead of streetlamps
       poles.add(poleM, boxAt(0.18, 0.7, 0.18, x, 0.14, z));
@@ -364,17 +380,27 @@ export function buildLand(name, T, LOTS) {
       lights.push(new THREE.Vector3(x, 0.9, z));
       return;
     }
-    poles.add(poleM, boxAt(0.13, 2.9, 0.13, x, 0.14, z));
-    poles.add(poleM, boxAt(Math.abs(ax) * 0.9 + 0.1, 0.1, Math.abs(az) * 0.9 + 0.1, x + ax * 0.45, 2.95, z + az * 0.45));
-    poles.add(lampM, boxAt(0.42, 0.14, 0.42, x + ax * 0.9, 2.84, z + az * 0.9));
-    lights.push(new THREE.Vector3(x + ax * 0.9, 2.8, z + az * 0.9));
+    // a slim tapered pole, a curved arm, and a flat lamp head with a glowing lens
+    const pole = new THREE.CylinderGeometry(0.05, 0.08, 3.0, 8); pole.translate(x, 0.14 + 1.5, z);
+    poles.add(poleM, pole);
+    const base = new THREE.CylinderGeometry(0.13, 0.15, 0.25, 8); base.translate(x, 0.14 + 0.12, z); poles.add(poleM, base);
+    const len = 0.95, ang = Math.atan2(az, ax);
+    const arm = new THREE.CylinderGeometry(0.035, 0.035, len, 6); arm.rotateZ(Math.PI / 2); arm.rotateY(-ang); arm.translate(x + ax * len / 2 / Math.hypot(ax, az), 3.08, z + az * len / 2 / Math.hypot(ax, az));
+    poles.add(poleM, arm);
+    const hx = x + ax / Math.hypot(ax, az) * len, hz = z + az / Math.hypot(ax, az) * len;
+    const head = new THREE.CylinderGeometry(0.26, 0.3, 0.12, 12); head.translate(hx, 3.0, hz); poles.add(headM, head);
+    const lens = new THREE.CylinderGeometry(0.22, 0.22, 0.03, 12); lens.translate(hx, 2.93, hz); poles.add(lampM, lens);
+    lights.push(new THREE.Vector3(hx, 2.9, hz));
   };
-  const lights = [];
   const o = HW + SW / 2;
   for (const x of AVES) for (const z of CROSS) { lamp(x + o, z + o, -0.7, -0.7); lamp(x - o, z - o, 0.7, 0.7); }
-  // out of town, a light every block or so along each road
-  for (const z of CROSS) for (let x = -108; x <= 108; x += 14) if (Math.abs(x) > 42) lamp(x, z + o, 0, -1);
-  for (const x of AVES) for (let z = -108; z <= 108; z += 14) if (Math.abs(z) > 42) lamp(x + o, z, -1, 0);
+  for (const e of NET.exits) {
+    const n = exitNode(e);
+    for (let d = 14; d <= 110; d += 14) {
+      if (e.axis === 'x') lamp(n.x + e.dir * d, n.z + o, 0, -1);
+      else lamp(n.x + o, n.z + e.dir * d, -1, 0);
+    }
+  }
   poles.build(ground, { cast: true });
   ground.userData.lamps = lights;
   ground.userData.lampMat = lampM;

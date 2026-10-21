@@ -2,8 +2,9 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
-  PLOTS, isPlot, landCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap,
+  PLOTS, isPlot, landCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff,
 } from './economy.js';
+import { blocksApart } from './layout.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
 import * as storage from './storage.js';
@@ -168,7 +169,21 @@ export class Game {
     const base = this.defOf(t, worldId);
     return { ...base, id, type: t, extra: true, unlock: (base.unlock || 150 * (worldById(worldId).cost || 1)) * EXTRA_BUILD, baseCost: base.baseCost * EXTRA_UPGRADE };
   }
-  extrasOf(run) { return Object.values(run.extra || {}).filter(e => e && e.level > 0); }
+  extrasOf(run) { return Object.entries(run.extra || {}).filter(([, e]) => e && e.level > 0).map(([id, e]) => ({ ...e, id, eff: this.effOf(id, run) })); }
+  // how well a building is supplied: by distance (in blocks) to the nearest building
+  // that makes what it needs. Mines (and support buildings) need nothing.
+  supplierOf(id, run = this.run, type = this.typeOf(id, run)) {
+    const i = FACTORIES.findIndex(f => f.id === type);
+    if (i <= 0) return null;
+    let best = null;
+    for (const s of this.slotsOf(FACTORIES[i - 1].id, run)) { const b = blocksApart(id, s); if (!best || b < best.blocks) best = { id: s, blocks: b }; }
+    return best;
+  }
+  effOf(id, run = this.run, type) {
+    const sup = this.supplierOf(id, run, type ?? this.typeOf(id, run));
+    return sup ? supplyEff(sup.blocks) : 1;
+  }
+  effCore(run) { const o = {}; for (const f of FACTORIES) if ((run.levels[f.id] || 0) > 0) o[f.id] = this.effOf(f.id, run); return o; }
   // every built slot of a type in a world (the core building first)
   slotsOf(type, run = this.run) {
     const out = (run.levels[type] || 0) > 0 ? [type] : [];
@@ -180,7 +195,7 @@ export class Game {
     const r = this.s.worlds[worldId];
     if (!r) return null;
     if (!this.cache) this.cache = {};
-    return (this.cache[worldId] ||= flow(r.levels, this.epMult(), worldById(worldId).perks, this.extrasOf(r)));
+    return (this.cache[worldId] ||= flow(r.levels, this.epMult(), worldById(worldId).perks, this.extrasOf(r), this.effCore(r)));
   }
   baseFlow() { return this.flowFor(this.s.current); }
   // totals for a product type
@@ -190,8 +205,8 @@ export class Game {
     const run = this.s.worlds[worldId], t = this.typeOf(id, run);
     const d = BUILDINGS.find(f => f.id === t);
     if (!d) return 0;
-    const all = totalCap(d, run.levels, this.extrasOf(run));
-    return all > 0 ? capacity(d, this.level(id, run)) / all : 0;
+    const all = totalCap(d, run.levels, this.extrasOf(run), this.effCore(run));
+    return all > 0 ? capacity(d, this.level(id, run)) * this.effOf(id, run) / all : 0;
   }
   info(id) {
     const t = this.typeOf(id); if (!t) return null;
@@ -317,8 +332,10 @@ export class Game {
   working() { return this.factorySlots().filter(id => this.run.managers[id]).length; }
   freeManagers() { return Math.max(0, this.staff() - this.working()); }
   nextHireCost() { return hireCost(this.staff()) * (this.world.cost || 1); }
+  // you can only hire as many managers as you have factories for them to run
+  canHireMore() { return this.staff() < this.factorySlots().length; }
   hire() {
-    if (!this.built('hq')) return false;
+    if (!this.built('hq') || !this.canHireMore()) return false;
     const cost = this.nextHireCost();
     if (!this.canAfford(cost)) return false;
     this.s.cash -= cost;
