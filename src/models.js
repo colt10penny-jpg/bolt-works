@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { withDetail } from './surface.js';
 
 // Materials: physically based, so light, shadow and reflections look solid.
 // Glass and metal colours get shinier materials automatically; glass glows warm at night.
@@ -27,10 +28,11 @@ export function mat(color, opts = {}) {
     m.userData.glow = [0.75, 0.35, 0.05][glassVar];
     GLOW.glass.push(m);
   } else if (METAL.has(color)) {
-    m = new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.6, ...opts });
+    m = withDetail(new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.6, ...opts }), 0.6);
   } else {
     m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...opts });
     if (opts.emissive) { m.userData.baseGlow = opts.emissiveIntensity ?? 1; GLOW.lit.push(m); }
+    else if (!opts.transparent) withDetail(m);
   }
   matCache.set(key, m);
   return m;

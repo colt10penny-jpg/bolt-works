@@ -46,6 +46,52 @@ const DAY = {
     [1.00, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
   ],
 };
+// "Miniature": a tilt-shift lens. Sharp across the middle, softly blurred toward the top
+// and bottom, like a photo of a model town. Run twice: across, then up and down.
+const TiltShader = {
+  uniforms: { tDiffuse: { value: null }, uDir: { value: new THREE.Vector2(1, 0) }, uRes: { value: new THREE.Vector2(1, 1) }, uAmt: { value: 7.5 }, uFocus: { value: 0.55 }, uBand: { value: 0.13 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 uDir; uniform vec2 uRes; uniform float uAmt; uniform float uFocus; uniform float uBand; varying vec2 vUv;
+    void main(){
+      float d = max(0.0, abs(vUv.y - uFocus) - uBand) / max(0.01, 0.5 - uBand);
+      float r = d * d * uAmt;
+      if (r < 0.05) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
+      vec2 st = uDir * r / uRes;
+      vec4 c = texture2D(tDiffuse, vUv) * 0.2270;
+      c += (texture2D(tDiffuse, vUv + st * 1.3846) + texture2D(tDiffuse, vUv - st * 1.3846)) * 0.3162;
+      c += (texture2D(tDiffuse, vUv + st * 3.2308) + texture2D(tDiffuse, vUv - st * 3.2308)) * 0.0703;
+      gl_FragColor = c;
+    }`,
+};
+// "Illustrated": ink outlines where surfaces change direction or depth, and colour
+// gently gathered into painted bands.
+const InkShader = {
+  uniforms: { tDiffuse: { value: null }, tNormal: { value: null }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uInk: { value: 0.85 }, uBands: { value: 0.45 }, uFar: { value: 600 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform sampler2D tNormal; uniform sampler2D tDepth; uniform vec2 uRes; uniform float uInk; uniform float uBands; uniform float uFar; varying vec2 vUv;
+    float dep(vec2 p){ return texture2D(tDepth, p).r * uFar; }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 px = 1.0 / uRes;
+      vec3 n0 = texture2D(tNormal, vUv).xyz;
+      float d0 = dep(vUv);
+      float e = 0.0;
+      for (int i = 0; i < 4; i++) {
+        vec2 o = i == 0 ? vec2(px.x, 0.0) : i == 1 ? vec2(-px.x, 0.0) : i == 2 ? vec2(0.0, px.y) : vec2(0.0, -px.y);
+        vec3 n1 = texture2D(tNormal, vUv + o).xyz;
+        float d1 = dep(vUv + o);
+        e = max(e, smoothstep(0.12, 0.3, length(n1 - n0)));
+        e = max(e, smoothstep(0.35, 0.9, abs(d1 - d0)));
+      }
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      float q = (floor(l * 5.0) + 0.5) / 5.0;
+      c.rgb *= mix(1.0, q / max(l, 0.02), uBands);
+      c.rgb = mix(c.rgb, vec3(0.13, 0.11, 0.1), e * uInk);
+      gl_FragColor = c;
+    }`,
+};
 const ca = new THREE.Color(), cb = new THREE.Color();
 const lerpHex = (a, b, t, out) => out.copy(ca.setHex(a)).lerp(cb.setHex(b), t);
 
@@ -94,13 +140,35 @@ export class Look {
     c.addPass(new OutputPass());
     this.grade = new ShaderPass(GradeShader);
     c.addPass(this.grade);
+    this.tiltH = new ShaderPass(TiltShader); this.tiltV = new ShaderPass(TiltShader);
+    this.tiltV.uniforms.uDir.value = new THREE.Vector2(0, 1);
+    this.ink = new ShaderPass(InkShader);
+    c.addPass(this.tiltH); c.addPass(this.tiltV); c.addPass(this.ink);
     this.composer = c;
+    this.setStyle(this.style || 'plain');
+  }
+
+  // the overall look: 'mini' (tilt-shift model town), 'ink' (illustrated) or 'plain'
+  setStyle(style) {
+    this.style = style;
+    if (!this.composer) return;
+    this.tiltH.enabled = this.tiltV.enabled = style === 'mini';
+    this.ink.enabled = style === 'ink';
+    if (style === 'ink' && !this.normalRT) {
+      const size = this.r.getDrawingBufferSize(new THREE.Vector2());
+      this.normalRT = new THREE.WebGLRenderTarget(size.x, size.y, { depthTexture: new THREE.DepthTexture(size.x, size.y) });
+      this.normalMat = new THREE.MeshNormalMaterial();
+    }
+    this.resize();
   }
 
   resize() {
     const w = this.r.domElement.clientWidth, h = this.r.domElement.clientHeight;
     if (!w || !h) return;
     this.r.setSize(w, h, false);
+    const pr = this.r.getPixelRatio();
+    if (this.tiltH) for (const p of [this.tiltH, this.tiltV, this.ink]) p.uniforms.uRes.value.set(w * pr, h * pr);
+    if (this.normalRT) this.normalRT.setSize(w * pr, h * pr);
     if (this.composer) {
       this.composer.setPixelRatio(this.r.getPixelRatio());
       this.composer.setSize(w, h);
@@ -141,11 +209,26 @@ export class Look {
       this.grade.uniforms.vignette.value = 0.28;
       // night: a cool moonlit cast and a little less colour, without making anything darker
       this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17, 1 - n * 0.07, 1 + n * 0.12);
-      this.grade.uniforms.sat.value = 1.08 - n * 0.2;
+      this.grade.uniforms.sat.value = 1.08 - n * 0.2 + (this.style === 'mini' ? 0.14 : 0);
     }
   }
 
   render() {
+    if (this.quality === 'high' && this.composer && this.style === 'ink') {
+      // draw the town's surface directions and depth for the outline pass
+      // (skipping see-through things like smoke and light pools)
+      const hide = [];
+      this.scene.traverseVisible(o => { if ((o.isSprite || o.isPoints || o.material?.transparent || o.material?.blending === THREE.AdditiveBlending) && o.visible) hide.push(o); });
+      for (const o of hide) o.visible = false;
+      const bg = this.scene.background, fog = this.scene.fog;
+      this.scene.overrideMaterial = this.normalMat; this.scene.background = null; this.scene.fog = null;
+      this.r.setRenderTarget(this.normalRT); this.r.clear(); this.r.render(this.scene, this.camera); this.r.setRenderTarget(null);
+      this.scene.overrideMaterial = null; this.scene.background = bg; this.scene.fog = fog;
+      for (const o of hide) o.visible = true;
+      this.ink.uniforms.tNormal.value = this.normalRT.texture;
+      this.ink.uniforms.tDepth.value = this.normalRT.depthTexture;
+      this.ink.uniforms.uFar.value = this.camera.far - this.camera.near;
+    }
     if (this.quality === 'high' && this.composer) this.composer.render();
     else this.r.render(this.scene, this.camera);
   }

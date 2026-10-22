@@ -835,6 +835,7 @@ function openSettings() {
     <h2>Settings</h2>
     <button class="btn plain toggle" data-act="sound" aria-pressed="${game.s.settings.sound}">Sound and vibration: <b>${game.s.settings.sound ? 'On' : 'Off'}</b></button>
     <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
+    <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
     <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
     <p>Rockets launched: <b>${game.s.launches}</b> · Engineering Points: <b>${game.s.ep}</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
     <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it.</p>
@@ -852,6 +853,12 @@ function openSettings() {
       world.look.setQuality(game.s.settings.graphics);
       track('graphics_changed', { to: game.s.settings.graphics });
       save(); openSettings();
+    }
+    if (act === 'style') {
+      const order = ['plain', 'mini', 'ink'], next = order[(order.indexOf(world.look.style || 'plain') + 1) % 3];
+      game.s.settings.style = next; world.look.setStyle(next);
+      if (next !== 'plain' && world.look.quality !== 'high') toast('Turn Graphics to High to see this look');
+      track('style_changed', { to: next }); openSettings(); return;
     }
     if (act === 'daynight') {
       game.s.settings.daynight = game.s.settings.daynight === false;
@@ -1086,6 +1093,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   const gfx = game.s.settings.graphics || 'auto';
   world.look.setQuality(gfx === 'low' ? 'low' : 'high');
   world.look.cycle = game.s.settings.daynight !== false;
+  { const st = new URLSearchParams(location.search).get('style'); world.look.setStyle(st || game.s.settings.style || 'plain'); }
   world.setSeed([...game.s.playerId].reduce((h, c) => (h * 33 + c.charCodeAt(0)) >>> 0, 5381));
   world.setTheme(game.theme());
   syncBuilt();
