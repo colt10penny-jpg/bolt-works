@@ -647,3 +647,6 @@ Object.assign(BUILDERS, {
     return { group: g, top: ty + 3.6, anim(t) { flag.rotation.y = Math.sin(t * 3) * 0.25; } };
   },
 });
+
+// the kit, for the other worlds' buildings
+export { TRIM, DARK, STEEL, IRON, HAZ, GLASS, WARM, PLINTH, ROOF, RED, WHITE, shade, mesh, at, rod, onWall, win, winRow, door, sideDoor, signBoard, ladder, railing, pipe, hall, gableRoof, chimney, tank, lattice, spokeWheel, gearShape };

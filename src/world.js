@@ -8,6 +8,8 @@ import { Look } from './fx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLOW } from './models.js';
 import './buildings.js';   // the detailed Colorado buildings replace the plain ones
+import './buildings-mojave.js';   // and the Mojave ones
+import './buildings-moon.js';     // and the Moon ones
 import { withDetail } from './surface.js';
 const NIGHT_LIST = () => GLOW.night;
 import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
@@ -535,7 +537,8 @@ export class World {
     shadow.renderOrder = 1;
     ex.add(shadow);
     // loading bays with garage doors, on each side trucks use
-    for (const side of this.#baySides(id)) ex.add(this.#bay(side, color));
+    // (only factories trucks deliver to: no bays on power, compute or the headquarters)
+    if (!['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) ex.add(this.#bay(side, color));
     // free corners: an extra wing for each upgrade tier, parked cars in the rest
     const corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8))
