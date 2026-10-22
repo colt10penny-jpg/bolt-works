@@ -345,6 +345,12 @@ export function buildLand(name, T, blocks) {
     place(40, S.boulder, { minH: 4, blob: 0 });
     // farm fields near the lake side
     const fields = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
+    // a dense evergreen forest closing in round the town: thin at the town's edge, thick
+    // further out (not on the fields or in the lake)
+    const inField = (x, z) => fields.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
+    const woods = (x, z) => { const d = townDist(x, z); return d > 13 && !inField(x, z) && r() < Math.min(0.95, (d - 13) / 16) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
+    place(2400, S.fir, { where: woods, span: 230, maxH: 30, pad: 0.4, blob: 0.9 });
+    place(700, S.pine, { where: woods, span: 230, maxH: 30, pad: 0.3, blob: 0.8 });
     const fieldM = new Map();
     for (const [fx, fz, w, d, color] of fields) {
       if (!fieldM.has(color)) fieldM.set(color, withClouds(std(color, { map: tx.rows, roughness: 0.95 })));
@@ -422,7 +428,16 @@ function sceneryKit() {
       g.userData.r = s;
       return g;
     },
-    bush(r) {
+    // a tall forest fir: four tiers, dark and dense, for the woods round town
+    fir(r) {
+      const g = new THREE.Group(), s = 1.0 + r() * 0.9, col = [0x245c33, 0x2b6a3a, 0x1f5230][Math.floor(r() * 3)];
+      g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.6 * s, 5), m(0x5a3d24), 0, 0.3 * s, 0));
+      const lm = m(col, {}, 1.0 * s);
+      for (let i = 0; i < 4; i++) g.add(mesh(new THREE.ConeGeometry((1.05 - i * 0.22) * s, 1.15 * s, 7), lm, 0, (0.95 + i * 0.55) * s, 0));
+      g.userData.r = s;
+      return g;
+    },
+        bush(r) {
       const g = new THREE.Group(), s = 0.4 + r() * 0.4, lm = m(greens[Math.floor(r() * 3)], {}, 0.1);
       g.add(mesh(new THREE.IcosahedronGeometry(0.6 * s, 0), lm, 0, 0.35 * s, 0));
       g.add(mesh(new THREE.IcosahedronGeometry(0.45 * s, 0), lm, 0.45 * s, 0.25 * s, 0.1));

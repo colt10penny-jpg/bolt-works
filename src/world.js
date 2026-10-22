@@ -1212,8 +1212,10 @@ export class World {
     // shrink labels when zoomed out so they don't pile on top of each other
     const labelScale = Math.min(1, Math.max(0.62, this.zoom * 0.95)).toFixed(2);
     for (const [id, L] of Object.entries(this.lots)) {
-      const s = this.#project(new THREE.Vector3(L.group.position.x, L.top * L.grow + 0.15, L.group.position.z));
       const info = labelFor(id);
+      // the + for land you can develop sits on the middle of the plot; other bubbles float over the building
+      const plus = info.cls?.includes('plus');
+      const s = this.#project(new THREE.Vector3(L.group.position.x, plus ? 0.9 : L.top * L.grow + 0.15, L.group.position.z));
       if (L.label._html !== info.html) { L.label.innerHTML = info.html; L.label._html = info.html; L.bar = L.label.querySelector('.bar i'); L.label.hidden = !info.html; }
       if (L.bar) L.bar.style.width = (info.progress * 100).toFixed(1) + '%';
       const cls = 'lot-label ' + info.cls + (this.selected === id ? ' sel' : '');
