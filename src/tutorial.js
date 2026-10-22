@@ -1,5 +1,6 @@
 // The opening of the game, kept short: a note from your late great-uncle's will, naming
-// your town, then two pointers (collect the mine's coin, upgrade the mine). Players work
+// your town, then two pointers (collect the mine's coin, upgrade the mine) and a word about
+// building more factories. Players work
 // out the rest themselves. Every world you reach asks you to name its town.
 //
 // Progress lives in game.s.tutorial.step (a number; -1 means finished or skipped), so
@@ -8,6 +9,22 @@ import { track } from './analytics.js';
 
 export const UNCLE = 'Walter "Walt" Bolton';
 
+// a red wax seal: a lumpy blob, a pressed ring with a laurel, and Walt's initial
+const WAX = `<svg class="wax" viewBox="0 0 100 100" aria-hidden="true">
+  <defs>
+    <radialGradient id="wax-g" cx="38%" cy="34%" r="70%"><stop offset="0" stop-color="#e0484a"/><stop offset=".55" stop-color="#a8222a"/><stop offset="1" stop-color="#6e1218"/></radialGradient>
+    <radialGradient id="wax-in" cx="60%" cy="62%" r="60%"><stop offset="0" stop-color="#b52a31"/><stop offset="1" stop-color="#7a161c"/></radialGradient>
+  </defs>
+  <path d="M50 4c8 0 11 6 18 7s13 1 16 8-2 12 1 18 10 9 8 17-9 9-11 16-1 14-8 17-12-2-19 2-10 9-18 7-8-8-15-11-14-3-17-10 3-12 0-18-10-10-7-17 10-7 13-14 0-14 7-17 13 2 19-2S42 4 50 4z" fill="url(#wax-g)"/>
+  <circle cx="50" cy="50" r="31" fill="url(#wax-in)" stroke="#5e0f14" stroke-width="2.5" opacity=".95"/>
+  <circle cx="50" cy="50" r="26" fill="none" stroke="#e8737a" stroke-width="1.2" stroke-dasharray="2 3" opacity=".7"/>
+  <g fill="none" stroke="#f0a0a3" stroke-width="2" stroke-linecap="round" opacity=".85">
+    <path d="M30 62q-6-10 0-22M33 57l-5 1M31 50l-5 0M32 43l-4-2"/>
+    <path d="M70 62q6-10 0-22M67 57l5 1M69 50l5 0M68 43l4-2"/>
+  </g>
+  <text x="50" y="60" text-anchor="middle" font-family="'IM Fell English', Georgia, serif" font-size="30" fill="#f6c6c8" stroke="#5e0f14" stroke-width=".8">W</text>
+  <path d="M30 22q8-6 18-6" stroke="#ff9a9c" stroke-width="3" stroke-linecap="round" fill="none" opacity=".55"/>
+</svg>`;
 const KEY = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3m-3 3 2.5 2.5M14.5 8.5l2 2"/></svg>';
 const DICE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>';
 const SIGN = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M4 5h13l3 3-3 3H4z"/><path d="M20 13H7l-3 3 3 3h13z"/></svg>';
@@ -52,6 +69,12 @@ export function createTutorial(ctx) {
       say: () => world.selected === mineLot() ? `Now <b>upgrade</b> it to make more money.` : `Tap the <b>mine</b> and upgrade it to make more money.`,
       point: () => world.selected === mineLot() ? document.querySelector('#sheet [data-act=upgrade]') : { lot: mineLot() },
       done: () => game.level('mine') >= 2,
+    },
+    {
+      id: 'expand', next: 'Got it',
+      say: () => `Nice! Save up, then tap a <b>+</b> to clear land and build <b>more factories</b>. Each new one makes something worth more.`,
+      enter: () => world.select(null),
+      point: () => ({ lot: 'q1' }),
     },
   ];
 
@@ -134,9 +157,15 @@ export function createTutorial(ctx) {
       game.s.nextContractAt = Date.now() + 1e12;   // no orders until the tutorial is done
       document.body.classList.add('tutorial');
       openModal(`
-        <div class="letter">
-          <p>Your great-uncle <b>Walt</b> left you something in his will:</p>
-          <blockquote class="will">"To my long-lost relative, I leave my old ore mine. Build something big."<span class="sig">Walt</span></blockquote>
+        <div class="scroll" aria-label="Great-uncle Walt's will">
+          <div class="scroll-rod"></div>
+          <div class="scroll-paper">
+            <p class="scroll-head">Last Will &amp; Testament</p>
+            <p class="scroll-body">To my long-lost relative,<br>I leave you my old ore mine.<br>Build something big.</p>
+            <p class="scroll-sig">Walt Bolton</p>
+            ${WAX}
+          </div>
+          <div class="scroll-rod"></div>
         </div>
         <button class="btn gold" data-act="keys">${KEY} Take the keys</button>`, () => {
         sfx.reward(); askName(game.s.current, () => setStep(1));

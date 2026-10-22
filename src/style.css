@@ -262,7 +262,12 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
   width: 28px; height: 28px; padding: 0; justify-content: center; font: 800 16px var(--display); color: #fff;
 }
 .lot-label.bub.warn { background: #e8862c; }
-.lot-label.bub.plus { background: var(--green); font-size: 20px; }
+.lot-label.bub.plus {
+  width: 42px; height: 42px; background: var(--green); font-size: 28px; color: #fff;
+  border: 3px solid #fff; box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 0 rgba(46,160,90,.6);
+  animation: plus-pulse 1.6s ease-out infinite;
+}
+@keyframes plus-pulse { 0% { box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 0 rgba(255,255,255,.75); } 70%, 100% { box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 14px rgba(255,255,255,0); } }
 @keyframes bob { 50% { margin-top: -4px; } }
 .pop.big { font-size: 22px; color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
 
@@ -461,17 +466,38 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 .town-name { font: 800 11px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 .town-name:empty { display: none; }
 
-.letter {
-  position: relative; text-align: left; padding: 18px 18px 22px; border-radius: 6px;
-  background: #fbf6e9; color: #3b3326; font: 15px/1.5 Georgia, 'Times New Roman', serif;
-  box-shadow: inset 0 0 0 1px #e8dcc0, inset 0 0 40px rgba(180,150,90,.18);
-  max-height: 62vh; overflow-y: auto;
+/* ---- great-uncle Walt's will: an old parchment scroll on wooden rollers, with a wax seal ---- */
+.modal-card:has(.scroll) { background: transparent; box-shadow: none; padding: 0; overflow: visible; }
+.modal-card:has(.scroll) > .btn { margin: 4px 18px 0; width: calc(100% - 36px); }
+.scroll { position: relative; margin: 0 4px; filter: drop-shadow(0 14px 18px rgba(0,0,0,.45)); animation: scroll-open .7s cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes scroll-open { from { transform: scaleY(.15); opacity: 0; } 60% { opacity: 1; } }
+.scroll-rod {
+  position: relative; height: 22px; margin: 0 6px; border-radius: 11px; z-index: 2;
+  background: linear-gradient(#a8703f, #6b3f1d 55%, #4a2a12);
+  box-shadow: inset 0 3px 2px rgba(255,220,170,.35), 0 3px 4px rgba(0,0,0,.35);
 }
-.letter p { margin: 0 0 10px; color: #3b3326; }
-.letter-head { font: 700 11px/1.3 Georgia, serif; letter-spacing: .08em; text-transform: uppercase; color: #8a7350; border-bottom: 1px solid #e3d5b5; padding-bottom: 8px; margin-bottom: 12px; }
-.letter .will { margin: 6px 0 12px; padding: 10px 12px; background: #f3ead2; border-left: 3px solid #b8924a; font-style: italic; }
-.letter .sig { display: block; text-align: right; margin-top: 6px; font: italic 700 22px 'Brush Script MT', 'Segoe Script', cursive; color: #2c4a7a; }
-.letter .sig.small { display: inline; font-size: 19px; }
-.letter-sign { margin-bottom: 0 !important; }
-.letter .seal { position: absolute; right: 14px; bottom: 12px; width: 40px; height: 40px; border-radius: 999px; background: radial-gradient(circle at 35% 35%, #d9484a, #8f1f22); color: #f6d3c0; display: grid; place-items: center; font: 700 18px Georgia, serif; box-shadow: 0 2px 4px rgba(0,0,0,.3); transform: rotate(-12deg); }
+.scroll-rod::before, .scroll-rod::after {
+  content: ''; position: absolute; top: -4px; width: 18px; height: 30px; border-radius: 8px;
+  background: radial-gradient(circle at 40% 30%, #d9a94f, #8a5a1c 60%, #5a3a10);
+  box-shadow: 0 2px 3px rgba(0,0,0,.4);
+}
+.scroll-rod::before { left: -12px; } .scroll-rod::after { right: -12px; }
+.scroll-paper {
+  position: relative; margin: -8px 18px; padding: 26px 24px 30px; text-align: center; color: #3e2a14;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .32 0 0 0 0 .15 0 0 0 .28 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 20% 15%, rgba(255,250,230,.7), transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(150,95,35,.35), transparent 50%),
+    radial-gradient(circle at 70% 25%, rgba(160,110,50,.18) 0 8%, transparent 9%),
+    radial-gradient(circle at 25% 75%, rgba(160,110,50,.15) 0 6%, transparent 7%),
+    linear-gradient(90deg, #d9b97e, #efdcac 12%, #f5e6bf 50%, #efdcac 88%, #d4b073);
+  box-shadow: inset 0 0 28px rgba(120,70,20,.45), inset 0 0 4px rgba(90,50,10,.5);
+  /* ragged, torn-looking edges down both sides */
+  clip-path: polygon(0 0, 100% 0, 99% 6%, 100% 12%, 98.5% 19%, 100% 26%, 99% 33%, 100% 41%, 98.5% 48%, 100% 56%, 99% 63%, 100% 71%, 98.5% 79%, 100% 86%, 99% 93%, 100% 100%, 0 100%, 1% 93%, 0 86%, 1.5% 79%, 0 71%, 1% 63%, 0 56%, 1.5% 48%, 0 41%, 1% 33%, 0 26%, 1.5% 19%, 0 12%, 1% 6%);
+}
+.modal-card .scroll-head { margin: 0 0 12px; font: 400 15px 'IM Fell English', Georgia, serif; letter-spacing: .14em; text-transform: uppercase; color: #6b4a22; }
+.scroll-head::after { content: ''; display: block; width: 60%; height: 1px; margin: 8px auto 0; background: linear-gradient(90deg, transparent, #8a6430, transparent); }
+.modal-card .scroll-body { margin: 0; font: italic 400 21px/1.45 'IM Fell English', Georgia, serif; color: #3e2a14; }
+.scroll-sig { margin: 14px 8px 0 0; text-align: right; font: 400 34px/1 'Pinyon Script', 'Brush Script MT', cursive; color: #2b2560; transform: rotate(-4deg); }
+.wax { position: absolute; left: 14px; bottom: 6px; width: 74px; height: 74px; transform: rotate(-14deg); filter: drop-shadow(0 3px 3px rgba(60,10,10,.45)); }
 .btn.gold svg { vertical-align: -4px; margin-right: 4px; }

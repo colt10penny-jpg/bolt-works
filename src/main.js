@@ -90,7 +90,7 @@ function labelFor(lot) {
     // a + on the spot for the next building, once you can afford to clear it or build on it
     if (!lotReady(lot)) return NONE;
     const can = game.developed(lot) ? canBuildHere(lot) : game.canAfford(game.developQuote(lot).total);
-    return can ? { cls: 'bub plus', html: '<span aria-hidden="true">+</span>', aria: `Spot for the ${def(lotType(lot)).name}. Tap to build.` } : NONE;
+    return can ? { cls: 'bub plus', html: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>', aria: `Spot for the ${def(lotType(lot)).name}. Tap to build.` } : NONE;
   }
   const d = def(id), lv = game.level(id);
   const job = game.jobOf(id);
