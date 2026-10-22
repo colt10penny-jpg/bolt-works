@@ -161,10 +161,10 @@ function supportStatus(d) {
   return `<div class="sh-status ok">Fully powered · ${SUPPORT[1].need} MW per PFLOPS</div>`;
 }
 
-function head(d, badge, title, sub) {
+function head(d, badge, title, sub, lvl = 0) {
   return `<div class="sh-head">
       <span class="badge sm" style="background:${tint(d)}">${badge}</span>
-      <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
+      <span class="sh-title"><span class="sh-name-row"><b>${title}</b>${lvl ? `<span class="lv-pill">Lv ${lvl}</span>` : ''}</span><small>${sub}</small></span>
       ${d.fact ? `<button class="icon-sm" data-act="fact" aria-label="About this building" aria-pressed="${factOpen}">i</button>` : ''}
       <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
     </div>
@@ -294,12 +294,12 @@ function renderSheet(force = false) {
     const pw2 = capacity(SUPPORT[0], nextLv.power) * (game.world.perks.power || 1), dc2 = capacity(SUPPORT[1], nextLv.datacenter);
     const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
     const made = t === 'power' ? `${fmtRate(game.info(id).made)} MW` : `${fmtRate(game.info(id).made)} PFLOPS`;
-    const sub = `Lv ${lv} · ${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
-    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus({ ...d, id: t }) + mileBar(lv, t) + buyRow(d, lv) + demolishRow(d);
+    const sub = `${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
+    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub, lv) + supportStatus({ ...d, id: t }) + mileBar(lv, t) + buyRow(d, lv) + demolishRow(d);
   } else if (lv > 0) {
     const f = game.info(id);
     const earn = f.made * d.value * game.mult();
-    const sub = `Lv ${lv} · ${fmtRate(f.made)} ${d.unit}/s · $${fmt(earn)}/s${game.hasManager(id) ? ' · <span class="mgr-on">manager</span>' : ''}`;
+    const sub = `${fmtRate(f.made)} ${d.unit}/s · $${fmt(earn)}/s${game.hasManager(id) ? ' · <span class="mgr-on">manager</span>' : ''}`;
     const rocket = t === 'rocket' ? (() => {
       const pts = game.launchPreview(), next = game.nextWorld(), unlocks = next && !game.s.worlds[next.id];
       const can = game.canLaunch() && (pts >= 1 || unlocks);
@@ -312,7 +312,7 @@ function renderSheet(force = false) {
       return how + prog + `<div class="sh-row"><span>${ready} ${ready === 1 ? one(d.unit) : d.unit} ready</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
+    html = head(d, ICON.factory, d.name, sub, lv) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   const key = lot + ':' + (id || '');

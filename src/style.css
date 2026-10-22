@@ -36,16 +36,16 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; pointer-events: none;
 }
 .cash {
-  background: var(--paper); border-radius: 20px; padding: 8px 16px 8px 8px; display: flex; align-items: center; gap: 10px;
+  background: var(--paper); border-radius: 16px; padding: 5px 10px 5px 6px; display: flex; align-items: center; gap: 8px;
   box-shadow: 0 4px 0 rgba(0,0,0,.15); min-width: 0;
 }
 .coin {
-  width: 40px; height: 40px; border-radius: 999px; background: var(--gold); box-shadow: inset 0 -4px 0 var(--gold-d);
-  display: grid; place-items: center; font: 800 20px var(--display); color: var(--gold-ink); flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 999px; background: var(--gold); box-shadow: inset 0 -3px 0 var(--gold-d);
+  display: grid; place-items: center; font: 800 17px var(--display); color: var(--gold-ink); flex-shrink: 0;
 }
-.cash-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
-.cash-text b { font: 800 26px var(--display); font-variant-numeric: tabular-nums; }
-.cash-text small { font-size: 12px; font-weight: 800; color: var(--green); font-variant-numeric: tabular-nums; }
+.cash-text { display: flex; flex-direction: column; line-height: 1; min-width: 0; }
+.cash-text b { font: 800 22px var(--display); font-variant-numeric: tabular-nums; }
+.cash-text small { font-size: 11px; font-weight: 800; color: var(--green); font-variant-numeric: tabular-nums; }
 .icon-btn {
   pointer-events: auto; width: 48px; height: 48px; border-radius: 16px; background: var(--paper); border: none;
   box-shadow: 0 4px 0 rgba(0,0,0,.15); display: grid; place-items: center; color: var(--ink);
@@ -463,7 +463,7 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 .name-input { flex: 1; min-width: 0; height: 52px; border-radius: 14px; border: 3px solid var(--mint-2); background: #fff; padding: 0 14px; font: 800 20px var(--display); color: var(--ink); }
 .name-input:focus { outline: none; border-color: var(--green); }
 .name-row .icon-sm { width: 52px; height: 52px; border-radius: 14px; }
-.town-name { font: 800 11px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.town-name { font: 800 9.5px/1.1 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 .town-name:empty { display: none; }
 
 /* ---- great-uncle Walt's will: an old parchment scroll on wooden rollers, with a wax seal ---- */
@@ -501,3 +501,8 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 .scroll-sig { margin: 14px 8px 0 0; text-align: right; font: 400 34px/1 'Pinyon Script', 'Brush Script MT', cursive; color: #2b2560; transform: rotate(-4deg); }
 .wax { position: absolute; left: 14px; bottom: 6px; width: 74px; height: 74px; transform: rotate(-14deg); filter: drop-shadow(0 3px 3px rgba(60,10,10,.45)); }
 .btn.gold svg { vertical-align: -4px; margin-right: 4px; }
+
+/* the building's level, easy to see next to its name */
+.sh-name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sh-name-row b { min-width: 0; }
+.lv-pill { flex-shrink: 0; padding: 2px 9px 1px; border-radius: 999px; background: var(--gold); color: var(--gold-ink); box-shadow: inset 0 -2px 0 var(--gold-d); font: 800 15px/1.25 var(--display); font-variant-numeric: tabular-nums; }
