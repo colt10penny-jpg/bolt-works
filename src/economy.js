@@ -8,7 +8,7 @@
 // Every upgrade is a big step: output x1.5 (`mult`) for a price that rises x1.9
 // (`growth`), so upgrades are few, costly, and you feel each one.
 export const FACTORIES = [
-  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0,     baseCost: 6,     growth: 2.2,  mult: 1.5, perLevel: 1,        value: 0.4,     need: 0 },
+  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0,     first: 12, baseCost: 6,     growth: 2.2,  mult: 1.5, perLevel: 1,        value: 0.4,     need: 0 },
   { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90,    baseCost: 55,    growth: 2.15, mult: 1.5, perLevel: 0.5,      value: 3,       need: 2 },
   { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 1500,  baseCost: 900,   growth: 2.1,  mult: 1.5, perLevel: 0.25,     value: 48,      need: 2 },
   { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 27000, baseCost: 16000, growth: 2.05, mult: 1.5, perLevel: 0.125,    value: 720,     need: 2 },
@@ -132,6 +132,9 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
 
 // Cost of buying `n` levels starting at `level` (the next one costs baseCost * growth^(level-1)).
 export function upgradeCost(def, level, n = 1) {
+  // a building can have a cheap first upgrade (the Ore Mine does, so a new player has
+  // something to do straight away)
+  if (def.first && level === 1) return def.first + (n > 1 ? upgradeCost(def, 2, n - 1) : 0);
   const r = def.growth;
   return def.baseCost * Math.pow(r, level - 1) * (Math.pow(r, n) - 1) / (r - 1);
 }
@@ -161,7 +164,7 @@ export const WORLDS = [
 // a building's numbers in a given world (prices scale up in later worlds)
 export function inWorld(def, world) {
   if (!def || !world || world.cost === 1) return def;
-  return { ...def, unlock: def.unlock * world.cost, baseCost: def.baseCost * world.cost, value: def.value !== undefined ? def.value * world.value : def.value };
+  return { ...def, unlock: def.unlock * world.cost, baseCost: def.baseCost * world.cost, first: def.first ? def.first * world.cost : undefined, value: def.value !== undefined ? def.value * world.value : def.value };
 }
 export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 

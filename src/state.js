@@ -298,7 +298,7 @@ export class Game {
     const t = this.typeOf(id, run);
     if (!t) return null;
     const base = this.defOf(t, worldId);
-    return { ...base, id, type: t, extra: true, unlock: (base.unlock || 150 * (worldById(worldId).cost || 1)) * EXTRA_BUILD, baseCost: base.baseCost * EXTRA_UPGRADE };
+    return { ...base, id, type: t, extra: true, unlock: (base.unlock || 150 * (worldById(worldId).cost || 1)) * EXTRA_BUILD, baseCost: base.baseCost * EXTRA_UPGRADE, first: undefined };
   }
   extrasOf(run) { return Object.entries(run.extra || {}).filter(([id, e]) => e && e.level > 0 && run.jobs?.[id]?.kind !== 'build').map(([id, e]) => ({ ...e, id, eff: this.effOf(id, run) })); }
   // levels that are actually working: a building still under construction makes nothing yet
