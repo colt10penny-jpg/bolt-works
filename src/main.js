@@ -7,7 +7,7 @@ import {
 import { Game } from './state.js';
 import { World } from './world.js';
 import { lookText } from './upgrades.js';
-import { plotIds } from './layout.js';
+import { plotIds, TYPE_AT, PLOT_FOR } from './layout.js';
 import { ads } from './ads.js';
 import { sfx } from './sound.js';
 import { initAnalytics, track, flush } from './analytics.js';
@@ -82,16 +82,14 @@ const ICON = {
 const pctSpeed = () => Math.round((game.baseFlow().speed - 1) * 100);
 const COIN = '<span class="b-coin" aria-hidden="true">$</span>';
 const NONE = { cls: '', html: '', aria: '' };
-const canBuildSomething = () => BUILDINGS.some(f => game.canAfford(game.buildCost(f.id)));
+const canBuildHere = lot => lotReady(lot) && game.canAfford(game.buildCost(lotType(lot)));
 function labelFor(lot) {
   const id = slotAt(lot);
   if (!id) {
-    // a developed, empty lot shows a + when you can afford something to put on it.
-    // Undeveloped land just has its sign, so the map stays calm (except in a brand-new
-    // town, where the first plot gets a + so you know where to start)
-    if (game.developed(lot)) return canBuildSomething() ? { cls: 'bub plus', html: '<span aria-hidden="true">+</span>', aria: 'Empty lot. Tap to build here.' } : NONE;
-    if (!Object.keys(game.run.land).length && lot === 'q0') return { cls: 'bub plus', html: '<span aria-hidden="true">+</span>', aria: 'Open land. Tap to start your town here.' };
-    return NONE;
+    // a + on the spot for the next building, once you can afford to clear it or build on it
+    if (!lotReady(lot)) return NONE;
+    const can = game.developed(lot) ? canBuildHere(lot) : game.canAfford(game.developQuote(lot).total);
+    return can ? { cls: 'bub plus', html: '<span aria-hidden="true">+</span>', aria: `Spot for the ${def(lotType(lot)).name}. Tap to build.` } : NONE;
   }
   const d = def(id), lv = game.level(id);
   const job = game.jobOf(id);
@@ -219,45 +217,36 @@ function whatItDoes(t) {
   if (t === 'datacenter') return 'Turns power into compute that speeds up every factory';
   return prev ? `Turns ${prev.unit} into ${d.makes}` : `Digs ${d.makes}`;
 }
+// each plot has its one building. Is that building ready to go up here yet?
+const lotType = lot => TYPE_AT[lot];
+const lotReady = lot => nextSet().includes(lotType(lot));
+function lockedWhy(t) {
+  if (t === 'hq') return `Unlocks after the ${def('furnace').name}`;
+  const i = LINEAGE.indexOf(t), prev = i > 0 ? LINEAGE[i - 1] : null;
+  return prev ? `Unlocks after the ${def(prev).name}` : '';
+}
 function plotSheet(lot) {
-  const fact = 'Developing land means clearing it, levelling it and pouring a concrete pad. Roads around it get rebuilt so trucks can reach it.';
+  const t = lotType(lot), d = def(t), ready = lotReady(lot);
   const top = (title, sub) => `<div class="sh-head">
-      <span class="badge sm dashed">${ICON.plus}</span>
+      <span class="badge sm" style="background:${tint(d)}">${ICON.plus}</span>
       <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
       <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
     </div>`;
+  if (!ready) return top(`Spot for the ${d.name}`, lockedWhy(t)) + `<p class="sh-how">${whatItDoes(t)}. This spot is saved for it.</p>`;
   if (!game.developed(lot)) {
     const q = game.developQuote(lot), ok = game.canAfford(q.total);
     const worn = q.list.filter(r => r.kind === 'worn').length, fresh = q.list.length - worn;
     const roadWords = [worn ? `fix ${worn} old road${worn > 1 ? 's' : ''}` : '', fresh ? `pave ${fresh} new road${fresh > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
-    const first = !Object.keys(game.run.land).length;
-    const sub = first ? 'Start your town: clear it and build a road in' : roadWords ? `Clear it and ${roadWords}` : 'Clear it (its roads are already good)';
-    return top(first ? 'Empty land' : 'Overgrown land', sub) +
+    const sub = roadWords ? `Clear it and ${roadWords}` : 'Clear it (its roads are already good)';
+    return top(`Spot for the ${d.name}`, sub) +
       `<div class="sh-cost"><span>Land <b>$${fmtCost(q.land)}</b></span>${q.list.length ? `<span>Roads <b>$${fmtCost(q.roads)}</b></span>` : ''}</div>
       <button class="btn green" data-act="develop" ${ok ? '' : 'disabled'}>Develop · $${fmtCost(q.total)}</button>
-      ${ok ? '' : cashAdButton(q.total - game.cash)}
-      <p class="sh-note">Building next to roads you already fixed is cheaper.</p>`;
+      ${ok ? '' : cashAdButton(q.total - game.cash)}`;
   }
-  // what can go here: the next new building first, then extra copies
-  const types = BUILDINGS.filter(f => game.buildCost(f.id) < Infinity && (f.id !== 'hq' || game.built('furnace') || game.built('hq')));
-  const fresh = types.filter(f => !game.built(f.id)), more = types.filter(f => game.built(f.id));
-  // new buildings appear in order: the next factory in the chain, plus the helpers once you're going
-  const nextF = FACTORIES.find(f => !game.built(f.id));
-  // new buildings come one at a time, in one line: only the next one is offered
-  const nextNew = fresh.filter(f => nextSet().includes(f.id));
-  const row = (f, name, sub) => {
-    const cost = game.buildCost(f.id), ok = game.canAfford(cost);
-    return `<div class="hq-row"><span class="hq-dot" style="background:${tint(def(f.id))}"></span>
-      <span class="hq-name">${name}<small>${sub}</small></span>
-      <button class="btn small${ok ? ' green' : ''}" data-act="build" data-type="${f.id}" ${ok ? '' : 'disabled'}>$${fmtCost(cost)}</button></div>`;
-  };
-  const rows = nextNew.map(f => row(f, def(f.id).name, whatItDoes(f.id))).concat(more.map(f => {
-    const k = def(f.id);
-    const sup = game.supplierOf(lot, game.run, f.id, lot);
-    const here = sup ? `${Math.round(game.effOf(lot, game.run, f.id, lot) * 100)}% output here (${def(sup.id).name} ${sup.blocks <= 1 ? 'next door' : sup.blocks + ' blocks away'})` : `Adds to your ${k.unit} output`;
-    return row(f, `Another ${k.name}`, here);
-  })).join('');
-  return top('Empty lot', 'Pick what to build here') + `<div class="hq-list">${rows}</div>`;
+  const cost = game.buildCost(t), ok = game.canAfford(cost);
+  return top(`Build the ${d.name}`, whatItDoes(t)) +
+    `<button class="btn green" data-act="build" data-type="${t}" ${ok ? '' : 'disabled'}>Build · $${fmtCost(cost)}</button>
+    ${ok ? '' : cashAdButton(cost - game.cash)}`;
 }
 
 function hqSheet(d) {
@@ -318,7 +307,7 @@ function renderSheet(force = false) {
       return how + prog + `<div class="sh-row"><span>${ready} ${ready === 1 ? one(d.unit) : d.unit} ready</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + supplyLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
+    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   const key = lot + ':' + (id || '');
@@ -935,7 +924,7 @@ function hintText() {
     if (!t.opened) return `Tap the ${def('mine').name} building to see upgrades`;
     if (!t.upgraded) return `Upgrade the ${def('mine').name} to make more ${def('mine').unit}`;
     if (!game.built('furnace')) {
-      if (!emptyLot()) return `Tap overgrown land near your ${def('mine').name} to clear it and fix its roads`;
+      if (!emptyLot()) return `Tap the + to clear the spot for your ${def('furnace').name}`;
       return game.canAfford(def('furnace').unlock) ? `Build a ${def('furnace').name} on your cleared lot` : `Save $${fmtCost(def('furnace').unlock)} for a ${def('furnace').name}`;
     }
     if (game.info('furnace').starved && game.level('furnace') > 1) return `The ${def('furnace').name} is short on ${def('mine').unit}. Upgrade the ${def('mine').name}!`;
@@ -946,7 +935,7 @@ function hintText() {
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
   if (full) return `Your ${def(full.id).name} is full. Tap it to collect!`;
-  if (!emptyLot() && FACTORIES.some(f => !game.built(f.id)) && game.built('press') && game.canAfford(game.landPrice() * 2)) return (game.s.current === 'colorado' ? 'Tap overgrown land' : 'Tap empty land') + ' to clear it for your next building';
+  if (!emptyLot() && FACTORIES.some(f => !game.built(f.id)) && game.built('press') && game.canAfford(game.landPrice() * 2)) return 'Tap the + to clear the spot for your next building';
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
   if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;
@@ -955,8 +944,8 @@ function hintText() {
     return game.typeInfo('rocket')?.made > 0 ? `Your ${r.name} is putting a rocket together from ${p.unit}: ${Math.floor(game.run.rocketsBuilt * 100)}%` : `Your ${r.name} needs ${p.unit} from a ${p.name} to build a rocket`;
   }
   const nl = nextInLine(), nextF = nl ? { id: nl } : null;
-  if (nextF && !emptyLot() && plotIds(game.s.current).some(p => !game.developed(p)) && game.canAfford(game.landPrice() * 2 + def(nextF.id).unlock * 0.5)) return `Clear more land for a ${def(nextF.id).name}`;
-  if (nextF && emptyLot() && game.canAfford(def(nextF.id).unlock)) return `Build a ${def(nextF.id).name} on your empty lot`;
+  if (nextF && !emptyLot() && plotIds(game.s.current).some(p => !game.developed(p)) && game.canAfford(game.landPrice() * 2 + def(nextF.id).unlock * 0.5)) return `Tap the + to clear the spot for your ${def(nextF.id).name}`;
+  if (nextF && emptyLot() && game.canAfford(def(nextF.id).unlock)) return `Tap the + to build your ${def(nextF.id).name}`;
   if (nl === 'power' && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
   if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return `Build the ${def('datacenter').name} to turn power into speed`;
   return '';
@@ -1110,7 +1099,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   world.ready = true;
   achievementTick(true);   // anything already done counts quietly
   if (game.rebalanced) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Big update!</h2><p>Upgrades are now bigger steps: each one costs more but makes a real difference, and buildings grow as you upgrade them. Your towns were converted to the new levels, and all your worlds now share one wallet.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
-  if (game.relaidOut) openModal(`<div class="big-icon">${ICON.globe}</div><h2>New town maps</h2><p>Each world now has its own shape: Colorado is a 4×4 town, the Mojave 5×5, and the Moon base is bigger still. Your buildings and levels moved over as they were. Tap any empty land to clear it and build more.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
+  if (game.relaidOut) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A tidier town plan</h2><p>Every world now has the same plan: a 3×3 grid with one spot for each factory, and the headquarters just to the left. Your buildings moved to their spots and kept their levels. Where you had extra copies, the best one was kept.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   welcomeBack();
   maybeDaily();
   dayCheck();

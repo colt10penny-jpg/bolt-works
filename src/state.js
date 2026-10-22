@@ -4,7 +4,7 @@ import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
   isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, MAX_LEVEL, buildSecs, upgradeSecs,
 } from './economy.js';
-import { blocksApart, plotsOf, plotIds, START_PLOT } from './layout.js';
+import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR } from './layout.js';
 import { makeExits, townSegments, blockSides, segKey } from './traffic.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
@@ -43,7 +43,7 @@ export function freshState() {
     totalEarned: 0,
     cash: 0,             // one wallet shared by every world
     econ: 3,             // economy version (3 = ten big levels per building)
-    layout: 2,           // town layout version (2 = towns built plot by plot)
+    layout: 3,           // town layout version (3 = fixed 3x3 plan, one of each building)
     current: 'colorado',
     worlds: { colorado: freshRun() },
     ep: 0,               // Engineering Points (permanent, shared by every world)
@@ -119,6 +119,7 @@ export class Game {
       };
       this.#migrateEconomy(saved);
       if ((saved.layout || 1) < 2) this.#migrateLayout();
+      if ((saved.layout || 1) < 3) this.#migrateToPlan();
     } else this.#startWorld('colorado');
     this.invalidate();
   }
@@ -224,6 +225,29 @@ export class Game {
     this.relaidOut = true;
   }
 
+  // Towns move onto the fixed plan: each building to its own spot, one of each. Where a
+  // town had extra copies, the best one is kept (its level, storage and manager).
+  #migrateToPlan() {
+    for (const [w, run] of Object.entries(this.s.worlds)) {
+      const best = {};
+      for (const id of [...ALL.map(f => f.id), 'hq']) { const L = run.levels?.[id] || 0; if (L > 0) best[id] = { level: L, id }; }
+      for (const [id, e] of Object.entries(run.extra || {})) if (e?.level > 0 && (!best[e.type] || e.level > best[e.type].level)) best[e.type] = { level: e.level, id };
+      const slotsOfType = t => [t, ...Object.entries(run.extra || {}).filter(([, e]) => e?.type === t).map(([id]) => id)];
+      const nr = { ...run, levels: Object.fromEntries(ALL.map(f => [f.id, 0])), pos: {}, at: {}, extra: {}, land: {}, roads: {}, bins: {}, managers: {}, jobs: {} };
+      for (const [t, b] of Object.entries(best)) {
+        const q = PLOT_FOR[t]; if (!q) continue;
+        nr.levels[t] = b.level; nr.pos[t] = q; nr.at[q] = t; nr.land[q] = true;
+        const bins = slotsOfType(t).reduce((a, id) => a + (run.bins?.[id] || 0), 0); if (bins) nr.bins[t] = bins;
+        if (slotsOfType(t).some(id => run.managers?.[id])) nr.managers[t] = true;
+        if (run.jobs?.[b.id]) nr.jobs[t] = run.jobs[b.id];
+      }
+      this.s.worlds[w] = nr;
+      for (const q of Object.keys(nr.land)) for (const r of this.roadsFor(q, w, nr)) nr.roads[r.k] = true;
+    }
+    this.s.layout = 3;
+    this.relaidOut = true;
+  }
+
   // Saves from before the rebalance: one shared wallet, and levels squeezed onto the
   // new, steeper upgrade scale (old Lv 10 -> 4, Lv 40 -> 8, Lv 128 -> 14).
   #migrateEconomy(saved) {
@@ -319,7 +343,8 @@ export class Game {
     for (const s of this.slotsOf(FACTORIES[i - 1].id, run)) { const b = blocksApart(w, at, this.plotOf(s, run)); if (!best || b < best.blocks) best = { id: s, blocks: b }; }
     return best;
   }
-  effOf(id, run = this.run, type, at) {
+  effOf() { return 1; }   // every building has its set spot now, so distance doesn't change output
+  effOfByDistance(id, run = this.run, type, at) {
     const sup = this.supplierOf(id, run, type ?? this.typeOf(id, run), at ?? this.plotOf(id, run));
     return sup ? supplyEff(sup.blocks) : 1;
   }
@@ -390,9 +415,10 @@ export class Game {
   extraCost(type) { const b = this.defOf(type); return (b.unlock || 150 * (this.world.cost || 1)) * EXTRA_BUILD; }
   // what it costs to put a building of this type on a plot: the first of a kind is the
   // main one (normal price); more copies cost extra. Only one headquarters.
-  buildCost(type) { return this.built(type) ? (type === 'hq' ? Infinity : this.extraCost(type)) : this.defOf(type).unlock; }
+  // one of each building, each on its own spot
+  buildCost(type) { return this.built(type) ? Infinity : this.defOf(type).unlock; }
   buildOn(plot, type) {
-    if (!isPlot(plot) || !this.run.land[plot] || this.slotAt(plot)) return false;
+    if (!isPlot(plot) || !this.run.land[plot] || this.slotAt(plot) || PLOT_FOR[type] !== plot || this.built(type)) return false;
     const cost = this.buildCost(type);
     if (!isFinite(cost) || !this.canAfford(cost)) return false;
     this.s.cash -= cost;

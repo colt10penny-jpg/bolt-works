@@ -1,30 +1,30 @@
-// Where the plots are in each world, and how big each town can grow.
-//   Colorado: 4 x 4 plots.   Mojave: 5 x 5.   Moon: 5 x 5 plus a row along the
-//   back-left and the back-right (35 plots).
-// Roads run around every plot. Plot ids are q0, q1, ... (nearest the camera first).
+// Where the plots are. Every world has the same town plan: a 3 x 3 grid with one fixed
+// spot for each factory (as in version 5), plus the headquarters just left of the grid.
+// Roads run around every plot. Plot ids are q0 ... q9.
 import { BLOCK } from './traffic.js';
 
-const grid = vals => vals.flatMap(x => vals.map(z => [x, z]));
-const SHAPES = {
-  colorado: grid([-21, -7, 7, 21]),
-  desert: grid([-28, -14, 0, 14, 28]),
-  moon: [...grid([-28, -14, 0, 14, 28]), ...[-28, -14, 0, 14, 28].map(z => [-42, z]), ...[-28, -14, 0, 14, 28].map(x => [x, -42])],
+// which plot each building stands on
+export const PLOT_FOR = {
+  mine: 'q0', furnace: 'q1', press: 'q2',
+  gear: 'q3', engine: 'q4', power: 'q5',
+  rocket: 'q6', turbine: 'q7', datacenter: 'q8',
+  hq: 'q9',
 };
-const cache = {};
-export function plotsOf(world) {
-  if (cache[world]) return cache[world];
-  const list = (SHAPES[world] || SHAPES.colorado).slice().sort((a, b) => (b[0] + b[1]) - (a[0] + a[1]) || b[0] - a[0]);
-  const m = {};
-  list.forEach((p, i) => { m['q' + i] = p; });
-  return (cache[world] = m);
-}
+export const TYPE_AT = Object.fromEntries(Object.entries(PLOT_FOR).map(([t, q]) => [q, t]));
+const PLAN = {
+  q0: [14, 14], q1: [0, 14], q2: [-14, 14],
+  q3: [-14, 0], q4: [0, 0], q5: [14, 0],
+  q6: [-14, -14], q7: [0, -14], q8: [14, -14],
+  q9: [-14, 28],     // headquarters: just left of the Bolt Press, the grid's left-most corner on screen
+};
+export function plotsOf() { return PLAN; }
 export const plotIds = world => Object.keys(plotsOf(world));
 export const isPlot = id => /^q\d+$/.test(id);
 // the plot the Ore Mine starts on in Colorado (the front corner, nearest the camera)
 export const START_PLOT = 'q0';
 export function startView(world) {
   const [x, z] = plotsOf(world)[START_PLOT];
-  return [x - 5, z - 4];
+  return [x - 6, z + 1];   // the mine, with the Steel Furnace spot to its left
 }
 export function boundsOf(world) {
   const ps = Object.values(plotsOf(world));

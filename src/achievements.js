@@ -12,7 +12,6 @@ export const ACHIEVEMENTS = [
   { id: 'manager1', name: 'Middle Management', desc: 'Send your first manager to a factory', test: g => anyRun(g, r => Object.values(r.managers).some(Boolean)) },
   { id: 'manager7', name: 'Fully Staffed', desc: 'Have a manager at all 7 factories in one world', test: g => anyRun(g, r => FACTORIES.every(f => r.managers[f.id])) },
   { id: 'land1', name: 'Breaking Ground', desc: 'Clear a plot of land and fix its roads', test: g => Object.entries(g.s.worlds).some(([w, r]) => Object.keys(r.land || {}).length >= (w === 'colorado' ? 2 : 1)) },
-  { id: 'extra1', name: 'Expansion', desc: 'Build an extra factory on developed land', test: g => anyRun(g, r => Object.values(r.extra || {}).some(e => e?.level > 0)) },
   { id: 'land5', name: 'Land Baron', desc: 'Develop 5 plots in one world', test: g => anyRun(g, r => Object.keys(r.land || {}).length >= 5) },
   { id: 'power', name: 'Lights On', desc: 'Build your first power source', test: g => anyRun(g, r => r.levels.power > 0) },
   { id: 'compute', name: 'Thinking Machine', desc: 'Get compute flowing to your factories', test: g => anyRun(g, r => r.levels.datacenter > 0 && r.levels.power > 0) },
