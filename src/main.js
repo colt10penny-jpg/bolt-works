@@ -244,7 +244,7 @@ function plotSheet(lot) {
   // new buildings appear in order: the next factory in the chain, plus the helpers once you're going
   const nextF = FACTORIES.find(f => !game.built(f.id));
   // new buildings come one at a time, in one line: only the next one is offered
-  const nextNew = fresh.filter(f => f.id === nextInLine());
+  const nextNew = fresh.filter(f => nextSet().includes(f.id));
   const row = (f, name, sub) => {
     const cost = game.buildCost(f.id), ok = game.canAfford(cost);
     return `<div class="hq-row"><span class="hq-dot" style="background:${tint(def(f.id))}"></span>
@@ -912,7 +912,15 @@ function welcomeBack() {
 
 // ---------- tutorial hints ----------
 // the order new buildings unlock in
-const LINEAGE = ['mine', 'furnace', 'hq', 'press', 'gear', 'power', 'datacenter', 'engine', 'turbine', 'rocket'];
+// the order new buildings unlock in. The headquarters unlocks alongside the Bolt Press
+// (once the furnace is up) and stays on offer without holding up the rest of the line.
+const LINEAGE = ['mine', 'furnace', 'press', 'gear', 'power', 'datacenter', 'engine', 'turbine', 'rocket'];
+const nextSet = () => {
+  const out = [], nxt = LINEAGE.find(t => !game.built(t));
+  if (nxt) out.push(nxt);
+  if (!game.built('hq') && game.built('furnace')) out.push('hq');
+  return out;
+};
 const nextInLine = () => LINEAGE.find(t => !game.built(t)) || null;
 const emptyLot = () => plotIds(game.s.current).find(p => game.developed(p) && !slotAt(p));
 function hintText() {
@@ -931,7 +939,6 @@ function hintText() {
       return game.canAfford(def('furnace').unlock) ? `Build a ${def('furnace').name} on your cleared lot` : `Save $${fmtCost(def('furnace').unlock)} for a ${def('furnace').name}`;
     }
     if (game.info('furnace').starved && game.level('furnace') > 1) return `The ${def('furnace').name} is short on ${def('mine').unit}. Upgrade the ${def('mine').name}!`;
-    if (!game.built('hq')) return game.canAfford(def('hq').unlock) ? (emptyLot() ? `Build a ${def('hq').name} on your cleared lot` : `Clear another lot for a ${def('hq').name}`) : `Save $${fmtCost(def('hq').unlock)} for a ${def('hq').name}: it lets you hire managers`;
     if (!game.built('press')) return game.canAfford(def('press').unlock) ? `Build a ${def('press').name} next` : `Trucks carry ${def('mine').unit} to the ${def('furnace').name}. Keep the ${def('mine').name} ahead!`;
     if (game.s.contract && game.s.contractsDone === 0) return 'Fill the order at the top for a big bonus';
     if (game.s.contractsDone > 0 || game.built('engine')) { t.done = true; track('tutorial_step', { step: 'done' }); }
