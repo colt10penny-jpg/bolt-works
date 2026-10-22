@@ -12,7 +12,7 @@ export const FACTORIES = [
   { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90, baseCost: 45, growth: 1.17, perLevel: 0.5,      value: 3,       need: 2 },
   { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 3000, baseCost: 1500, growth: 1.17, perLevel: 0.25,     value: 48,      need: 2 },
   { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 108000, baseCost: 54000, growth: 1.17, perLevel: 0.125,    value: 720,     need: 2 },
-  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 4.2e6, baseCost: 2.1e6, growth: 1.17, perLevel: 0.0625,   value: 11200,   need: 2 },
+  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 2e6, baseCost: 1e6, growth: 1.17, perLevel: 0.0625,   value: 11200,   need: 2 },
   { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 7.2e7, baseCost: 3.6e7, growth: 1.17, perLevel: 0.03125,  value: 160000,  need: 2 },
   { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 1.56e9, baseCost: 7.8e8, growth: 1.17, perLevel: 0.015625, value: 2.24e6,  need: 2 },
 ];
@@ -21,8 +21,8 @@ export const FACTORIES = [
 // Power Plant makes electricity (MW). Data Center turns electricity into compute,
 // and compute makes every factory run faster.
 export const SUPPORT = [
-  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 1.2e6, baseCost: 600000, growth: 1.17, perLevel: 3, need: 0 },
-  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 3.2e6, baseCost: 1.6e6, growth: 1.17, perLevel: 1, need: 3, needUnit: 'MW' },
+  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 4e6, baseCost: 2e6, growth: 1.17, perLevel: 3, need: 0 },
+  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 8e6, baseCost: 4e6, growth: 1.17, perLevel: 1, need: 3, needUnit: 'MW' },
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
@@ -168,7 +168,7 @@ export const BIN_SECONDS = 600;
 
 // Building takes time: a few seconds for the first buildings, longer the further along
 // the chain a building is. Every world builds at the same speed. Upgrades are instant.
-export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 90, power: 150, datacenter: 210, engine: 300, turbine: 600, rocket: 900 };
+export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 90, engine: 150, power: 210, datacenter: 300, turbine: 600, rocket: 900 };
 export const buildSecs = type => BUILD_SECS[type] || 30;
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;

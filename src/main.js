@@ -228,19 +228,15 @@ function whatItDoes(t) {
 // each plot has its one building. Is that building ready to go up here yet?
 const lotType = lot => TYPE_AT[lot];
 const lotReady = lot => nextSet().includes(lotType(lot));
-function lockedWhy(t) {
-  if (t === 'hq') return `Unlocks after the ${def('furnace').name}`;
-  const i = LINEAGE.indexOf(t), prev = i > 0 ? LINEAGE[i - 1] : null;
-  return prev ? `Unlocks after the ${def(prev).name}` : '';
-}
 function plotSheet(lot) {
   const t = lotType(lot), d = def(t), ready = lotReady(lot);
-  const top = (title, sub) => `<div class="sh-head">
-      <span class="badge sm" style="background:${tint(d)}">${ICON.plus}</span>
-      <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
+  const top = (title, sub, color = tint(d)) => `<div class="sh-head">
+      <span class="badge sm" style="background:${color}">${ICON.plus}</span>
+      <span class="sh-title"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span>
       <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
     </div>`;
-  if (!ready) return top(`Spot for the ${d.name}`, lockedWhy(t)) + `<p class="sh-how">${whatItDoes(t)}. This spot is saved for it.</p>`;
+  // land for a building you can't build yet says nothing about what will go there
+  if (!ready) return top(game.developed(lot) ? 'Cleared land' : 'Undeveloped land', '', '#8a8f99');
   if (!game.developed(lot)) {
     const q = game.developQuote(lot), ok = game.canAfford(q.total);
     const worn = q.list.filter(r => r.kind === 'worn').length, fresh = q.list.length - worn;
@@ -923,7 +919,7 @@ function offlineModal(seconds, capped, byWorld) {
 // the order new buildings unlock in
 // the order new buildings unlock in. The headquarters unlocks alongside the Bolt Press
 // (once the furnace is up) and stays on offer without holding up the rest of the line.
-const LINEAGE = ['mine', 'furnace', 'press', 'gear', 'power', 'datacenter', 'engine', 'turbine', 'rocket'];
+const LINEAGE = ['mine', 'furnace', 'press', 'gear', 'engine', 'power', 'datacenter', 'turbine', 'rocket'];
 const nextSet = () => {
   const out = [], nxt = LINEAGE.find(t => !game.built(t));
   if (nxt) out.push(nxt);

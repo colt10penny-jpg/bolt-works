@@ -7,6 +7,8 @@ const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLOW } from './models.js';
+import './buildings.js';   // the detailed Colorado buildings replace the plain ones
+import { withDetail } from './surface.js';
 const NIGHT_LIST = () => GLOW.night;
 import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
 import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, NET } from './traffic.js';
@@ -54,6 +56,23 @@ function mergeStatic(src, cast = true) {
   return out;
 }
 
+// Plain painted parts (no glow, no glass, not see-through) that share a finish are
+// merged into one mesh whose colours live in the vertices, so a detailed building
+// still costs only a handful of draw calls.
+const PAINT = new Map();
+function paintable(mt) {
+  return mt.isMeshStandardMaterial && !mt.transparent && !mt.map && !mt.vertexColors && mt.userData.detailK != null &&
+    !mt.userData.night && !mt.userData.glow && !mt.userData.baseGlow && !(mt.emissiveIntensity > 0 && mt.emissive?.getHex());
+}
+function paintMat(mt) {
+  const key = [mt.roughness.toFixed(2), mt.metalness.toFixed(2), mt.side, mt.flatShading, mt.userData.detailK].join('|');
+  let p = PAINT.get(key);
+  if (!p) {
+    p = withDetail(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: mt.roughness, metalness: mt.metalness, side: mt.side, flatShading: mt.flatShading }), mt.userData.detailK);
+    PAINT.set(key, p);
+  }
+  return p;
+}
 // Merge every part of a building that never moves into one mesh per material
 // (far fewer draw calls). Parts the animation moves are found by running it a few
 // times and seeing what changed.
@@ -75,10 +94,18 @@ function bakeModel(m) {
   for (const o of statics) {
     const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
     for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+    geo.morphAttributes = {};
     if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
     geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
-    if (!byMat.has(o.material)) byMat.set(o.material, []);
-    byMat.get(o.material).push(geo);
+    let target = o.material;
+    if (paintable(o.material)) {
+      const c = o.material.color, n = geo.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      target = paintMat(o.material);
+    }
+    if (!byMat.has(target)) byMat.set(target, []);
+    byMat.get(target).push(geo);
   }
   for (const o of statics) o.parent.remove(o);
   for (const [material, list] of byMat) {
@@ -425,6 +452,7 @@ export class World {
       L.color = color;
       this.#decorate(L, m, id, L.tier || 0, color);
       bakeModel(m);
+      if (L.extras) bakeModel({ group: L.extras });
       this.#ageLook(m.group, L.tier || 0);
       if (L.extras) this.#ageLook(L.extras, L.tier || 0);
       this.#padLook(L, L.tier || 0);
@@ -527,19 +555,13 @@ export class World {
       it.position.set(at[0], at[1], at[2]); ex.add(it);
     });
     if (tier <= 1) {
-      // an old yard: rusty drums, a pile of tyres, oil stains and weeds pushing up
+      // an old yard: rusty drums, a pile of tyres and oil stains
       for (const [cx, cz] of corners.slice(wings, wings + 2)) {
         for (let k = 0; k < 3; k++) ex.add(cyl(0.26, 0.26, 0.62, [0x8a4b2a, 0x6b5a3a, 0x7d3f26][k], cx + (k - 1) * 0.55, 0.15, cz + (k % 2) * 0.4, 10));
         for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.12, 6, 12), mat(0x24252a)); t.rotation.x = Math.PI / 2; t.position.set(cx + 0.2, 0.27 + k * 0.22, cz - 0.9); ex.add(t); }
       }
       const stainM = this.stainM ||= new THREE.MeshBasicMaterial({ color: 0x2a2620, transparent: true, opacity: 0.35, depthWrite: false });
       for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.4 + rnd() * 0.5, 10), stainM); st.rotation.x = -Math.PI / 2; st.scale.set(1.5, 1, 1); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
-      const weedM = mat(0x6f8f3c, { flatShading: true });
-      for (let k = 0; k < 18; k++) {
-        const side = Math.floor(rnd() * 4), u = (rnd() - 0.5) * 8.6, e = 4.35;
-        const x = side < 2 ? (side ? e : -e) : u, z = side < 2 ? u : (side === 2 ? e : -e);
-        const wd = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35 + rnd() * 0.25, 4), weedM); wd.position.set(x, 0.3, z); ex.add(wd);
-      }
     }
     if (tier >= 7) {
       // a smart new campus: white planters with young trees in the free corners
@@ -572,12 +594,29 @@ export class World {
       if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
       const m0 = o.material;
       if (!m0.isMeshStandardMaterial || m0.userData.night || m0.userData.glow || m0.userData.baseGlow || (m0.emissiveIntensity > 0 && m0.emissive?.getHex())) return;
+      const vc = m0.vertexColors && o.geometry.attributes.color;
+      if (vc && !o.geometry.userData.aged) {
+        // the same change as below, done to each vertex's colour
+        o.geometry.userData.aged = true;
+        const a = vc.array, c = new THREE.Color();
+        for (let i = 0; i < a.length; i += 3) {
+          c.setRGB(a[i], a[i + 1], a[i + 2]);
+          if (age) c.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          else { c.getHSL(hsl); c.setHSL(hsl.h, Math.min(1, hsl.s * (1 + 0.35 * modern)), Math.min(0.92, hsl.l + 0.05 * modern)); }
+          a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b;
+        }
+        vc.needsUpdate = true;
+      }
       const key = m0.uuid + '|' + tier;
       let m = this.ageCache.get(key);
       if (!m) {
         m = m0.clone(); m.userData = { ...m0.userData };
         if (m0.onBeforeCompile) m.onBeforeCompile = m0.onBeforeCompile;
-        if (age) {
+        if (vc) {
+          // colour already done in the vertices; just the finish
+          m.roughness = age ? Math.min(1, m.roughness + 0.25 * age) : m.roughness + (0.3 - m.roughness) * modern * 0.85;
+          m.metalness = age ? m.metalness * (1 - age) : Math.max(m.metalness, 0.22 * modern);
+        } else if (age) {
           m.color.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
           m.roughness = Math.min(1, m.roughness + 0.25 * age); m.metalness *= 1 - age;
         } else {
@@ -619,18 +658,23 @@ export class World {
     if (NET.good.has(seg([lx - h, lz - h], [lx + h, lz - h]))) sides.add('z-');
     return sides;
   }
-  // a loading bay: open garage door the trucks come and go through
+  // a loading bay: an open dock under a light canopy on two posts, with the open door
+  // into the building at the back. It's open at the sides so the building's own front
+  // still shows.
   #bay(side, color) {
     const g = new THREE.Group();
     const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
     const W = 2.1, H = 1.75, D = 1.7;
-    g.add(box(0.16, H, D, wall, -W / 2, 0, 0), box(0.16, H, D, wall, W / 2, 0, 0));      // side walls
-    g.add(box(W + 0.16, 0.18, D + 0.1, new THREE.Color(wall).multiplyScalar(0.75).getHex(), 0, H, 0));   // roof
-    g.add(box(W, H, 0.12, 0x1e2126, 0, 0, -D / 2 + 0.06));                                 // dark inside
-    g.add(box(W - 0.1, 0.4, 0.14, 0x9aa0a8, 0, H - 0.42, D / 2 - 0.05));                    // rolled-up door
-    for (let k = 0; k < 5; k++) g.add(box(0.36, 0.12, 0.16, k % 2 ? 0x2a2a2e : 0xffc23d, -0.8 + k * 0.4, H - 0.02, D / 2 + 0.02));   // hazard stripe
+    g.add(box(W + 0.24, H + 0.16, 0.1, new THREE.Color(wall).multiplyScalar(0.7).getHex(), 0, 0, -D / 2 + 0.02));   // door frame
+    g.add(box(W, H, 0.12, 0x1e2126, 0, 0, -D / 2 + 0.08));                                // the open door
+    g.add(box(W - 0.1, 0.36, 0.08, 0x9aa0a8, 0, H - 0.38, -D / 2 + 0.16));                  // rolled-up door
+    const roof = box(W + 0.4, 0.1, D + 0.15, new THREE.Color(wall).multiplyScalar(0.8).getHex(), 0, H + 0.1, 0.05);
+    roof.rotation.x = 0.06; g.add(roof);
+    for (let k = 0; k < 6; k++) g.add(box(0.4, 0.1, 0.05, k % 2 ? 0x2a2a2e : 0xffc23d, -1.0 + k * 0.4, H + 0.06, D / 2 + 0.11));   // hazard fascia
+    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.09, H + 0.1, 0.09, 0x5b5f66, x, 0, D / 2 + 0.02));                      // posts
+    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.1, 0.5, 0.1, 0xffc23d, x, 0, D / 2 + 0.02));                                // post guards
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
-    g.add(box(0.3, 0.3, 0.06, 0xfff1cf, W / 2 + 0.1, H - 0.35, D / 2 + 0.05, { emissive: 0xffd28a, night: 2.5 }));   // light by the door
+    g.add(box(0.26, 0.08, 0.2, 0xfff1cf, 0, H, 0, { emissive: 0xffd28a, night: 2.5 }));   // a lamp under the canopy
     // the open front faces the driveway
     const dist = 2.75;
     const rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];

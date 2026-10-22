@@ -14,6 +14,7 @@ float sdNoise(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 *
 float sdLine(float v, float w){ float f = fract(v); return 1.0 - smoothstep(0.0, w, min(f, 1.0 - f)); }`;
 
 export function withDetail(m, strength = 1) {
+  m.userData.detailK = strength;   // lets building parts that share a finish be merged
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     prev?.(sh, r);
