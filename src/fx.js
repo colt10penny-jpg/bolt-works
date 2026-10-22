@@ -11,7 +11,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLOW } from './models.js';
 
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.32 }, sat: { value: 1.08 }, tint: { value: new THREE.Color(1, 1, 1) } },
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.32 }, sat: { value: 1.22 }, tint: { value: new THREE.Color(1, 1, 1) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float vignette; uniform float sat; uniform vec3 tint; varying vec2 vUv;
@@ -209,7 +209,7 @@ export class Look {
       this.grade.uniforms.vignette.value = 0.28;
       // night: a cool moonlit cast and a little less colour, without making anything darker
       this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17, 1 - n * 0.07, 1 + n * 0.12);
-      this.grade.uniforms.sat.value = 1.08 - n * 0.2 + (this.style === 'mini' ? 0.14 : 0);
+      this.grade.uniforms.sat.value = 1.22 - n * 0.2;   // rich colour in every look
     }
   }
 
