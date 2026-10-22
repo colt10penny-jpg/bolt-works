@@ -389,8 +389,9 @@ sheet.addEventListener('click', async e => {
   renderSheet(true);
 });
 
-// Tapping a coin bubble collects that building's money. Tapping the building itself
-// collects too and opens its panel (tap it again, or the ground, to close).
+// Tapping a coin bubble collects that building's money (and nothing else). Tapping the
+// building itself only opens its panel, without collecting (tap it again, or the
+// ground, to close).
 function collectAt(lot) {
   const id = slotAt(lot);
   if (!id) return 0;
@@ -405,10 +406,8 @@ function collectAt(lot) {
 }
 world.onBubble = id => {
   if (!collectAt(id)) world.select(id);
-  else if (world.selected) world.select(id);
 };
 world.onTap = id => {
-  collectAt(id);
   world.select(world.selected === id ? null : id);
 };
 
@@ -459,6 +458,7 @@ async function watch(placement, reason) {
   const ok = await ads.showRewarded(reason);
   adBusy = false;
   if (ok) { game.s.adsWatched++; track('ad_watched', { placement }); save(); }
+  else if (ads.last === 'cancelled') { track('ad_cancelled', { placement }); toast('Ad closed early, so no reward.'); }
   else toast('No ad available right now. Try again soon.');
   return ok;
 }
@@ -553,7 +553,7 @@ contractEl.addEventListener('click', () => {
       <button class="btn gold" data-act="c2">${AD} Collect 2× · $${fmt(c.reward * 2)}</button>
       <button class="btn plain" data-act="c1">Collect $${fmt(c.reward)}</button>`, async act => {
       let mult = 1;
-      if (act === 'c2' && await watch('contract_double', 'double contract reward')) mult = 2;
+      if (act === 'c2') { if (await watch('contract_double', 'double contract reward')) mult = 2; else { contractEl.click(); return; } }
       const paid = game.finishContract(mult);
       track('contract_done', { product: c.id, doubled: mult === 2 });
       sfx.reward(); toast(`+$${fmt(paid)}`);
@@ -597,7 +597,7 @@ function openLaunch() {
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch?</h2>
-    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch takes you to <b>${next.name}</b>.` : ''}</p>
+    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch takes you to <b>${next.name}</b>, where you start fresh with an Ore Mine and no money. Your money here stays here, and you can come back any time.` : ''}</p>
     <div class="stats">
       <div class="stat"><small>Engineering Points</small><b><em>+${gain}</em></b></div>
       <div class="stat"><small>Income bonus after</small><b>+${fmt(totalAfter)}%</b></div>
@@ -607,7 +607,7 @@ function openLaunch() {
     <button class="btn red" data-act="l1">Launch now</button>
     <button class="btn plain" data-act="dismiss">Not yet</button>`, async act => {
     let mult = 1;
-    if (act === 'l2' && await watch('launch_double', 'double Engineering Points')) mult = 2;
+    if (act === 'l2') { if (await watch('launch_double', 'double Engineering Points')) mult = 2; else { openLaunch(); return; } }
     if (act === 'l1' || act === 'l2') await doLaunch(mult);
   });
 }
@@ -643,13 +643,13 @@ async function doLaunch(mult) {
     openModal(`
       <div class="big-icon red">${ICON.rocket}</div>
       <h2>Welcome to ${nw.name}!</h2>
-      <p>New world, new kinds of factories. ${nw.perk}</p>
+      <p>A fresh start: an Ore Mine and an empty wallet. ${nw.perk}</p>
       <div class="stats">
         <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
         <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
       </div>
       <button class="btn green" data-act="dismiss">Start building</button>
-      <p class="small">Your ${worldById(from).short} town is saved and keeps earning. Go back any time with the map button.</p>`);
+      <p class="small">Your ${worldById(from).short} town and its money are saved there, and it keeps earning. Go back any time with the map button.</p>`);
     return;
   }
   openModal(`
@@ -700,13 +700,14 @@ function openMap() {
       : '<span class="w-lock" aria-label="Locked"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>';
     return `<div class="w-card ${here ? 'here' : ''} ${open ? '' : 'locked'} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${w.name}</b></span>
+      <span class="w-info"><b>${w.name}</b>${open ? `<small>$${fmt(game.cashIn(w.id))} in the bank</small>` : ''}</span>
       ${status}
     </div>`;
   }).join('');
   openModal(`
     <div class="big-icon">${ICON.globe}</div>
     <h2>Your worlds</h2>
+    <p class="small">Each world keeps its own money. Travel back any time.</p>
     <div class="w-list">${cards}</div>
     <button class="btn plain" data-act="dismiss">Close</button>`, act => {});
   // travel buttons live inside the modal
@@ -747,7 +748,7 @@ function maybeDaily() {
     <button class="btn gold" data-act="d2">${AD} Collect 2× · $${fmt(amount * 2)}</button>
     <button class="btn plain" data-act="d1">Collect $${fmt(amount)}</button>`, async act => {
     let mult = 1;
-    if (act === 'd2' && await watch('daily_double', 'double daily delivery')) mult = 2;
+    if (act === 'd2') { if (await watch('daily_double', 'double daily delivery')) mult = 2; else { maybeDaily(); return; } }
     const got = game.claimDaily(mult);
     track('daily_claimed', { streak, doubled: mult === 2 });
     sfx.reward(); toast(`+$${fmt(got)}`);
@@ -785,7 +786,7 @@ const PACKS = [
   { id: 'cash_l', name: 'Vault of cash', price: '$9.99', minutes: 480, floor: 2.5e5, icon: '$$$', best: true },
   { id: 'cash_xl', name: 'Bank of cash', price: '$19.99', minutes: 1440, floor: 2.5e6, icon: '$$$$' },
 ];
-const packAmount = k => Math.max(k.floor * (game.world.cost || 1), game.totalRate() * 60 * k.minutes);
+const packAmount = k => Math.max(k.floor, game.totalRate() * 60 * k.minutes);
 function openShop() {
   sfx.tap();
   const rows = PACKS.map(k => `<button class="shop-row" data-act="buy" data-pack="${k.id}">
@@ -884,25 +885,38 @@ function achievementTick(silent = false) {
 }
 
 // ---------- offline earnings ----------
+// Managers paid into each world's own wallet. The big number is this world's; money
+// made in your other worlds stays there and is mentioned underneath.
 function welcomeBack() {
   const seconds = game.offlineSeconds();
   game.s.lastSeen = Date.now();
   if (seconds < 60) return;
-  const amount = game.applyOffline(seconds);   // managers' takings go straight into the wallet
+  const byWorld = game.applyOffline(seconds);
   const capped = seconds >= GAME.offlineCapHours * 3600 - 1;
-  if (amount < 1) {
+  if (!Object.values(byWorld).some(v => v >= 1)) {
     if (Object.keys(game.s.worlds).some(w => FACTORIES.some(f => (game.s.worlds[w].bins[f.id] || 0) > 0)))
-      toast(`Your factories filled up while you were away. Tap them to collect!`);
+      toast(`Your factories filled up while you were away. Tap their coins to collect!`);
     return;
   }
+  offlineModal(seconds, capped, byWorld);
+}
+function offlineModal(seconds, capped, byWorld) {
+  const here = byWorld[game.s.current] || 0;
+  const others = Object.entries(byWorld).filter(([w, v]) => w !== game.s.current && v >= 1);
+  const elsewhere = others.length ? `<p class="small">Managers in ${others.map(([w, v]) => `${worldById(w).short} made $${fmt(v)}`).join(' and ')}, kept in ${others.length > 1 ? 'those worlds' : 'that world'}.</p>` : '';
   openModal(`
     <div class="big-icon">${ICON.moon}</div>
     <h2>Welcome back, boss</h2>
     <p>Your managers kept collecting for ${fmtTime(seconds)} while you were away${capped ? ` (they work up to ${GAME.offlineCapHours} hours)` : ''}. Factories without a manager filled their storage.</p>
-    <div class="big-num">$${fmt(amount)}</div>
-    <button class="btn gold" data-act="o2">${AD} Double it · +$${fmt(amount)}</button>
+    <div class="big-num">$${fmt(here)}</div>
+    ${elsewhere}
+    <button class="btn gold" data-act="o2">${AD} Double it all</button>
     <button class="btn plain" data-act="o1">Nice!</button>`, async act => {
-    if (act === 'o2' && await watch('offline_double', 'double offline earnings')) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)} more`); }
+    if (act !== 'o2') return;
+    if (await watch('offline_double', 'double offline earnings')) {
+      for (const [w, v] of Object.entries(byWorld)) if (v > 0) game.addEarned(v, w);
+      game.emit('change'); sfx.reward(); toast(here >= 1 ? `+$${fmt(here)} more` : 'Doubled!');
+    } else offlineModal(seconds, capped, byWorld);   // ad closed early: offer it again
   });
 }
 
@@ -941,7 +955,7 @@ function hintText() {
     return '';
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
-  if (full) return `Your ${def(full.id).name} is full. Tap it to collect!`;
+  if (full) return `Your ${def(full.id).name} is full. Tap its coin to collect!`;
   if (!emptyLot() && FACTORIES.some(f => !game.built(f.id)) && game.built('press') && game.canAfford(game.landPrice() * 2)) return 'Tap the + to clear the spot for your next building';
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
@@ -1105,7 +1119,8 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   if (brandNew) { game.s.daily = { lastDay: game.today(), streak: 0 }; track('first_open'); }
   world.ready = true;
   achievementTick(true);   // anything already done counts quietly
-  if (game.rebalanced) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Big update!</h2><p>Upgrades are now bigger steps: each one costs more but makes a real difference, and buildings grow as you upgrade them. Your towns were converted to the new levels, and all your worlds now share one wallet.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
+  if (game.rebalanced) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Big update!</h2><p>Upgrades are now bigger steps: each one costs more but makes a real difference, and buildings grow as you upgrade them. Your towns were converted to the new levels.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
+  if (game.walletsSplit) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A wallet for each world</h2><p>Money now stays in the world it was made in, and every world has the same prices. Your money is in ${game.world.short}; your other worlds keep everything you built and start their wallets at $0. You can travel back and forth any time.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   if (game.relevelled4) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Upgrades are instant again</h2><p>No more waiting, and no level limit. Buildings get a new look and 2× output at levels 5, 10, 25, 50, 100 and 250. Your buildings moved to the matching new levels.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   else if (game.relaidOut) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A tidier town plan</h2><p>Every world now has the same plan: a 3×3 grid with one spot for each factory, and the headquarters just to the left. Your buildings moved to their spots and kept their levels. Where you had extra copies, the best one was kept.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   welcomeBack();

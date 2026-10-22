@@ -174,6 +174,13 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .sim-bar i { display: block; height: 100%; width: 0; background: #6a5fa3; }
 .sim-card button { min-height: 48px; border: none; border-radius: 10px; background: #1d1838; color: #f3efff; font: 800 16px var(--body); }
 .sim-card button:disabled { opacity: .4; }
+.sim-card { position: relative; }
+.sim-card .sim-close { position: absolute; top: 8px; right: 8px; width: 40px; min-height: 40px; height: 40px; padding: 0; border-radius: 999px; background: rgba(29,24,56,.12); color: #1d1838; font: 700 26px/1 var(--body); }
+.sim-ask { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px solid #ddd6f7; }
+.sim-ask[hidden] { display: none; }
+.sim-ask-row { display: flex; gap: 8px; }
+.sim-ask-row button { flex: 1; }
+.sim-ask-row .sim-quit { background: #ddd6f7; color: #1d1838; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
@@ -245,6 +252,8 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
   box-shadow: 0 2px 0 rgba(0,0,0,.18); background: rgba(255,255,255,.94);
 }
 .lot-label.bub.cash b { font-variant-numeric: tabular-nums; }
+/* a bigger, invisible tap area around the coin (and + ) bubbles, so they're easy to hit */
+.lot-label.bub.cash::before, .lot-label.bub.plus::before { content: ''; position: absolute; inset: -16px -18px; border-radius: 999px; }
 .lot-label.bub.cash i { font-style: normal; font-size: 9px; letter-spacing: .06em; background: #d9482b; color: #fff; border-radius: 5px; padding: 1px 4px; margin-left: 2px; }
 .lot-label.bub.cash.full { background: #fff3c4; animation: bob 1s ease-in-out infinite; }
 .lot-label.bub.warn-dot::after { content: ''; position: absolute; right: -3px; top: -3px; width: 10px; height: 10px; border-radius: 999px; background: #e8862c; border: 2px solid #fff; }

@@ -26,19 +26,20 @@ export const SUPPORT = [
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
-export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 400, baseCost: 400, growth: 1, perLevel: 0, need: 0 };
+export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 50000, baseCost: 50000, growth: 1, perLevel: 0, need: 0 };
 export const BUILDINGS = [...ALL, HQ];
 // Open land around town: develop a plot, then build an extra factory of any kind on it.
 export { isPlot } from './layout.js';
 // land costs more for each plot you develop (and more in later worlds)
 // Every building now needs a plot, so land is cheap at first and rises gently.
-export const landCost = (developed, world) => 40 * Math.pow(2.3, developed) * (world?.cost || 1);
+export const landCost = developed => 40 * Math.pow(2.3, developed);
 // Roads: restoring an old one is cheaper than building one from scratch.
-export const roadCost = (kind, built, world) => (kind === 'none' ? 45 : 15) * (1 + built * 0.08) * (world?.cost || 1);
+export const roadCost = (kind, built) => 15 * (1 + built * 0.08);
 // an extra copy costs more to build and upgrade than the first one
 export const EXTRA_BUILD = 2, EXTRA_UPGRADE = 3;
-// Each manager you hire costs 10× the one before. Managers can be moved between factories.
-export const hireCost = n => 100 * Math.pow(10, n);
+// Each manager you hire costs 6× the one before, starting at $25K, so early on you
+// collect by hand for a while. Managers can be moved between factories.
+export const hireCost = n => 25000 * Math.pow(6, n);
 export const isSupport = id => SUPPORT.some(s => s.id === id);
 
 // Compute speeds up every factory, with diminishing returns:
@@ -112,7 +113,7 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
     const canFeed = d.need ? upstream / d.need : Infinity;
     const made = Math.min(cap, canFeed);
     out.push({ id: d.id, cap, made, util: cap ? made / cap : 0, starved: cap > 0 && made < cap * 0.98 });
-    income += made * d.value * (perks.value || 1) * mult;
+    income += made * d.value * mult;
     upstream = cap > 0 ? made : 0;
   }
   for (let i = 0; i < out.length; i++) {
@@ -148,19 +149,17 @@ export function epForRun(runEarned) {
 }
 export const THEMES = ['colorado', 'desert', 'moon'];
 
-// Each world is its own town. Launching a rocket unlocks the next one, and you can
-// travel back and forth. Each has a perk so it's worth revisiting.
-// Each later world costs much more to build in than it pays back, so it's a real step up.
+// Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
+// no money), and money stays in the world it was made in. Launching a rocket unlocks the
+// next world, and you can travel back and forth. Every world has the same prices; each
+// has a perk so it's worth revisiting.
 export const WORLDS = [
-  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 }, cost: 1, value: 1 },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3, value: 12 }, cost: 40, value: 12 },
-  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2, value: 150 }, cost: 1600, value: 150 },
+  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
+  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 } },
 ];
-// a building's numbers in a given world (prices scale up in later worlds)
-export function inWorld(def, world) {
-  if (!def || !world || world.cost === 1) return def;
-  return { ...def, unlock: def.unlock * world.cost, baseCost: def.baseCost * world.cost, first: def.first ? def.first * world.cost : undefined, value: def.value !== undefined ? def.value * world.value : def.value };
-}
+// a building's numbers in a given world (the same everywhere now)
+export function inWorld(def) { return def; }
 export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 
 // Factories store the money they make until you tap to collect it.
@@ -168,10 +167,9 @@ export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 export const BIN_SECONDS = 600;
 
 // Building takes time: a few seconds for the first buildings, longer the further along
-// the chain a building is. Later worlds are slower. Upgrades are instant.
+// the chain a building is. Every world builds at the same speed. Upgrades are instant.
 export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 90, power: 150, datacenter: 210, engine: 300, turbine: 600, rocket: 900 };
-const worldPace = world => 1 + 0.5 * Math.max(0, WORLDS.findIndex(w => w.id === world?.id));
-export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 30) * worldPace(world));
+export const buildSecs = type => BUILD_SECS[type] || 30;
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };

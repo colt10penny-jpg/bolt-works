@@ -63,11 +63,16 @@
 
   <div id="sim-ad" class="sim-ad" hidden role="dialog" aria-label="Test ad">
     <div class="sim-card">
+      <button class="sim-close" aria-label="Close ad">&times;</button>
       <div class="sim-label">Test ad · browser preview</div>
       <h2>Your ad plays here</h2>
       <p>On a phone, a real AdMob rewarded video plays here. Reward: <b class="sim-why"></b></p>
       <div class="sim-bar"><i></i></div>
-      <button disabled>Reward in 5s</button>
+      <button class="sim-claim" disabled>Reward in 5s</button>
+      <div class="sim-ask" hidden>
+        <p><b>Close the ad?</b> You won't get the reward.</p>
+        <div class="sim-ask-row"><button class="sim-keep">Keep watching</button><button class="sim-quit">Close ad</button></div>
+      </div>
     </div>
   </div>
 </div>
