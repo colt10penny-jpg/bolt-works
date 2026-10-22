@@ -4,8 +4,8 @@ import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
   isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, buildSecs,
 } from './economy.js';
-import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR } from './layout.js';
-import { makeExits, townSegments, blockSides, segKey } from './traffic.js';
+import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR, EXITS } from './layout.js';
+import { townSegments, blockSides, segKey } from './traffic.js';
 import { GAME } from './config.js';
 import { CUSTOMERS } from './worlds.js';
 import * as storage from './storage.js';
@@ -42,7 +42,7 @@ export function freshState() {
     lastSeen: Date.now(),
     totalEarned: 0,
     econ: 5,             // economy version (5 = a wallet per world, every world priced the same)
-    layout: 3,           // town layout version (3 = fixed 3x3 plan, one of each building)
+    layout: 4,           // town layout version (4 = fixed 3x3 plan, HQ by the mine, two roads out)
     current: 'colorado',
     worlds: { colorado: freshRun() },
     ep: 0,               // Engineering Points (permanent, shared by every world)
@@ -119,7 +119,16 @@ export class Game {
       this.#migrateEconomy(saved);
       if ((saved.layout || 1) < 2) this.#migrateLayout();
       if ((saved.layout || 1) < 3) this.#migrateToPlan();
+      if ((saved.layout || 1) < 4) this.#joinRoads();
     } else this.#startWorld('colorado');
+    this.invalidate();
+  }
+
+  // v4: the headquarters moved and there are only two roads out of town, so make sure
+  // every developed plot still has road all round and is joined to a way out
+  #joinRoads() {
+    for (const [w, run] of Object.entries(this.s.worlds)) for (const q of Object.keys(run.land || {})) for (const r of this.roadsFor(q, w, run)) run.roads[r.k] = true;
+    this.s.layout = 4;
     this.invalidate();
   }
 
@@ -127,7 +136,7 @@ export class Game {
   seedFor(w) { return [...(this.s.playerId + w)].reduce((h, c) => (h * 33 + c.charCodeAt(0)) >>> 0, 5381); }
   exitsOf(w) {
     this.exitCache ||= {};
-    return (this.exitCache[w + this.s.playerId] ||= makeExits(Object.values(plotsOf(w)), this.seedFor(w)));
+    return EXITS;
   }
   // what shape a stretch of road is in: good, worn (Colorado's old roads), or none
   roadState(k, w = this.s.current, run = this.s.worlds[w]) { return run?.roads[k] ? 'good' : w === 'colorado' ? 'worn' : 'none'; }

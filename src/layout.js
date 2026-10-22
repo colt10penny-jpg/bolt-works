@@ -1,5 +1,5 @@
 // Where the plots are. Every world has the same town plan: a 3 x 3 grid with one fixed
-// spot for each factory (as in version 5), plus the headquarters just left of the grid.
+// spot for each factory (as in version 5), plus the headquarters beside the Ore Mine.
 // Roads run around every plot. Plot ids are q0 ... q9.
 import { BLOCK } from './traffic.js';
 
@@ -15,11 +15,18 @@ const PLAN = {
   q0: [14, 14], q1: [0, 14], q2: [-14, 14],
   q3: [-14, 0], q4: [0, 0], q5: [14, 0],
   q6: [-14, -14], q7: [0, -14], q8: [14, -14],
-  q9: [-14, 28],     // headquarters: just left of the Bolt Press, the grid's left-most corner on screen
+  q9: [14, 28],      // headquarters: just below and to the left of the Ore Mine on screen
 };
 export function plotsOf() { return PLAN; }
 export const plotIds = world => Object.keys(plotsOf(world));
 export const isPlot = id => /^q\d+$/.test(id);
+// The only two roads out of town, the same in every world: one at the Ore Mine's front
+// corner (there from the start), and one into the top corner of the Gear Cutter's block,
+// which shows up once the roads round the Gear Cutter are fixed.
+export const EXITS = [
+  { node: { x: 21, z: 21 }, dir: { x: 1, z: 0 } },
+  { node: { x: -21, z: -7 }, dir: { x: -1, z: 0 } },
+];
 // the plot the Ore Mine starts on in Colorado (the front corner, nearest the camera)
 export const START_PLOT = 'q0';
 export function startView(world) {
