@@ -428,30 +428,22 @@ body.has-ep .contract { top: calc(112px + var(--sa-t)); }
 body.selecting .toast { bottom: calc(var(--sheet-h, 0px) + 12px); }
 @keyframes toastIn { from { transform: translate(-50%, 10px); opacity: 0; } }
 
-/* ---- the story tutorial: Rosie pops up at the bottom with a speech bubble ---- */
-.guide {
-  position: absolute; left: 0; right: 0; bottom: calc(var(--sa-b, 0px) + 6px); z-index: 30; pointer-events: none;
-  display: flex; align-items: flex-end; padding: 0 10px 0 0;
-}
-body.selecting .guide { bottom: calc(var(--sheet-h, 0px) - 8px); }
+/* ---- the opening tutorial: a speech bubble near the bottom and a pointing arrow ---- */
+.guide { position: absolute; top: auto; left: 12px; right: 12px; bottom: calc(var(--sa-b, 0px) + 22px); align-items: flex-end; z-index: 30; pointer-events: none; display: flex; justify-content: center; }
+body.selecting .guide { bottom: calc(var(--sheet-h, 0px) + 10px); }
 .guide[hidden] { display: none; }
-.guide-char { width: 138px; height: 193px; flex-shrink: 0; margin: 0 -4px 0 2px; pointer-events: none; filter: drop-shadow(0 4px 5px rgba(0,0,0,.22)); }
-.rosie-img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .guide-bubble {
-  pointer-events: auto; position: relative; margin: 0 0 96px -10px; padding: 12px 14px 13px; min-width: 0; flex: 1 1 0; max-width: calc(100vw - 136px); white-space: normal;
-  background: var(--paper); border-radius: 20px; box-shadow: 0 5px 0 rgba(0,0,0,.14), 0 12px 24px rgba(0,0,0,.2);
-  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: auto; padding: 12px 16px; max-width: 360px; white-space: normal; text-align: center;
+  background: var(--paper); border-radius: 18px; box-shadow: 0 5px 0 rgba(0,0,0,.14), 0 12px 24px rgba(0,0,0,.2);
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
 }
-.guide-bubble::before { content: ''; position: absolute; left: -11px; bottom: 22px; border: 11px solid transparent; border-right-color: var(--paper); border-left: 0; }
+.guide.pop .guide-bubble { animation: guide-bubble .4s cubic-bezier(.2,1.5,.4,1) both; }
+@keyframes guide-bubble { from { transform: translateY(20px) scale(.9); opacity: 0; } }
 .guide-text { font: 700 16px/1.32 var(--body); color: var(--ink); white-space: normal; overflow-wrap: anywhere; display: block; }
 .guide-text b { font-weight: 800; color: #2f6fb0; }
 .guide-count { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--mint); font: 800 13px var(--display); color: var(--ink); }
-.guide-next { align-self: flex-start; }
+.guide-next { align-self: center; }
 /* she pops up from the bottom, then keeps breathing, waving and talking */
-.guide.pop .guide-char { animation: guide-up .5s cubic-bezier(.2,1.5,.4,1) both; }
-.guide.pop .guide-bubble { animation: guide-bubble .45s .15s cubic-bezier(.2,1.5,.4,1) both; }
-@keyframes guide-up { from { transform: translateY(190px); } }
-@keyframes guide-bubble { from { transform: scale(.4); opacity: 0; transform-origin: left bottom; } }
 .tut-finger { position: absolute; left: 0; top: 0; z-index: 31; pointer-events: none; margin: -40px 0 0 -17px; }
 .tut-finger svg { display: block; filter: drop-shadow(0 3px 2px rgba(0,0,0,.3)); animation: tut-bob .8s ease-in-out infinite; }
 .tut-finger[hidden] { display: none; }
@@ -460,7 +452,7 @@ body.selecting .guide { bottom: calc(var(--sheet-h, 0px) - 8px); }
 .tut-finger.up svg { transform: rotate(180deg); animation: tut-bob-up .8s ease-in-out infinite; }
 @keyframes tut-bob-up { 0%, 100% { transform: rotate(180deg); } 50% { transform: rotate(180deg) translateY(-9px); } }
 body.tutorial #contract, body.tutorial #boost-btn, body.tutorial #hint, body.tutorial #map-btn, body.tutorial #ep { display: none !important; }
-body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 190px); }
+body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 /* naming your town */
 .name-row { display: flex; gap: 8px; align-items: center; }
 .name-input { flex: 1; min-width: 0; height: 52px; border-radius: 14px; border: 3px solid var(--mint-2); background: #fff; padding: 0 14px; font: 800 20px var(--display); color: var(--ink); }

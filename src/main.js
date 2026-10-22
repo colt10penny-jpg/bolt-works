@@ -920,19 +920,9 @@ function offlineModal(seconds, capped, byWorld) {
   });
 }
 
-// ---------- the story tutorial (see tutorial.js) and Rosie's later tips ----------
+// ---------- the short opening tutorial (see tutorial.js) ----------
 const showTown = () => { $('town').textContent = game.townName(); };
 const tutorial = createTutorial({ game, world, openModal, sfx, save, onRename: showTown });
-function laterTips() {
-  if (tutorial.active || current || world.selected) return;
-  if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock * 0.6))
-    tutorial.tip('hq', `Getting tired of tapping all those coins? Walt kept an office by the mine. Build the <b>${def('hq').name}</b> and you can hire <b>managers</b> who collect for you, even while you're away.`);
-  if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost()))
-    tutorial.tip('manager', `Your first manager is ready to hire. Send them to your busiest factory so it never fills up.`);
-  if (game.canLaunch())
-    tutorial.tip('rocket', `Look at that: a finished rocket. Walt would have cried. <b>Launch it</b> for Engineering Points (a bonus on everything you earn, forever) and a new place to build.`);
-}
-
 // ---------- tutorial hints ----------
 // the order new buildings unlock in
 // the order new buildings unlock in. The headquarters unlocks alongside the Bolt Press
@@ -1105,7 +1095,6 @@ function loop(now) {
     const showLaunch = game.canLaunch() && (game.launchPreview() >= 1 || (nxt && !game.s.worlds[nxt.id])) && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;
     const h = world.selected || showLaunch || tutorial.active ? '' : hintText();
-    laterTips();
     if (h !== hintCache) { hintCache = h; $('hint').textContent = h; $('hint').hidden = !h; }
     renderContract();
     if (!sheet.hidden) renderSheet();
