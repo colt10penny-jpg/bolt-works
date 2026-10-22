@@ -13,7 +13,7 @@ export const ADMOB = {
 export const ANALYTICS = {
   posthogKey: 'phc_uFLGLoCrwfXGmDvvvdiKNnmFHQP8yVDcYouhg5NaBMgD',
   posthogHost: 'https://us.i.posthog.com',
-  appVersion: '0.31.1',
+  appVersion: '0.31.2',
 };
 
 export const GAME = {
