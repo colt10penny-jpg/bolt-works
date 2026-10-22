@@ -164,9 +164,10 @@ function head(d, badge, title, sub) {
   return `<div class="sh-head">
       <span class="badge sm" style="background:${tint(d)}">${badge}</span>
       <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
+      ${d.fact ? `<button class="icon-sm" data-act="fact" aria-label="About this building" aria-pressed="${factOpen}">i</button>` : ''}
       <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
     </div>
-    `;
+    ${factOpen && d.fact ? `<p class="sh-fact">${d.fact}</p>` : ''}`;
 }
 // progress to the next milestone level, where the building gets a new look and 2x output
 function mileBar(lv, type) {
@@ -692,15 +693,13 @@ const WORLD_ART = {
 };
 function openMap() {
   sfx.tap();
-  const cards = WORLDS.map((w, i) => {
-    const open = !!game.s.worlds[w.id];
+  // only the worlds you've reached; later ones stay a surprise
+  const cards = WORLDS.filter(w => game.s.worlds[w.id]).map(w => {
     const here = w.id === game.s.current;
-    const status = here ? '<span class="w-here">Here</span>'
-      : open ? `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`
-      : '<span class="w-lock" aria-label="Locked"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>';
-    return `<div class="w-card ${here ? 'here' : ''} ${open ? '' : 'locked'} w-${w.id}">
+    const status = here ? '<span class="w-here">Here</span>' : `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`;
+    return `<div class="w-card ${here ? 'here' : ''} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${w.name}</b>${open ? `<small>$${fmt(game.cashIn(w.id))} in the bank</small>` : ''}</span>
+      <span class="w-info"><b>${w.name}</b><small>$${fmt(game.cashIn(w.id))} in the bank</small></span>
       ${status}
     </div>`;
   }).join('');
