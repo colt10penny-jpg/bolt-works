@@ -326,6 +326,7 @@ function renderSheet(force = false) {
   else if (force || html !== sheetKey) { const t = document.createElement('div'); t.innerHTML = html; morphKids(sheet, t); sheetKey = html; }
   sheet.hidden = false;
   const h = sheet.offsetHeight, H = window.innerHeight || 1;
+  document.documentElement.style.setProperty('--sheet-h', h + 'px');
   if (h) world.setFreeTop(Math.max(0, (H - h) / H));
 }
 
