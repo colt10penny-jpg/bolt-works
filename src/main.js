@@ -646,8 +646,9 @@ async function doLaunch(mult) {
         <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
         <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
       </div>
-      <button class="btn green" data-act="dismiss">Start building</button>
-      <p class="small">Your ${worldById(from).short} town and its money are saved there, and it keeps earning. Go back any time with the map button.</p>`);
+      <button class="btn green" data-act="start">Start building</button>
+      <p class="small">${game.townName(from)} and its money are saved in ${worldById(from).short}, and it keeps earning. Go back any time with the map button.</p>`,
+      () => tutorial.askName(nw.id), () => tutorial.askName(nw.id));
     return;
   }
   openModal(`
@@ -696,7 +697,7 @@ function openMap() {
     const status = here ? '<span class="w-here">Here</span>' : `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`;
     return `<div class="w-card ${here ? 'here' : ''} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${w.name}</b><small>$${fmt(game.cashIn(w.id))} in the bank</small></span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank</small></span>
       ${status}
     </div>`;
   }).join('');
@@ -724,7 +725,8 @@ async function doTravel(id, quiet = false) {
   rebuildTown();
   save();
   setTimeout(() => { flash.hidden = true; }, 600);
-  if (!quiet) toast(`Welcome to ${game.world.name}`);
+  showTown();
+  if (!quiet) toast(`Welcome to ${game.townName()}`);
 }
 $('map-btn').addEventListener('click', openMap);
 
@@ -826,6 +828,7 @@ function openAchievements() {
 function openSettings() {
   openModal(`
     <h2>Settings</h2>
+    <button class="btn plain toggle" data-act="rename">Town name: <b>${game.townName()}</b></button>
     <button class="btn plain toggle" data-act="sound" aria-pressed="${game.s.settings.sound}">Sound and vibration: <b>${game.s.settings.sound ? 'On' : 'Off'}</b></button>
     <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
     <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
@@ -835,6 +838,7 @@ function openSettings() {
     <button class="btn danger" data-act="reset-ask">Start over</button>
     <button class="btn plain" data-act="back">Back</button>`, async act => {
     if (act === 'back') openMenu();
+    if (act === 'rename') tutorial.askName(game.s.current, openSettings);
     if (act === 'sound') {
       game.s.settings.sound = !game.s.settings.sound;
       sfx.setEnabled(game.s.settings.sound);
@@ -862,7 +866,7 @@ function openSettings() {
       openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
-        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); tutorial.start(); }
+        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); showTown(); tutorial.start(); }
       });
     }
   });
@@ -917,9 +921,10 @@ function offlineModal(seconds, capped, byWorld) {
 }
 
 // ---------- the story tutorial (see tutorial.js) and Rosie's later tips ----------
-const tutorial = createTutorial({ game, world, def, openModal, sfx, save });
+const showTown = () => { $('town').textContent = game.townName(); };
+const tutorial = createTutorial({ game, world, openModal, sfx, save, onRename: showTown });
 function laterTips() {
-  if (tutorial.active || current) return;
+  if (tutorial.active || current || world.selected) return;
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock * 0.6))
     tutorial.tip('hq', `Getting tired of tapping all those coins? Walt kept an office by the mine. Build the <b>${def('hq').name}</b> and you can hire <b>managers</b> who collect for you, even while you're away.`);
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost()))
@@ -1079,7 +1084,7 @@ function loop(now) {
   perfCheck(now, dt);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
-  tutorial.frame();
+  tutorial.frame(!!current);
   $('cash').textContent = '$' + (game.cash < 1000 ? Math.floor(game.cash) : fmt(game.cash));
   $('rate').textContent = `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`;
   uiT -= dt;
@@ -1136,6 +1141,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   welcomeBack();
   maybeDaily();
   dayCheck();
+  showTown();
   tutorial.start();
   step('starting loop');
   ads.init();
