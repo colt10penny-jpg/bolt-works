@@ -16,7 +16,8 @@ import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
 import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, NET } from './traffic.js';
 
 import { plotsOf, boundsOf, startView } from './layout.js';
-import { STYLE, PROPS, styledWing } from './upgrades.js';
+import { STYLE, PROPS } from './upgrades.js';
+import { buildWing } from './wings.js';
 const LOT = 10;
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
 let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
@@ -687,54 +688,7 @@ export class World {
   }
   // an extra wing added by an upgrade tier
   #wing(cx, cz, color, tier, i, kind = 'brick') {
-    if (kind !== 'brick') return styledWing(kind, cx, cz, color, tier, i);
-    const g = new THREE.Group();
-    const h = 1.6 + Math.min(9, tier) * 0.32 + (tier >= 8 ? 0.7 : 0) + (i === 0 ? 0.5 : 0);
-    if (tier >= 7) {
-      // a sleek modern block: a glass box in a crisp white frame, with a light strip on top
-      g.add(box(2.2, h, 2.1, 0x9fe8ff, 0, 0, 0));
-      const white = 0xf4f4f2;
-      for (const [fx, fz] of [[-1.1, -1.05], [1.1, -1.05], [-1.1, 1.05], [1.1, 1.05]]) g.add(box(0.12, h, 0.12, white, fx, 0, fz));
-      for (let f = 1; f <= Math.floor(h / 0.85); f++) { g.add(box(2.24, 0.06, 2.14, white, 0, Math.min(h - 0.06, f * 0.85), 0)); }
-      for (const fx of [-0.37, 0.37]) { g.add(box(0.05, h, 0.04, white, fx, 0, 1.06)); g.add(box(0.05, h, 0.04, white, fx, 0, -1.06)); g.add(box(0.04, h, 0.05, white, 1.11, 0, fx)); g.add(box(0.04, h, 0.05, white, -1.11, 0, fx)); }
-      g.add(box(2.4, 0.18, 2.3, white, 0, h, 0));
-      g.add(box(2.42, 0.05, 2.32, 0x7fe0ff, 0, h + 0.18, 0, { emissive: 0x4fd0ff, night: 2.2 }));
-      const sx = Math.sign(cx), sz = Math.sign(cz);
-      if (tier >= 8) for (const [fx, fz] of [[sx * 1.05, sz * 1.0], [-sx * 1.05, sz * 1.0]]) {
-        g.add(box(0.08, 0.5, 0.08, 0x3a3f48, fx, h + 0.23, fz));
-        g.add(box(0.3, 0.2, 0.2, 0xfff1cf, fx, h + 0.69, fz, { emissive: 0xffe2a8, night: 3 }));
-      }
-      g.add(box(1.6, 0.06, 1.5, 0x5f9e3c, 0, h + 0.23, 0));
-      g.position.set(cx, 0.15, cz);
-      g.userData.top = h + 0.3;
-      return g;
-    }
-    // older wings are plain brick with small windows; mid levels get the building's colours
-    const c = tier <= 3 ? new THREE.Color(color).lerp(new THREE.Color(0x9a5a44), 0.55).multiplyScalar(0.9).getHex() : new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.12).getHex();
-    g.add(box(2.3, h, 2.2, c, 0, 0, 0));
-    g.add(box(2.45, 0.16, 2.35, new THREE.Color(color).multiplyScalar(0.6).getHex(), 0, h, 0));
-    const sx = Math.sign(cx), sz = Math.sign(cz);
-    for (let f = 0; f < Math.floor(h / 0.9); f++) {
-      g.add(box(1.7, 0.36, 0.06, 0x9fd6ff, 0, 0.45 + f * 0.85, sz * 1.11));
-      g.add(box(0.06, 0.36, 1.6, 0x9fd6ff, sx * 1.16, 0.45 + f * 0.85, 0));
-      if (tier <= 2 && f % 2 === 0) {
-        // boarded-up windows on the old wing
-        g.add(box(1.2, 0.12, 0.05, 0x7a5a3a, -0.2, 0.47 + f * 0.85, sz * 1.15), box(1.0, 0.12, 0.05, 0x6b4f33, 0.3, 0.63 + f * 0.85, sz * 1.15));
-      }
-    }
-    if (tier >= 7) {
-      // a rooftop garden
-      g.add(box(1.9, 0.08, 1.8, 0x5f9e3c, 0, h + 0.16, 0));
-      for (const [bx, bz] of [[-0.5, -0.4], [0.5, 0.45]]) { const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), mat(0x3f8f4a, { flatShading: true })); b.position.set(bx, h + 0.45, bz); g.add(b); }
-    } else if (tier >= 5) for (let k = 0; k < 2; k++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.7), mat(0x2a4f8f)); p.position.set(-0.45 + k * 0.9, h + 0.35, 0); p.rotation.x = -0.45; g.add(p); }
-    if (tier >= 8) for (const [fx, fz] of [[sx * 1.05, sz * 1.0], [-sx * 1.05, sz * 1.0]]) {
-      // floodlights on the roof edge
-      g.add(box(0.08, 0.5, 0.08, 0x3a3f48, fx, h + 0.16, fz));
-      g.add(box(0.3, 0.2, 0.2, 0xfff1cf, fx, h + 0.62, fz, { emissive: 0xffe2a8, night: 3 }));
-    }
-    g.position.set(cx, 0.15, cz);
-    g.userData.top = h + (tier >= 7 ? 0.24 : 0.16);
-    return g;
+    return buildWing({ kind, theme: this.themeName, cx, cz, color, tier, i });
   }
   #dust(L) {
     for (let i = 0; i < 14; i++) {
