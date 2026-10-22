@@ -5,24 +5,24 @@
 // fast as its supplier feeds it, so a slow supplier becomes a visible bottleneck.
 
 // The production chain, in order. Each one turns the previous product into its own.
-// Every upgrade is a big step: output x1.5 (`mult`) for a price that rises x1.9
-// (`growth`), so upgrades are few, costly, and you feel each one.
+// Output grows with the level (and doubles at each milestone); each upgrade costs
+// `growth` times the one before.
 export const FACTORIES = [
-  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0,     first: 12, baseCost: 6,     growth: 2.2,  mult: 1.5, perLevel: 1,        value: 0.4,     need: 0 },
-  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90,    baseCost: 55,    growth: 2.15, mult: 1.5, perLevel: 0.5,      value: 3,       need: 2 },
-  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 1500,  baseCost: 900,   growth: 2.1,  mult: 1.5, perLevel: 0.25,     value: 48,      need: 2 },
-  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 27000, baseCost: 16000, growth: 2.05, mult: 1.5, perLevel: 0.125,    value: 720,     need: 2 },
-  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 4.2e5, baseCost: 2.5e5, growth: 2.0,  mult: 1.5, perLevel: 0.0625,   value: 11200,   need: 2 },
-  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 4.5e6, baseCost: 2.7e6, growth: 1.95, mult: 1.5, perLevel: 0.03125,  value: 160000,  need: 2 },
-  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 5.2e7, baseCost: 3.1e7, growth: 1.9,  mult: 1.5, perLevel: 0.015625, value: 2.24e6,  need: 2 },
+  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0, baseCost: 6, growth: 1.17, perLevel: 1,        value: 0.4,     need: 0 },
+  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90, baseCost: 45, growth: 1.17, perLevel: 0.5,      value: 3,       need: 2 },
+  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 3000, baseCost: 1500, growth: 1.17, perLevel: 0.25,     value: 48,      need: 2 },
+  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 108000, baseCost: 54000, growth: 1.17, perLevel: 0.125,    value: 720,     need: 2 },
+  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 4.2e6, baseCost: 2.1e6, growth: 1.17, perLevel: 0.0625,   value: 11200,   need: 2 },
+  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 7.2e7, baseCost: 3.6e7, growth: 1.17, perLevel: 0.03125,  value: 160000,  need: 2 },
+  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 1.56e9, baseCost: 7.8e8, growth: 1.17, perLevel: 0.015625, value: 2.24e6,  need: 2 },
 ];
 
 // Support buildings: not part of the chain, they help every factory.
 // Power Plant makes electricity (MW). Data Center turns electricity into compute,
 // and compute makes every factory run faster.
 export const SUPPORT = [
-  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 150000, baseCost: 90000,  growth: 2.0, mult: 1.5, perLevel: 3, need: 0 },
-  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 400000, baseCost: 250000, growth: 2.0, mult: 1.5, perLevel: 1, need: 3, needUnit: 'MW' },
+  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 1.2e6, baseCost: 600000, growth: 1.17, perLevel: 3, need: 0 },
+  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 3.2e6, baseCost: 1.6e6, growth: 1.17, perLevel: 1, need: 3, needUnit: 'MW' },
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
@@ -59,27 +59,21 @@ export const FACTS = {
   datacenter: 'Data centers spend a big share of their electricity on cooling, because nearly all the power the servers use turns into heat.',
 };
 
-// Ten levels per building, and every one is a big step that changes how it looks.
-// The numbers above are written per "small step"; each real level is three of them:
-// output x mult^3, and the price of a level is three small steps' worth.
-export const MAX_LEVEL = 10;
-for (const d of [...FACTORIES, ...SUPPORT]) {
-  const g = d.growth;
-  d.baseCost *= 1 + g + g * g;
-  d.growth = g * g * g;
-  d.mult = Math.pow(d.mult || 1.5, 3);
-}
-// how the building looks: one new look per level (0 at level 1, 9 at level 10)
-export const lookTier = level => Math.max(0, Math.min(MAX_LEVEL, level) - 1);
-// kept for older code: every level is a milestone now
-export const MILESTONES = Array.from({ length: MAX_LEVEL - 1 }, (_, i) => i + 2);
-export const milestoneCount = lookTier;
-export const nextMilestone = level => level < MAX_LEVEL ? level + 1 : null;
+// Levels have no limit and every upgrade is instant. At 5, 10, 25, 50, 100 and 250 a
+// building gets a new look and doubles its output.
+export const MILESTONES = [5, 10, 25, 50, 100, 250];
+export const MILESTONE_BOOST = 2;
+export const milestoneCount = level => MILESTONES.filter(m => level >= m).length;
+export const nextMilestone = level => MILESTONES.find(m => level < m) ?? null;
+// how the building looks (the world has ten looks, 0 to 9; each milestone jumps to the next one)
+const LOOK_AT = [0, 2, 4, 6, 7, 8, 9];
+export const lookTier = level => level > 0 ? LOOK_AT[milestoneCount(level)] : 0;
+export const LEVEL_CAP = 10000;   // only to keep numbers finite
 
 // Units per second a building makes at a level (before the compute boost).
 export function capacity(def, level) {
   if (level <= 0) return 0;
-  return def.perLevel * Math.pow(def.mult || 1.5, level - 1);
+  return def.perLevel * level * Math.pow(MILESTONE_BOOST, milestoneCount(level));
 }
 
 // Actual flow through the town given everyone's levels.
@@ -138,7 +132,8 @@ export function upgradeCost(def, level, n = 1) {
   const r = def.growth;
   return def.baseCost * Math.pow(r, level - 1) * (Math.pow(r, n) - 1) / (r - 1);
 }
-export function maxAffordable(def, level, cash, cap = MAX_LEVEL - level) {
+export function maxAffordable(def, level, cash, cap = LEVEL_CAP - level) {
+  if (def.first && level === 1) return cash < def.first ? 0 : Math.min(cap, 1 + maxAffordable({ ...def, first: 0 }, 2, cash - def.first, cap - 1));
   const r = def.growth;
   const first = def.baseCost * Math.pow(r, level - 1);
   if (cash < first) return 0;
@@ -172,12 +167,11 @@ export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 // Storage holds this many seconds of the building's earnings.
 export const BIN_SECONDS = 600;
 
-// Building and upgrading take time: a few seconds for the first buildings, longer the
-// further along the chain a building is and the higher the level. Later worlds are slower.
+// Building takes time: a few seconds for the first buildings, longer the further along
+// the chain a building is. Later worlds are slower. Upgrades are instant.
 export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 90, power: 150, datacenter: 210, engine: 300, turbine: 600, rocket: 900 };
 const worldPace = world => 1 + 0.5 * Math.max(0, WORLDS.findIndex(w => w.id === world?.id));
 export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 30) * worldPace(world));
-export const upgradeSecs = (type, toLevel, world) => Math.max(3, Math.round((BUILD_SECS[type] || 30) * 0.6 * Math.pow(1.45, Math.max(0, toLevel - 2)) * worldPace(world)));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };

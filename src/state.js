@@ -2,7 +2,7 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
-  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, MAX_LEVEL, buildSecs, upgradeSecs,
+  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, buildSecs,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR } from './layout.js';
 import { makeExits, townSegments, blockSides, segKey } from './traffic.js';
@@ -42,7 +42,7 @@ export function freshState() {
     lastSeen: Date.now(),
     totalEarned: 0,
     cash: 0,             // one wallet shared by every world
-    econ: 3,             // economy version (3 = ten big levels per building)
+    econ: 4,             // economy version (4 = endless instant levels, new looks at milestones)
     layout: 3,           // town layout version (3 = fixed 3x3 plan, one of each building)
     current: 'colorado',
     worlds: { colorado: freshRun() },
@@ -268,7 +268,7 @@ export class Game {
     }
     // v3: ten levels per building, each one worth about three of the old ones
     if ((saved.econ || 1) < 3) {
-      const squeeze = L => L > 0 ? Math.max(1, Math.min(MAX_LEVEL, Math.ceil((L + 2) / 3))) : 0;
+      const squeeze = L => L > 0 ? Math.max(1, Math.min(10, Math.ceil((L + 2) / 3))) : 0;
       for (const r of Object.values(s.worlds)) {
         for (const f of ALL) if (r.levels[f.id] > 0 && f.id !== 'hq') r.levels[f.id] = squeeze(r.levels[f.id]);
         for (const e of Object.values(r.extra || {})) if (e?.level > 0) e.level = squeeze(e.level);
@@ -276,6 +276,20 @@ export class Game {
       s.econ = 3;
       this.invalidate();
       this.relevelled = true;
+    }
+    // v4: no level limit, instant upgrades. Ten-level buildings get the level with the
+    // same look in the new system (or close to it), and any upgrade in progress finishes.
+    if ((saved.econ || 1) < 4) {
+      const spread = [0, 1, 3, 5, 8, 10, 18, 25, 50, 75, 100];
+      const lift = L => L > 0 ? spread[Math.min(10, L)] : 0;
+      for (const r of Object.values(s.worlds)) {
+        for (const [id, j] of Object.entries(r.jobs || {})) if (j.kind === 'upgrade') { if (r.levels[id] != null) r.levels[id] = j.to; delete r.jobs[id]; }
+        for (const f of ALL) if (r.levels[f.id] > 0) r.levels[f.id] = lift(r.levels[f.id]);
+      }
+      s.econ = 4;
+      s.contract = null;
+      this.invalidate();
+      this.relevelled4 = true;
     }
   }
   async save() {
@@ -533,15 +547,15 @@ export class Game {
   buyLevels(id, n) {
     const def = this.slotDef(id);
     const lv = this.level(id);
-    if (!def || n <= 0 || lv <= 0 || lv + n > MAX_LEVEL || this.jobOf(id)) return false;
+    if (!def || n <= 0 || lv <= 0 || lv + n > LEVEL_CAP || this.jobOf(id)) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
     this.s.cash -= cost;
-    // the work takes a while; the building keeps running at its old level meanwhile
-    const now = Date.now(), secs = upgradeSecs(this.typeOf(id), lv + n, this.world);
-    (this.run.jobs ||= {})[id] = { kind: 'upgrade', from: lv, to: lv + n, start: now, end: now + secs * 1000 };
+    // upgrades are instant
+    if (isPlot(id)) this.run.extra[id].level = lv + n; else this.run.levels[id] = lv + n;
     this.s.tutorial.upgraded = true;
-    this.emit('upgrading', id, lv + n, secs);
+    this.invalidate();
+    this.emit('upgrade', id, lv, lv + n);
     this.emit('change');
     return true;
   }

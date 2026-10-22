@@ -1,7 +1,7 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
-  FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, MAX_LEVEL,
+  FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, lookTier,
   nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES,
 } from './economy.js';
 import { Game } from './state.js';
@@ -93,7 +93,7 @@ function labelFor(lot) {
   }
   const d = def(id), lv = game.level(id);
   const job = game.jobOf(id);
-  if (job) return { cls: 'bub job', html: `${ICON.hammer}<b>${fmtTime(game.jobLeft(id))}</b>`, aria: `${d.name}: ${job.kind === 'build' ? 'being built' : `upgrading to level ${job.to}`}, ${fmtTime(game.jobLeft(id))} left` };
+  if (job) return { cls: 'bub job', html: `${ICON.hammer}<b>${fmtTime(game.jobLeft(id))}</b>`, aria: `${d.name}: being built, ${fmtTime(game.jobLeft(id))} left` };
   if (id === 'hq' && lv > 0) {
     const free = game.freeManagers();
     return free > 0 ? { cls: 'bub idle', html: `${ICON.person}<b>${free}</b>`, aria: `${free} manager${free > 1 ? 's' : ''} waiting for a job. Tap to send them out.` } : { cls: '', html: '', aria: '' };
@@ -120,7 +120,7 @@ let buyMode = 1;
 let factOpen = false;
 const sheet = $('sheet');
 let sheetKey = '';
-const buyCount = () => 1;
+const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode;
 const go = (id, label) => lotOf(id) ? `<button class="link" data-goto="${lotOf(id)}">${label}</button>` : '';
 const one = u => /ss$/.test(u) ? u : /ies$/.test(u) ? u.replace(/ies$/, 'y') : u.replace(/s$/, '');
 
@@ -168,16 +168,18 @@ function head(d, badge, title, sub) {
     </div>
     `;
 }
-// what each level adds to the building (index = the level it arrives at)
+// progress to the next milestone level, where the building gets a new look and 2x output
 function mileBar(lv, type) {
-  const pct = (lv / MAX_LEVEL) * 100;
-  return `<div class="sh-mile"><span>${lv < MAX_LEVEL ? `Next: ${lookText(type, lv + 1)}` : 'Fully built'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${lv}/${MAX_LEVEL}</span></div>`;
+  const nm = nextMilestone(lv);
+  const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 1;
+  const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
+  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${lookText(type, nm)}, 2× output` : 'Fully expanded'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : `Lv ${lv}`}</span></div>`;
 }
 // work in progress: a bar, the time left, and a button to finish it now with an ad
 function jobRow(id) {
   const j = game.jobOf(id); if (!j) return '';
   const p = game.jobProgress(id);
-  const what = j.kind === 'build' ? 'Under construction' : `Upgrading to Lv ${j.to}`;
+  const what = 'Under construction';
   return `<div class="sh-job"><div class="sh-save"><span class="sh-bar"><i style="width:${(p * 100).toFixed(1)}%"></i></span><small>${what} · ${fmtTime(game.jobLeft(id))} left</small></div>
     <button class="btn gold" data-act="finish">${AD} Watch ad to finish now</button></div>`;
 }
@@ -187,11 +189,16 @@ function buildingSheet(d, id) {
 }
 function buyRow(d, lv) {
   if (game.jobOf(d.id)) return jobRow(d.id);
-  if (lv >= MAX_LEVEL) return `<div class="sh-buy"><button class="btn green" disabled>Max level</button></div>`;
-  const cost = upgradeCost(d, lv, 1);
+  const n = buyCount(d, lv);
+  const cost = upgradeCost(d, lv, n);
   const afford = game.canAfford(cost);
   return `<div class="sh-buy">
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + 1} · $${fmtCost(cost)}</button>
+      <div class="amounts sm" role="group" aria-label="How many levels to buy">
+        <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
+        <button data-buy="10" aria-pressed="${buyMode === 10}">×10</button>
+        <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max</button>
+      </div>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>+${n} · $${fmtCost(cost)}</button>
     </div>
     ${afford ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${Math.min(100, game.cash / cost * 100).toFixed(1)}%"></i></span><small>Saving up: ${Math.floor(Math.min(99, game.cash / cost * 100))}%</small></div>`}
     ${afford ? '' : cashAdButton(cost - game.cash)}`;
@@ -202,7 +209,7 @@ function managerRow(d) {
   const store = `<span>${ICON.person}<span>Storage <b>$${fmt(game.bin(d.id))}</b> / $${fmt(game.binCap(d.id))}</span></span>`;
   const H = def('hq');
   let btn;
-  if (!game.built('hq')) btn = `<small class="sh-tip">Build a ${H.name} on any lot to hire managers</small>`;
+  if (!game.built('hq')) btn = `<small class="sh-tip">Build the ${H.name} to hire managers</small>`;
   else if (game.freeManagers() > 0) btn = `<button class="btn small" data-act="assign" data-id="${d.id}">Send a manager here</button>`;
   else btn = `<button class="btn small" data-goto="${lotOf('hq')}">Hire at ${H.name}</button>`;
   return `<div class="sh-mgr">${store}${btn}</div>`;
@@ -967,16 +974,16 @@ game.on('constructed', id => {
   world.setWork(lotOf(id), null); world.bounce(lotOf(id));
   sfx.milestone(); toast(`${def(id).name} is open for business!`);
 });
-game.on('upgrading', (id, to, secs) => {
-  world.setWork(lotOf(id), 'upgrade');
-  sfx.upgrade(); toast(`Upgrading the ${def(id).name} to level ${to}: ${fmtTime(secs)}`);
-});
 game.on('upgrade', (id, before, after) => {
   world.setWork(lotOf(id), null);
-  world.setGrowth(lotOf(id), milestoneCount(after));
-  sfx.milestone();
-  toast(after >= MAX_LEVEL ? `${def(id).name} is fully built!` : `${def(id).name} level ${after}: ${lookText(game.typeOf(id), after)}!`);
-  track('milestone', { factory: id, level: after });
+  world.setGrowth(lotOf(id), lookTier(after));
+  const crossed = MILESTONES.filter(m => before < m && after >= m);
+  if (crossed.length) {
+    const m = crossed[crossed.length - 1];
+    sfx.milestone();
+    toast(`${def(id).name} level ${m}: ${lookText(game.typeOf(id), m)} and 2× output!`);
+    track('milestone', { factory: id, level: m });
+  } else sfx.upgrade();
 });
 
 function syncBuilt() {
@@ -984,7 +991,7 @@ function syncBuilt() {
     const id = slotAt(lot);
     world.setLand(lot, game.developed(lot));
     world.setBuilt(lot, !!id, id ? def(id) : null);
-    world.setGrowth(lot, id ? milestoneCount(game.level(id)) : 0);
+    world.setGrowth(lot, id ? lookTier(game.level(id)) : 0);
     world.setWork(lot, id ? game.jobOf(id)?.kind || null : null);
   }
 }
@@ -1099,7 +1106,8 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   world.ready = true;
   achievementTick(true);   // anything already done counts quietly
   if (game.rebalanced) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Big update!</h2><p>Upgrades are now bigger steps: each one costs more but makes a real difference, and buildings grow as you upgrade them. Your towns were converted to the new levels, and all your worlds now share one wallet.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
-  if (game.relaidOut) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A tidier town plan</h2><p>Every world now has the same plan: a 3×3 grid with one spot for each factory, and the headquarters just to the left. Your buildings moved to their spots and kept their levels. Where you had extra copies, the best one was kept.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
+  if (game.relevelled4) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Upgrades are instant again</h2><p>No more waiting, and no level limit. Buildings get a new look and 2× output at levels 5, 10, 25, 50, 100 and 250. Your buildings moved to the matching new levels.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
+  else if (game.relaidOut) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A tidier town plan</h2><p>Every world now has the same plan: a 3×3 grid with one spot for each factory, and the headquarters just to the left. Your buildings moved to their spots and kept their levels. Where you had extra copies, the best one was kept.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   welcomeBack();
   maybeDaily();
   dayCheck();

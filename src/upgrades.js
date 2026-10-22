@@ -1,6 +1,6 @@
 // What each kind of building gains as it levels up, so every factory grows in its own
-// way: its own style of extra wing, and its own rooftop and yard gear at levels 3, 5, 7
-// and 8 (level 10 always adds the golden beacon).
+// way: its own style of extra wing, and its own rooftop and yard gear. The world has ten
+// looks (tiers 0-9); the milestone levels 5, 10, 25, 50, 100 and 250 step through them.
 import * as THREE from 'three';
 import { box, cyl, mat } from './models.js';
 
@@ -239,6 +239,7 @@ const PROP_NAMES = { conveyor: 'an ore conveyor', silo: 'a storage silo', floodt
 const WING_NAMES = { brick: 'wing', sawtooth: 'workshop', hangar: 'hangar', silo: 'pair of silos', yard: 'switchyard', server: 'server hall' };
 export function lookText(type, level) {
   const st = STYLE[type] || STYLE.default, w = WING_NAMES[st.wing];
-  return { 2: `a new ${w}`, 3: PROP_NAMES[st.props[0]], 4: `a second ${w}`, 5: PROP_NAMES[st.props[1]], 6: `a third ${w}`, 7: PROP_NAMES[st.props[2]],
-    8: `${PROP_NAMES[st.props[3]]} and a sleek new finish`, 9: 'taller, brighter buildings', 10: 'a golden beacon' }[level] || '';
+  // the look changes at the milestone levels
+  return { 5: `a new ${w} and ${PROP_NAMES[st.props[0]]}`, 10: `a second ${w} and ${PROP_NAMES[st.props[1]]}`, 25: `a third ${w} and ${PROP_NAMES[st.props[2]]}`,
+    50: `${PROP_NAMES[st.props[3]]} and a sleek new finish`, 100: 'taller, brighter buildings', 250: 'a golden beacon' }[level] || '';
 }
