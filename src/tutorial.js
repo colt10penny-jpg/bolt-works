@@ -6,38 +6,10 @@
 // Progress lives in game.s.tutorial.step (a number; -1 means finished or skipped), so
 // closing the app mid-way picks up where you left off.
 import { track } from './analytics.js';
+import { renderRosie } from './rosie3d.js';
 
 export const UNCLE = 'Walter "Walt" Bolton';
 
-// Rosie, waist up: hard hat, orange safety vest over a blue shirt, waving
-const ROSIE = `<svg class="rosie" viewBox="0 0 160 200" aria-hidden="true">
-  <g class="rosie-body">
-    <path d="M18 200c2-44 26-66 62-66s60 22 62 66z" fill="#2f6fb0"/>
-    <path d="M40 200l4-50c10-10 22-14 36-14s26 4 36 14l4 50z" fill="#ff8a2a"/>
-    <path d="M44 166h72M42 182h76" stroke="#f4f4f2" stroke-width="6"/>
-    <path d="M66 138l14 18 14-18" fill="#3c7fc4"/>
-    <rect x="52" y="150" width="16" height="12" rx="3" fill="#ffc23d"/><text x="60" y="160" font-size="9" font-family="sans-serif" font-weight="800" text-anchor="middle" fill="#5a4300">B</text>
-    <g class="rosie-wave">
-      <path d="M128 150c10-14 16-30 18-46" stroke="#2f6fb0" stroke-width="16" stroke-linecap="round" fill="none"/>
-      <circle cx="147" cy="98" r="11" fill="#ffc23d"/><path d="M140 90l-4-8M146 87l-1-9M152 88l2-8" stroke="#ffc23d" stroke-width="5" stroke-linecap="round"/>
-    </g>
-  </g>
-  <g class="rosie-head">
-    <rect x="70" y="112" width="20" height="18" rx="6" fill="#d9a07a"/>
-    <path d="M44 84c-4-26 10-40 36-40s40 14 36 40c-2 18-12 34-36 34S46 102 44 84z" fill="#e8b48f"/>
-    <path d="M44 80c-6-6-6-16 0-22l10 6zM116 80c6-6 6-16 0-22l-10 6z" fill="#cfcfd4"/>
-    <circle cx="62" cy="94" r="7" fill="#f2a08a" opacity=".55"/><circle cx="98" cy="94" r="7" fill="#f2a08a" opacity=".55"/>
-    <path d="M58 72q7-5 13 0M89 72q7-5 13 0" stroke="#8a8a90" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <g class="rosie-eyes"><ellipse cx="66" cy="83" rx="4" ry="5" fill="#2a2a2e"/><ellipse cx="94" cy="83" rx="4" ry="5" fill="#2a2a2e"/><circle cx="67.5" cy="81" r="1.4" fill="#fff"/><circle cx="95.5" cy="81" r="1.4" fill="#fff"/></g>
-    <path d="M78 86q2 6 5 6" stroke="#c98a6a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    <path class="rosie-smile" d="M68 102q12 10 24 0" stroke="#8a4b3a" stroke-width="3.2" fill="none" stroke-linecap="round"/>
-    <path class="rosie-talk" d="M70 100q10 14 20 0z" fill="#7a3a2e"/>
-    <path d="M34 62c0-24 20-38 46-38s46 14 46 38z" fill="#ffc23d"/>
-    <path d="M28 60h104q4 0 4 5t-4 5H28q-4 0-4-5t4-5z" fill="#e0a51e"/>
-    <rect x="74" y="24" width="12" height="36" rx="5" fill="#e0a51e"/>
-    <path d="M44 44q8-12 22-16" stroke="#fff3c8" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>
-  </g>
-</svg>`;
 const KEY = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3m-3 3 2.5 2.5M14.5 8.5l2 2"/></svg>';
 const DICE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>';
 const SIGN = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M4 5h13l3 3-3 3H4z"/><path d="M20 13H7l-3 3 3 3h13z"/></svg>';
@@ -52,8 +24,21 @@ export function createTutorial(ctx) {
   const { game, world, openModal, sfx, save, onRename } = ctx;
   const $ = id => document.getElementById(id);
   const guide = $('guide'), bubble = $('guide-bubble'), finger = $('tut-finger');
-  $('guide-char').innerHTML = ROSIE;
-  const t = game.s.tutorial;
+  // Rosie is drawn in 3D once, the first time she's needed, into a few still frames
+  let frames = null;
+  const img = document.createElement('img'); img.alt = ''; img.className = 'rosie-img'; $('guide-char').appendChild(img);
+  const ensureFrames = () => { if (!frames) { try { frames = renderRosie(300, 420); } catch { frames = {}; } img.src = frames.idle0 || ''; } };
+  let anim = 0, animUntil = 0, talkUntil = 0;
+  function animate() {
+    clearInterval(anim);
+    anim = setInterval(() => {
+      const now = performance.now(), k = Math.floor(now / 150);
+      if (!frames?.idle0) return;
+      const talk = now < talkUntil, wave = now < animUntil && Math.floor(now / 300) % 2 === 1;
+      img.src = talk ? (k % 2 ? frames[wave ? 'talk1' : 'talk0'] : frames[wave ? 'idle1' : 'idle0']) : frames[wave ? 'idle1' : 'idle0'];
+      if (now > animUntil && now > talkUntil) { clearInterval(anim); img.src = frames.idle0; }
+    }, 75);
+  }
   const st = () => game.s.tutorial.step;
   const town = () => game.townName();
   const setStep = n => {
@@ -81,7 +66,7 @@ export function createTutorial(ctx) {
       say: () => `This is <b>your Ore Mine</b>! It digs up ore and makes money. Tap the <b>coin</b> to collect it.`,
       enter: () => { const b = game.run.bins; b.mine = Math.max(b.mine || 0, 12); },
       point: () => label(mineLot()),
-      done: () => t.collected,
+      done: () => game.s.tutorial.collected,
     },
     {
       id: 'open',
@@ -158,8 +143,12 @@ export function createTutorial(ctx) {
       bubble.innerHTML = full; lastHtml = full;
       guide.hidden = false;
       if (fresh) { guide.classList.remove('pop'); void guide.offsetWidth; guide.classList.add('pop'); }
-      // she talks for a moment whenever she says something new
-      guide.classList.add('talking'); clearTimeout(show.t); show.t = setTimeout(() => guide.classList.remove('talking'), 1300);
+      // she waves when she pops up, and talks for a moment whenever she says something new
+      ensureFrames();
+      const now = performance.now();
+      if (fresh) animUntil = now + 1500;
+      talkUntil = now + 1300;
+      animate();
     }
   }
   function hide() {

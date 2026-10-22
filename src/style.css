@@ -435,10 +435,10 @@ body.selecting .toast { bottom: calc(var(--sheet-h, 0px) + 12px); }
 }
 body.selecting .guide { bottom: calc(var(--sheet-h, 0px) - 8px); }
 .guide[hidden] { display: none; }
-.guide-char { width: 132px; height: 165px; flex-shrink: 0; margin-bottom: -6px; pointer-events: none; filter: drop-shadow(0 6px 6px rgba(0,0,0,.25)); }
-.guide-char svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.guide-char { width: 138px; height: 193px; flex-shrink: 0; margin: 0 -4px 0 2px; pointer-events: none; filter: drop-shadow(0 4px 5px rgba(0,0,0,.22)); }
+.rosie-img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .guide-bubble {
-  pointer-events: auto; position: relative; margin: 0 0 70px -6px; padding: 12px 14px 13px; min-width: 0; flex: 1 1 0; max-width: calc(100vw - 136px); white-space: normal;
+  pointer-events: auto; position: relative; margin: 0 0 96px -10px; padding: 12px 14px 13px; min-width: 0; flex: 1 1 0; max-width: calc(100vw - 136px); white-space: normal;
   background: var(--paper); border-radius: 20px; box-shadow: 0 5px 0 rgba(0,0,0,.14), 0 12px 24px rgba(0,0,0,.2);
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -450,19 +450,8 @@ body.selecting .guide { bottom: calc(var(--sheet-h, 0px) - 8px); }
 /* she pops up from the bottom, then keeps breathing, waving and talking */
 .guide.pop .guide-char { animation: guide-up .5s cubic-bezier(.2,1.5,.4,1) both; }
 .guide.pop .guide-bubble { animation: guide-bubble .45s .15s cubic-bezier(.2,1.5,.4,1) both; }
-@keyframes guide-up { from { transform: translateY(170px); } }
+@keyframes guide-up { from { transform: translateY(190px); } }
 @keyframes guide-bubble { from { transform: scale(.4); opacity: 0; transform-origin: left bottom; } }
-.rosie-body, .rosie-head { animation: rosie-breathe 3s ease-in-out infinite; transform-origin: 80px 200px; }
-.rosie-head { animation-delay: -.2s; }
-@keyframes rosie-breathe { 50% { transform: translateY(2px) scaleY(.99); } }
-.rosie-wave { transform-origin: 130px 152px; animation: rosie-wave 2.4s ease-in-out infinite; }
-@keyframes rosie-wave { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-14deg); } 80% { transform: rotate(8deg); } 90% { transform: rotate(-10deg); } }
-.rosie-eyes { animation: rosie-blink 4s infinite; transform-origin: 80px 83px; }
-@keyframes rosie-blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
-.rosie-talk { opacity: 0; }
-.guide.talking .rosie-talk { animation: rosie-talk .22s steps(1) infinite; }
-.guide.talking .rosie-smile { animation: rosie-talk .22s steps(1) infinite reverse; }
-@keyframes rosie-talk { 0% { opacity: 1; } 50% { opacity: 0; } }
 .tut-finger { position: absolute; left: 0; top: 0; z-index: 31; pointer-events: none; margin: -40px 0 0 -17px; }
 .tut-finger svg { display: block; filter: drop-shadow(0 3px 2px rgba(0,0,0,.3)); animation: tut-bob .8s ease-in-out infinite; }
 .tut-finger[hidden] { display: none; }
