@@ -125,21 +125,28 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
   return { per: out, support, speed, compute, income };
 }
 
-// Cost of buying `n` levels starting at `level` (the next one costs baseCost * growth^(level-1)).
-export function upgradeCost(def, level, n = 1) {
-  // a building can have a cheap first upgrade (the Ore Mine does, so a new player has
-  // something to do straight away)
-  if (def.first && level === 1) return def.first + (n > 1 ? upgradeCost(def, 2, n - 1) : 0);
-  const r = def.growth;
-  return def.baseCost * Math.pow(r, level - 1) * (Math.pow(r, n) - 1) / (r - 1);
+// Upgrade prices. Each level costs `growth` times the one before up to level KNEE, which
+// sets the pace of a new town; after that prices rise more gently (LATE_GROWTH per
+// level) so the long climb to 100 and 250 stays within reach.
+export const KNEE = 25, LATE_GROWTH = 1.08;
+// price of going from `level` to level + 1
+export function levelPrice(def, level) {
+  const g = def.growth;
+  return level <= KNEE ? def.baseCost * Math.pow(g, level - 1) : def.baseCost * Math.pow(g, KNEE - 1) * Math.pow(LATE_GROWTH, level - KNEE);
 }
+const geo = (a, r, n) => n <= 0 ? 0 : a * (Math.pow(r, n) - 1) / (r - 1);
+// Cost of buying `n` levels starting at `level`.
+export function upgradeCost(def, level, n = 1) {
+  if (def.first && level === 1) return def.first + (n > 1 ? upgradeCost(def, 2, n - 1) : 0);
+  const early = Math.max(0, Math.min(n, KNEE + 1 - level));   // levels bought at the early rate
+  return geo(levelPrice(def, level), def.growth, early) + geo(levelPrice(def, level + early), LATE_GROWTH, n - early);
+}
+// how many levels you can buy with `cash`
 export function maxAffordable(def, level, cash, cap = LEVEL_CAP - level) {
-  if (def.first && level === 1) return cash < def.first ? 0 : Math.min(cap, 1 + maxAffordable({ ...def, first: 0 }, 2, cash - def.first, cap - 1));
-  const r = def.growth;
-  const first = def.baseCost * Math.pow(r, level - 1);
-  if (cash < first) return 0;
-  const n = Math.floor(Math.log(cash * (r - 1) / first + 1) / Math.log(r));
-  return Math.min(cap, Math.max(0, n));
+  if (cap <= 0 || cash < upgradeCost(def, level, 1)) return 0;
+  let lo = 1, hi = Math.max(1, cap);
+  while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (upgradeCost(def, level, mid) <= cash) lo = mid; else hi = mid - 1; }
+  return lo;
 }
 
 // ---- Rocket launches (prestige) ----
