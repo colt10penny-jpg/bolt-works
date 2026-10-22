@@ -44,7 +44,8 @@ const def = id => {
   const base = game.defOf(id); return base ? { ...base, ...skin(game.s.current, id), type: id } : base;
 };
 world.typeOf = lot => { const s = slotAt(lot); return s ? game.typeOf(s) : null; };
-world.lotsOf = type => game.slotsOf(type).map(lotOf).filter(Boolean);
+world.lotsOf = type => game.slotsOf(type).filter(s => game.jobOf(s)?.kind !== 'build').map(lotOf).filter(Boolean);
+world.workOf = lot => { const s = slotAt(lot); return s && game.jobOf(s) ? game.jobProgress(s) : null; };
 world.roadInfo = () => ({ good: new Set(Object.keys(game.run.roads)), exits: game.exitsOf(game.s.current), state: k => game.roadState(k) });
 const typeOf = id => game.typeOf(id);
 if (location.search.includes('debug')) import('./traffic.js').then(m => Object.assign(window, { __game: game, __world: world, __net: m.NET, __tm: m }));
@@ -66,6 +67,7 @@ const ICON = {
   chip: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg>',
   person: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/></svg>',
   globe: '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
+  hammer: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4l6 6-3 3-6-6zM11 7l-8 8 3 3 8-8"/></svg>',
   hq: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V5l8-2v18M12 8h8v13M4 21h17M7 8h2M7 12h2M7 16h2M15 12h2M15 16h2"/></svg>',
   trophy: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1.5A3.5 3.5 0 0 0 7.5 11M17 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5M12 14v3.5M8.5 21h7M9.5 17.5h5V21h-5z"/></svg>',
   gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
@@ -92,6 +94,8 @@ function labelFor(lot) {
     return NONE;
   }
   const d = def(id), lv = game.level(id);
+  const job = game.jobOf(id);
+  if (job) return { cls: 'bub job', html: `${ICON.hammer}<b>${fmtTime(game.jobLeft(id))}</b>`, aria: `${d.name}: ${job.kind === 'build' ? 'being built' : `upgrading to level ${job.to}`}, ${fmtTime(game.jobLeft(id))} left` };
   if (id === 'hq' && lv > 0) {
     const free = game.freeManagers();
     return free > 0 ? { cls: 'bub idle', html: `${ICON.person}<b>${free}</b>`, aria: `${free} manager${free > 1 ? 's' : ''} waiting for a job. Tap to send them out.` } : { cls: '', html: '', aria: '' };
@@ -162,17 +166,29 @@ function head(d, badge, title, sub) {
   return `<div class="sh-head">
       <span class="badge sm" style="background:${tint(d)}">${badge}</span>
       <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
-      <button class="icon-sm" data-act="fact" aria-label="How it works" aria-pressed="${factOpen}">i</button>
       <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
     </div>
-    ${factOpen ? `<p class="sh-fact">${d.fact}</p>` : ''}`;
+    `;
 }
 // what each level adds to the building (index = the level it arrives at)
 function mileBar(lv, type) {
   const pct = (lv / MAX_LEVEL) * 100;
   return `<div class="sh-mile"><span>${lv < MAX_LEVEL ? `Next: ${lookText(type, lv + 1)}` : 'Fully built'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${lv}/${MAX_LEVEL}</span></div>`;
 }
+// work in progress: a bar, the time left, and a button to finish it now with an ad
+function jobRow(id) {
+  const j = game.jobOf(id); if (!j) return '';
+  const p = game.jobProgress(id);
+  const what = j.kind === 'build' ? 'Under construction' : `Upgrading to Lv ${j.to}`;
+  return `<div class="sh-job"><div class="sh-save"><span class="sh-bar"><i style="width:${(p * 100).toFixed(1)}%"></i></span><small>${what} · ${fmtTime(game.jobLeft(id))} left</small></div>
+    <button class="btn gold" data-act="finish">${AD} Watch ad to finish now</button></div>`;
+}
+function buildingSheet(d, id) {
+  return head(d, ICON.factory, d.name, `Being built · opens in ${fmtTime(game.jobLeft(id))}`) +
+    `<p class="sh-how">Builders are putting up your ${d.name}. It starts working as soon as it's finished.</p>` + jobRow(id);
+}
 function buyRow(d, lv) {
+  if (game.jobOf(d.id)) return jobRow(d.id);
   if (lv >= MAX_LEVEL) return `<div class="sh-buy"><button class="btn green" disabled>Max level</button></div>`;
   const cost = upgradeCost(d, lv, 1);
   const afford = game.canAfford(cost);
@@ -208,9 +224,8 @@ function plotSheet(lot) {
   const top = (title, sub) => `<div class="sh-head">
       <span class="badge sm dashed">${ICON.plus}</span>
       <span class="sh-title"><b>${title}</b><small>${sub}</small></span>
-      <button class="icon-sm" data-act="fact" aria-label="How it works" aria-pressed="${factOpen}">i</button>
       <button class="close sm" data-act="close" aria-label="Close">${ICON.close}</button>
-    </div>${factOpen ? `<p class="sh-fact">${fact}</p>` : ''}`;
+    </div>`;
   if (!game.developed(lot)) {
     const q = game.developQuote(lot), ok = game.canAfford(q.total);
     const worn = q.list.filter(r => r.kind === 'worn').length, fresh = q.list.length - worn;
@@ -228,10 +243,8 @@ function plotSheet(lot) {
   const fresh = types.filter(f => !game.built(f.id)), more = types.filter(f => game.built(f.id));
   // new buildings appear in order: the next factory in the chain, plus the helpers once you're going
   const nextF = FACTORIES.find(f => !game.built(f.id));
-  // only the next factory in the chain is new; helper buildings unlock along the way:
-  // headquarters after the furnace, power after the gear cutter, the data center after power
-  const helperReady = { hq: game.built('furnace'), power: game.built('gear'), datacenter: game.built('power') };
-  const nextNew = fresh.filter(f => f === nextF || helperReady[f.id]);
+  // new buildings come one at a time, in one line: only the next one is offered
+  const nextNew = fresh.filter(f => f.id === nextInLine());
   const row = (f, name, sub) => {
     const cost = game.buildCost(f.id), ok = game.canAfford(cost);
     return `<div class="hq-row"><span class="hq-dot" style="background:${tint(def(f.id))}"></span>
@@ -277,6 +290,8 @@ function renderSheet(force = false) {
   const t = id ? typeOf(id) : null;
   if (!id) {
     html = plotSheet(lot);
+  } else if (game.jobOf(id)?.kind === 'build') {
+    html = buildingSheet(d, id);
   } else if (lv > 0 && id === 'hq') {
     html = hqSheet(d);
   } else if (lv > 0 && isSupport(t)) {
@@ -352,13 +367,16 @@ sheet.addEventListener('click', async e => {
   if (act === 'develop' && game.develop(lot)) { sfx.build(); toast('Land cleared and roads fixed! Now build something on it.'); track('land_developed', { plots: Object.keys(game.run.land).length }); }
   if (act === 'build') {
     const type = b.dataset.type, again = game.built(type);
-    if (game.buildOn(lot, type)) { toast(`${def(slotAt(lot)).name} is open for business!`); if (again) track('extra_built', { type }); }
+    if (game.buildOn(lot, type)) { toast(`Building the ${def(slotAt(lot)).name}: ${fmtTime(game.jobLeft(slotAt(lot)))}`); if (again) track('extra_built', { type }); }
   }
   if (act === 'cash-ad') {
     const amount = cashAdAmount(+b.dataset.short || 0);
     if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`); }
   }
   if (act === 'launch') openLaunch();
+  if (act === 'finish' && id && game.jobOf(id)) {
+    if (await watch('finish_job', 'finish the work now')) { game.finishNow(id); sfx.reward(); }
+  }
   if (act === 'demolish' && id) {
     const d = def(id);
     openModal(`<div class="big-icon">${ICON.factory}</div><h2>Demolish the ${d.name}?</h2>
@@ -843,7 +861,7 @@ function openSettings() {
       openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
-        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); toast('Fresh start!'); }
+        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); toast('Fresh start!'); }
       });
     }
   });
@@ -885,6 +903,9 @@ function welcomeBack() {
 }
 
 // ---------- tutorial hints ----------
+// the order new buildings unlock in
+const LINEAGE = ['mine', 'furnace', 'hq', 'press', 'gear', 'power', 'datacenter', 'engine', 'turbine', 'rocket'];
+const nextInLine = () => LINEAGE.find(t => !game.built(t)) || null;
 const emptyLot = () => plotIds(game.s.current).find(p => game.developed(p) && !slotAt(p));
 function hintText() {
   // a brand-new town on a new world: nothing here yet
@@ -902,6 +923,7 @@ function hintText() {
       return game.canAfford(def('furnace').unlock) ? `Build a ${def('furnace').name} on your cleared lot` : `Save $${fmtCost(def('furnace').unlock)} for a ${def('furnace').name}`;
     }
     if (game.info('furnace').starved && game.level('furnace') > 1) return `The ${def('furnace').name} is short on ${def('mine').unit}. Upgrade the ${def('mine').name}!`;
+    if (!game.built('hq')) return game.canAfford(def('hq').unlock) ? (emptyLot() ? `Build a ${def('hq').name} on your cleared lot` : `Clear another lot for a ${def('hq').name}`) : `Save $${fmtCost(def('hq').unlock)} for a ${def('hq').name}: it lets you hire managers`;
     if (!game.built('press')) return game.canAfford(def('press').unlock) ? `Build a ${def('press').name} next` : `Trucks carry ${def('mine').unit} to the ${def('furnace').name}. Keep the ${def('mine').name} ahead!`;
     if (game.s.contract && game.s.contractsDone === 0) return 'Fill the order at the top for a big bonus';
     if (game.s.contractsDone > 0 || game.built('engine')) { t.done = true; track('tutorial_step', { step: 'done' }); }
@@ -917,10 +939,10 @@ function hintText() {
     const r = def('rocket'), p = def('turbine');
     return game.typeInfo('rocket')?.made > 0 ? `Your ${r.name} is putting a rocket together from ${p.unit}: ${Math.floor(game.run.rocketsBuilt * 100)}%` : `Your ${r.name} needs ${p.unit} from a ${p.name} to build a rocket`;
   }
-  const nextF = FACTORIES.find(f => !game.built(f.id));
+  const nl = nextInLine(), nextF = nl ? { id: nl } : null;
   if (nextF && !emptyLot() && plotIds(game.s.current).some(p => !game.developed(p)) && game.canAfford(game.landPrice() * 2 + def(nextF.id).unlock * 0.5)) return `Clear more land for a ${def(nextF.id).name}`;
   if (nextF && emptyLot() && game.canAfford(def(nextF.id).unlock)) return `Build a ${def(nextF.id).name} on your empty lot`;
-  if (!game.built('power') && game.built('gear') && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
+  if (nl === 'power' && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
   if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return `Build the ${def('datacenter').name} to turn power into speed`;
   return '';
 }
@@ -930,13 +952,23 @@ const popAcc = {};
 const popT = {};
 game.on('built', id => {
   world.setBuilt(lotOf(id), true, def(id));
+  world.setWork(lotOf(id), game.jobOf(id)?.kind || null);
   sfx.build();
   track('factory_built', { factory: id, launches: game.s.launches });
 });
 // managers drive to work (and back) by car
 game.on('manager', id => world.sendManager(lotOf('hq'), lotOf(id)));
 game.on('recall', id => world.sendManager(lotOf(id), lotOf('hq')));
+game.on('constructed', id => {
+  world.setWork(lotOf(id), null); world.bounce(lotOf(id));
+  sfx.milestone(); toast(`${def(id).name} is open for business!`);
+});
+game.on('upgrading', (id, to, secs) => {
+  world.setWork(lotOf(id), 'upgrade');
+  sfx.upgrade(); toast(`Upgrading the ${def(id).name} to level ${to}: ${fmtTime(secs)}`);
+});
 game.on('upgrade', (id, before, after) => {
+  world.setWork(lotOf(id), null);
   world.setGrowth(lotOf(id), milestoneCount(after));
   sfx.milestone();
   toast(after >= MAX_LEVEL ? `${def(id).name} is fully built!` : `${def(id).name} level ${after}: ${lookText(game.typeOf(id), after)}!`);
@@ -949,6 +981,7 @@ function syncBuilt() {
     world.setLand(lot, game.developed(lot));
     world.setBuilt(lot, !!id, id ? def(id) : null);
     world.setGrowth(lot, id ? milestoneCount(game.level(id)) : 0);
+    world.setWork(lot, id ? game.jobOf(id)?.kind || null : null);
   }
 }
 game.on('developed', lot => world.setLand(lot, true));
@@ -1023,6 +1056,7 @@ function loop(now) {
     bb.classList.toggle('on', left > 0);
     $('boost-text').textContent = left > 0 ? fmtTime(left) : '×2';
     bb.setAttribute('aria-label', left > 0 ? `Double earnings active, ${fmtTime(left)} left. Watch an ad to add more.` : 'Watch an ad for double earnings');
+    document.body.classList.toggle('has-ep', game.s.ep > 0);
     if (game.s.ep > 0) { $('ep').hidden = false; $('ep').textContent = `+${fmt(game.s.ep * EP_BONUS * 100)}% · ${game.s.ep} EP`; }
     else $('ep').hidden = true;
     world.setRocketReady(game.canLaunch(), game.run.rocketsBuilt % 1);

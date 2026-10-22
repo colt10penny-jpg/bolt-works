@@ -184,7 +184,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   background: var(--ink); color: #fff; border-radius: 999px; padding: 4px 10px; font: 800 12px var(--body); font-variant-numeric: tabular-nums;
 }
 .contract {
-  position: absolute; left: max(12px, var(--sa-l)); top: calc(108px + var(--sa-t)); width: min(190px, calc(100% - 120px));
+  position: absolute; left: max(12px, var(--sa-l)); top: calc(86px + var(--sa-t)); width: min(190px, calc(100% - 120px));
   border: none; border-radius: 14px; background: var(--paper); box-shadow: 0 3px 0 rgba(0,0,0,.15); padding: 6px 10px 7px;
   display: flex; flex-direction: column; gap: 4px; text-align: left; color: var(--ink);
 }
@@ -406,3 +406,10 @@ body.selecting .boost, body.selecting #contract, body.selecting #ep, body.select
 .sh-how b { color: var(--ink); }
 
 .link.danger { color: #c4462d; font: 800 13px var(--body); background: none; border: none; padding: 6px 0 0; align-self: center; text-decoration: underline; }
+
+/* the EP chip sits under the cash card; the order card goes below it when it's there */
+body.has-ep .contract { top: calc(112px + var(--sa-t)); }
+
+.sh-job { display: flex; flex-direction: column; gap: 8px; }
+.bub.job { background: #ffe9a8; color: #5a4300; gap: 5px; }
+.bub.job svg { width: 15px; height: 15px; }

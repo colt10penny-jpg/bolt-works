@@ -168,6 +168,13 @@ export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 // Factories store the money they make until you tap to collect it.
 // Storage holds this many seconds of the building's earnings.
 export const BIN_SECONDS = 600;
+
+// Building and upgrading take time: a few seconds for the first buildings, longer the
+// further along the chain a building is and the higher the level. Later worlds are slower.
+export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 90, power: 150, datacenter: 210, engine: 300, turbine: 600, rocket: 900 };
+const worldPace = world => 1 + 0.5 * Math.max(0, WORLDS.findIndex(w => w.id === world?.id));
+export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 30) * worldPace(world));
+export const upgradeSecs = (type, toLevel, world) => Math.max(3, Math.round((BUILD_SECS[type] || 30) * 0.6 * Math.pow(1.45, Math.max(0, toLevel - 2)) * worldPace(world)));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };

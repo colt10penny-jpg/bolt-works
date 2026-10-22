@@ -2,7 +2,7 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
-  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, MAX_LEVEL,
+  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, MAX_LEVEL, buildSecs, upgradeSecs,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT } from './layout.js';
 import { makeExits, townSegments, blockSides, segKey } from './traffic.js';
@@ -22,7 +22,7 @@ const OLD_KEYS = ['boltworks.save.v4', 'boltworks.save.v3'];
 function freshRun() {
   const levels = {};
   for (const f of BUILDINGS) levels[f.id] = 0;
-  return { runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, lastActive: Date.now() };
+  return { runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, jobs: {}, lastActive: Date.now() };
 }
 // the old fixed layout (before towns were built by hand), for bringing saves forward
 const OLD_CORE = { mine: [28, 28], furnace: [0, 28], press: [-28, 28], gear: [-28, 0], engine: [0, 0], power: [28, 0], rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28], hq: [14, 14] };
@@ -64,7 +64,7 @@ export function freshState() {
 
 function mergeRun(saved) {
   const base = freshRun();
-  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) }, land: { ...(saved?.land || {}) }, extra: { ...(saved?.extra || {}) }, pos: { ...(saved?.pos || {}) }, at: { ...(saved?.at || {}) }, roads: { ...(saved?.roads || {}) } };
+  const run = { ...base, ...saved, levels: { ...base.levels, ...(saved?.levels || {}) }, bins: { ...(saved?.bins || {}) }, managers: { ...(saved?.managers || {}) }, land: { ...(saved?.land || {}) }, extra: { ...(saved?.extra || {}) }, pos: { ...(saved?.pos || {}) }, at: { ...(saved?.at || {}) }, roads: { ...(saved?.roads || {}) }, jobs: { ...(saved?.jobs || {}) } };
   // older saves hired managers without a headquarters: keep them, and give them an HQ
   const working = Object.keys(run.managers).filter(k => run.managers[k]).length;
   if (saved && saved.staff == null) run.staff = working;
@@ -300,7 +300,14 @@ export class Game {
     const base = this.defOf(t, worldId);
     return { ...base, id, type: t, extra: true, unlock: (base.unlock || 150 * (worldById(worldId).cost || 1)) * EXTRA_BUILD, baseCost: base.baseCost * EXTRA_UPGRADE };
   }
-  extrasOf(run) { return Object.entries(run.extra || {}).filter(([, e]) => e && e.level > 0).map(([id, e]) => ({ ...e, id, eff: this.effOf(id, run) })); }
+  extrasOf(run) { return Object.entries(run.extra || {}).filter(([id, e]) => e && e.level > 0 && run.jobs?.[id]?.kind !== 'build').map(([id, e]) => ({ ...e, id, eff: this.effOf(id, run) })); }
+  // levels that are actually working: a building still under construction makes nothing yet
+  workLevels(run) {
+    if (!run.jobs || !Object.keys(run.jobs).length) return run.levels;
+    const L = { ...run.levels };
+    for (const [id, j] of Object.entries(run.jobs)) if (j.kind === 'build' && !isPlot(id)) L[id] = 0;
+    return L;
+  }
   // how well a building is supplied: by distance (in blocks) to the nearest building
   // that makes what it needs. Mines (and support buildings) need nothing.
   // `at`: the plot to measure from (defaults to where the building is)
@@ -328,7 +335,7 @@ export class Game {
     const r = this.s.worlds[worldId];
     if (!r) return null;
     if (!this.cache) this.cache = {};
-    return (this.cache[worldId] ||= flow(r.levels, this.epMult(), worldById(worldId).perks, this.extrasOf(r), this.effCore(r)));
+    return (this.cache[worldId] ||= flow(this.workLevels(r), this.epMult(), worldById(worldId).perks, this.extrasOf(r), this.effCore(r)));
   }
   baseFlow() { return this.flowFor(this.s.current); }
   // totals for a product type
@@ -338,8 +345,9 @@ export class Game {
     const run = this.s.worlds[worldId], t = this.typeOf(id, run);
     const d = BUILDINGS.find(f => f.id === t);
     if (!d) return 0;
-    const all = totalCap(d, run.levels, this.extrasOf(run), this.effCore(run));
-    return all > 0 ? capacity(d, this.level(id, run)) * this.effOf(id, run) / all : 0;
+    const all = totalCap(d, this.workLevels(run), this.extrasOf(run), this.effCore(run));
+    const lv = run.jobs?.[id]?.kind === 'build' ? 0 : this.level(id, run);
+    return all > 0 ? capacity(d, lv) * this.effOf(id, run) / all : 0;
   }
   info(id) {
     const t = this.typeOf(id); if (!t) return null;
@@ -391,6 +399,8 @@ export class Game {
     let id;
     if (!this.built(type)) { this.levels[type] = 1; this.run.pos[type] = plot; this.run.at[plot] = type; id = type; }
     else { this.run.extra[plot] = { type, level: 1 }; id = plot; }
+    const secs = buildSecs(type, this.world), now = Date.now();
+    (this.run.jobs ||= {})[id] = { kind: 'build', to: 1, start: now, end: now + secs * 1000 };
     this.invalidate();
     this.emit('built', id);
     this.emit('change');
@@ -400,7 +410,7 @@ export class Game {
   // ---- per-frame production ----
   // Every world runs all the time. Factories with a manager pay straight into the
   // wallet; the rest fill their storage until you come and tap them.
-  tick(dt) { this.#produce(dt, true); this.tickContract(dt); }
+  tick(dt) { this.finishJobs(); this.#produce(dt, true); this.tickContract(dt); }
   #produce(seconds, live) {
     const boost = live ? (this.boostLeft() > 0 ? 2 : 1) : 1;
     let direct = 0;
@@ -443,6 +453,29 @@ export class Game {
 
   canAfford(cost) { return this.s.cash >= cost - 1e-9; }
 
+  // ---- building work in progress ----
+  jobOf(id, run = this.run) { return run.jobs?.[id] || null; }
+  jobLeft(id, now = Date.now()) { const j = this.jobOf(id); return j ? Math.max(0, (j.end - now) / 1000) : 0; }
+  jobProgress(id, now = Date.now()) { const j = this.jobOf(id); return j ? Math.min(1, Math.max(0, (now - j.start) / Math.max(1, j.end - j.start))) : 1; }
+  // finish right away (the "watch an ad to finish" button)
+  finishNow(id) { const j = this.jobOf(id); if (!j) return false; j.end = Date.now(); this.finishJobs(); return true; }
+  // complete any work whose time is up, in every world
+  finishJobs(now = Date.now()) {
+    for (const [w, run] of Object.entries(this.s.worlds)) {
+      if (!run.jobs) continue;
+      for (const [id, j] of Object.entries(run.jobs)) {
+        if (j.end > now) continue;
+        delete run.jobs[id];
+        if (j.kind === 'upgrade') {
+          if (isPlot(id)) { if (run.extra[id]) run.extra[id].level = j.to; } else run.levels[id] = j.to;
+        }
+        this.invalidate();
+        if (w === this.s.current) this.emit(j.kind === 'upgrade' ? 'upgrade' : 'constructed', id, j.from || 0, j.to);
+        this.emit('change');
+      }
+    }
+  }
+
   // knock a building down: the lot stays cleared (ready for something else), money in its
   // storage goes to your wallet, and a manager working there goes back to headquarters.
   // If you have another of the same kind, that one becomes the main one.
@@ -450,7 +483,7 @@ export class Game {
     const run = this.run, t = this.typeOf(id), plot = this.plotOf(id);
     if (!t || !plot || this.level(id) <= 0) return false;
     if (run.bins[id]) this.s.cash += run.bins[id];
-    delete run.bins[id]; delete run.managers[id];
+    delete run.bins[id]; delete run.managers[id]; delete run.jobs?.[id];
     let promoted = null;
     if (isPlot(id)) delete run.extra[id];
     else {
@@ -461,6 +494,7 @@ export class Game {
         run.levels[t] = e.level; run.pos[t] = q; run.at[q] = t; delete run.extra[q];
         if (run.bins[q]) { run.bins[t] = run.bins[q]; delete run.bins[q]; }
         if (run.managers[q]) { run.managers[t] = true; delete run.managers[q]; }
+        if (run.jobs?.[q]) { run.jobs[t] = run.jobs[q]; delete run.jobs[q]; }
         promoted = q;
       }
     }
@@ -473,14 +507,15 @@ export class Game {
   buyLevels(id, n) {
     const def = this.slotDef(id);
     const lv = this.level(id);
-    if (!def || n <= 0 || lv <= 0 || lv + n > MAX_LEVEL) return false;
+    if (!def || n <= 0 || lv <= 0 || lv + n > MAX_LEVEL || this.jobOf(id)) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
     this.s.cash -= cost;
-    if (isPlot(id)) this.run.extra[id].level = lv + n; else this.levels[id] = lv + n;
+    // the work takes a while; the building keeps running at its old level meanwhile
+    const now = Date.now(), secs = upgradeSecs(this.typeOf(id), lv + n, this.world);
+    (this.run.jobs ||= {})[id] = { kind: 'upgrade', from: lv, to: lv + n, start: now, end: now + secs * 1000 };
     this.s.tutorial.upgraded = true;
-    this.invalidate();
-    this.emit('upgrade', id, lv, lv + n);
+    this.emit('upgrading', id, lv + n, secs);
     this.emit('change');
     return true;
   }
@@ -537,6 +572,7 @@ export class Game {
   }
   // runs the time away; returns what the managers collected (already in the wallet)
   applyOffline(seconds) {
+    this.finishJobs();
     if (seconds <= 0) return 0;
     return this.#produce(seconds, false);
   }

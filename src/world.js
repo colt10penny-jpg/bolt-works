@@ -138,7 +138,13 @@ export class World {
     this.#traffic();
     this.#input();
     this.resize();
-    addEventListener('resize', () => this.resize());
+    // phones report a resize before the new layout has settled (rotating especially), so
+    // measure again a moment later, and whenever the canvas itself changes size
+    const again = () => { this.resize(); for (const ms of [120, 350, 800]) setTimeout(() => this.resize(), ms); };
+    addEventListener('resize', again);
+    addEventListener('orientationchange', again);
+    window.visualViewport?.addEventListener('resize', again);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.resize()).observe(this.canvas);
   }
 
   #lights() {
@@ -717,6 +723,56 @@ export class World {
     if (this.selected) this.viewShiftTarget = this.panelShift;
   }
 
+  // building work on a lot: 'build' (a construction site; the building appears when it's
+  // done), 'upgrade' (a crane and scaffolding beside the building), or null
+  setWork(id, mode) {
+    const L = this.lots[id];
+    if (!L || (L.work || null) === (mode || null)) return;
+    if (L.site) { L.group.remove(L.site); L.site.traverse(o => o.geometry?.dispose()); L.site = null; }
+    L.work = mode || null;
+    if (L.model) L.model.visible = true;
+    if (!mode) return;
+    const site = new THREE.Group(), orange = 0xff7a1a, steelC = 0x8a8f99, plank = 0xc9a26b;
+    // a striped barrier round the edge of the lot
+    for (let k = -4; k <= 4; k++) for (const [x, z, ry] of [[k * 1.05, -4.55, 0], [k * 1.05, 4.55, 0], [-4.55, k * 1.05, Math.PI / 2], [4.55, k * 1.05, Math.PI / 2]]) {
+      if (mode === 'upgrade' && Math.abs(k) < 3) continue;
+      const b = box(0.9, 0.18, 0.08, k % 2 ? orange : 0xf4efe0, x, 0.45, z); b.rotation.y = ry; site.add(b);
+      if (k % 2 === 0) site.add(box(0.08, 0.6, 0.08, 0x3a3f48, x, 0.15, z));
+    }
+    // a tower crane in the corner, its arm swinging over the work
+    const crane = new THREE.Group();
+    const H = mode === 'build' ? 9 : 6.5;
+    for (let y = 0; y < H; y += 1) { crane.add(box(0.45, 1, 0.45, 0xffc23d, 0, y, 0)); crane.add(box(0.5, 0.06, 0.5, 0xd99a1a, 0, y + 0.5, 0)); }
+    const jib = new THREE.Group(); jib.position.y = H;
+    jib.add(box(6.5, 0.28, 0.3, 0xffc23d, 2.6, 0, 0), box(1.6, 0.6, 0.6, 0x5b5f66, -1.2, -0.15, 0), box(0.5, 0.5, 0.5, 0x3a3f48, 0, 0.3, 0));
+    jib.add(box(0.03, 2.4, 0.03, 0x3a3f48, 4.6, -2.4, 0), box(0.4, 0.3, 0.4, steelC, 4.6, -2.7, 0));
+    crane.add(jib);
+    crane.position.set(3.6, 0.15, -3.6);
+    site.add(crane);
+    site.userData.jib = jib;
+    if (mode === 'build') {
+      // a fresh slab, and scaffolding that climbs as the work goes on
+      site.add(box(6.6, 0.14, 6.6, 0xc9c4b8, 0, 0.15, 0));
+      const sc = new THREE.Group();
+      for (const x of [-3, -1, 1, 3]) for (const z of [-3, 3]) sc.add(box(0.1, 4, 0.1, steelC, x, 0, z));
+      for (const z of [-1, 1]) for (const x of [-3, 3]) sc.add(box(0.1, 4, 0.1, steelC, x, 0, z));
+      for (let y = 1; y <= 4; y += 1) for (const [w, d, x, z] of [[6.2, 0.6, 0, -3], [6.2, 0.6, 0, 3], [0.6, 6.2, -3, 0], [0.6, 6.2, 3, 0]]) sc.add(box(w, 0.07, d, plank, x, y - 0.05, z));
+      // the building taking shape inside: a grey concrete block that rises with progress
+      const core = box(5, 1, 5, 0xb5b0a6, 0, 0, 0);
+      sc.position.y = 0.29; core.position.y = 0.29;
+      site.add(sc, core);
+      site.userData.sc = sc; site.userData.core = core;
+      for (let k = 0; k < 3; k++) site.add(box(0.9, 0.5, 0.6, 0x9a7a52, -3.2 + k * 1.0, 0.15, 3.9));   // stacked materials
+    } else {
+      for (const x of [-2.2, -1.2]) site.add(box(0.1, 3.4, 0.1, steelC, x, 0.15, 3.0), box(0.1, 3.4, 0.1, steelC, x, 0.15, 3.6));
+      for (let y = 1; y <= 3; y++) site.add(box(1.3, 0.07, 0.8, plank, -1.7, y + 0.1, 3.3));
+      for (const [x, z] of [[-3.8, 1.5], [-3.6, 0.4], [3.8, 2]]) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 10), mat(orange)); c.position.set(x, 0.42, z); site.add(c); }
+    }
+    site.traverse(o => { o.userData.lotId = id; });
+    L.group.add(site);
+    L.site = site;
+  }
+
   // upgrade tier: the building grows, gains wings and rooftop gear
   setGrowth(id, tier) {
     const L = this.lots[id];
@@ -1065,6 +1121,15 @@ export class World {
     for (const p of this.flowInfo || []) info[p.id] = p;
     for (const [k, v] of Object.entries(this.supportInfo || {})) info[k] = v;
     for (const [id, L] of Object.entries(this.lots)) {
+      if (L.site) {
+        const p = this.workOf?.(id) ?? 0;
+        if (L.work === 'build') {
+          if (L.model) L.model.visible = false;
+          L.site.userData.core.scale.y = 0.3 + p * 3.2;
+          L.site.userData.sc.scale.y = 0.35 + p * 0.75;
+        }
+        L.site.userData.jib.rotation.y = Math.sin(this.t * 0.35 + L.group.position.x) * 1.1 - 0.6;
+      }
       const type = L.model ? this.typeOf(id) : null;
       const f = type ? info[type] : null;
       // starved factories run their machines slower; idle ones stop

@@ -207,6 +207,7 @@ export function styledWing(kind, cx, cz, color, tier, i) {
       g.add(cylY(0.6, h + 0.6, wall, x, 0.4, z, 16));
       const cone = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.45, 16), mat(roofC)); cone.position.set(x, h + 1.22, z); g.add(cone);
       for (const [dx, dz] of [[-0.4, -0.4], [0.4, 0.4]]) g.add(box(0.08, 0.45, 0.08, steel, x + dx, 0, z + dz));
+      if (tier >= 7) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.035, 6, 24), mat(0x7fe0ff, { emissive: 0x4fd0ff, night: 2.2 })); ring.rotation.x = Math.PI / 2; ring.position.set(x, h + 0.95, z); g.add(ring); }
     }
     const chute = box(0.25, 0.25, 1.2, dark, 0, 0, 0); chute.rotation.x = 0.7; chute.position.set(0.05, h * 0.5, 0); g.add(chute);
     top = h + 1.0;
@@ -224,7 +225,7 @@ export function styledWing(kind, cx, cz, color, tier, i) {
     for (let k = 0; k < 6; k++) g.add(box(0.12, 0.05, 0.04, 0x4fd0ff, -0.75 + k * 0.3, h * 0.5, Math.sign(cz) * 1.11, { emissive: 0x4fd0ff, night: 2 }));
     top = h * 0.75 + 0.1;
   }
-  if (tier >= 7 && kind !== 'yard') g.add(box(2.36, 0.05, 2.26, 0x7fe0ff, 0, Math.min(top, h) + 0.02, 0, { emissive: 0x4fd0ff, night: 2.2 }));
+  if (tier >= 7 && kind !== 'yard' && kind !== 'silo') g.add(box(2.36, 0.05, 2.26, 0x7fe0ff, 0, Math.min(top, h) + 0.02, 0, { emissive: 0x4fd0ff, night: 2.2 }));
   g.position.set(cx, 0.15, cz);
   g.userData.top = top;
   return g;
