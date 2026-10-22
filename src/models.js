@@ -2,17 +2,61 @@
 // replace a builder function with a loaded 3D model later without touching game logic.
 import * as THREE from 'three';
 
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { withDetail } from './surface.js';
+
+// Materials: physically based, so light, shadow and reflections look solid.
+// Glass and metal colours get shinier materials automatically; glass glows warm at night.
+const GLASS = new Set([0x9fd6ff, 0xd8ecff, 0x9fe8ff]);
+const METAL = new Set([0x8a8f99, 0x5b5f66, 0xdddddd, 0xd9d9d9, 0xcfd3da, 0xd8d8de, 0xd9d9de, 0xb9b4a8]);
+export const GLOW = { glass: [], lit: [], night: [] };   // materials the day/night cycle lights up
 const matCache = new Map();
 export function mat(color, opts = {}) {
-  const key = color + JSON.stringify(opts);
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshLambertMaterial({ color, ...opts }));
-  return matCache.get(key);
+  // windows: some lit at night and some dark, so buildings look lived in
+  const glassVar = GLASS.has(color) && !opts.emissive ? Math.floor(Math.random() * 3) : 0;
+  const key = color + JSON.stringify(opts) + glassVar;
+  if (matCache.has(key)) return matCache.get(key);
+  let m;
+  if (opts.night) {
+    // lights that only come on after dark (headlights, lamps)
+    const { night, ...o } = opts;
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.4, emissiveIntensity: 0, ...o });
+    m.userData.night = night; GLOW.night.push(m);
+  } else if (GLASS.has(color) && !opts.emissive) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.08, metalness: 0.55, emissive: 0xffc98a, emissiveIntensity: 0, ...opts });
+    m.userData.glow = [0.75, 0.35, 0.05][glassVar];
+    GLOW.glass.push(m);
+  } else if (METAL.has(color)) {
+    m = withDetail(new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.6, ...opts }), 0.6);
+  } else {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...opts });
+    if (opts.emissive) { m.userData.baseGlow = opts.emissiveIntensity ?? 1; GLOW.lit.push(m); }
+    else if (!opts.transparent) withDetail(m);
+  }
+  matCache.set(key, m);
+  return m;
 }
 
+// Boxes big enough to notice get softly rounded edges that catch the light.
+export let roundEdges = true;
+export function setRoundEdges(on) { roundEdges = on; }
+function boxGeo(w, h, d) {
+  const m = Math.min(w, h, d);
+  if (!roundEdges || m < 0.3) return new THREE.BoxGeometry(w, h, d);
+  return new RoundedBoxGeometry(w, h, d, 2, Math.min(0.1, m * 0.14));
+}
 export function box(w, h, d, color, x = 0, y = 0, z = 0, opts) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
+  const m = new THREE.Mesh(boxGeo(w, h, d), mat(color, opts));
   m.position.set(x, y + h / 2, z);
   m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+// plain sharp box, for road paint and other flat things
+export function flatBox(w, h, d, color, x = 0, y = 0, z = 0, opts) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = false; m.receiveShadow = true;
   return m;
 }
 export function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 12, opts) {
@@ -42,6 +86,13 @@ const shade = (hex, f) => {
 };
 
 // Each builder returns { group, anim(t, dt), top } where top is the label anchor height.
+// the open top of a chimney: a dark hole inside a little rim, so smoke comes out of it
+function stackHole(g, x, y, z, r) {
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.78, 0.03, 16), mat(0x17181b, { roughness: 1 }));
+  hole.position.set(x, y + 0.006, z); g.add(hole);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r * 0.9, r * 0.12, 6, 18), mat(0x4a4c52, { roughness: 0.8 }));
+  rim.rotation.x = Math.PI / 2; rim.position.set(x, y + 0.02, z); g.add(rim);
+}
 export const BUILDERS = {
   mine(color) {
     const g = new THREE.Group();
@@ -86,7 +137,9 @@ export const BUILDERS = {
     const tower = new THREE.Mesh(new THREE.LatheGeometry(pts, 20), mat(0xe9e6df, { side: THREE.DoubleSide }));
     tower.position.set(-1.6, 0, -1.2); tower.castShadow = true; tower.receiveShadow = true;
     g.add(tower);
-    g.add(cyl(1.0, 1.0, 0.25, 0xcfcac0, -1.6, 5.8, -1.2, 20));
+    // the tower's open mouth: a dark hollow inside its rim
+    { const rim = new THREE.Mesh(new THREE.TorusGeometry(1.49, 0.1, 6, 24), mat(0xcfcac0)); rim.rotation.x = Math.PI / 2; rim.position.set(-1.6, 6.0, -1.2); g.add(rim);
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(1.36, 24), mat(0x3a3b3e, { roughness: 1 })); hole.rotation.x = -Math.PI / 2; hole.position.set(-1.6, 5.2, -1.2); g.add(hole); }
     // turbine hall + transformer yard
     g.add(box(3.4, 2.4, 3.4, color, 2.0, 0, -0.4));
     g.add(box(3.6, 0.25, 3.6, shade(color, -0.35), 2.0, 2.4, -0.4));
@@ -138,7 +191,8 @@ export const BUILDERS = {
     for (const [x, h] of [[-1.6, 5.2], [0.2, 4.2]]) {
       g.add(cyl(0.48, 0.55, h, shade(color, -0.3), x, 3.5, -1.2));
       g.add(cyl(0.52, 0.52, 0.35, 0xf3efe6, x, 3.5 + h - 1.2, -1.2));
-      stacks.push(new THREE.Vector3(x, 3.5 + h, -1.2));
+      stackHole(g, x, 3.5 + h, -1.2, 0.48);
+      stacks.push(new THREE.Vector3(x, 3.5 + h + 0.05, -1.2));
     }
     g.add(box(1.4, 1, 1.4, 0x8a8f99, 2, 3.55, -0.9));
     return { group: g, top: 9, smoke: stacks };
@@ -282,16 +336,138 @@ export function tree(scale = 1, color = 0x3f8f4a) {
   return g;
 }
 
-export function truck(color) {
-  const g = new THREE.Group();
-  g.add(box(1.5, 1, 0.95, 0xf3f0e8, -0.35, 0.25, 0));
-  g.add(box(0.7, 0.8, 0.95, color, 0.8, 0.25, 0));
-  g.add(box(0.06, 0.35, 0.8, 0x9fd6ff, 1.16, 0.6, 0));
-  for (const x of [-0.7, 0.75]) for (const z of [-0.45, 0.45]) {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.15, 10), mat(0x2a2a2e));
-    w.rotation.x = Math.PI / 2; w.position.set(x, 0.22, z); g.add(w);
+// ---- vehicles ----
+// Built from lots of small parts, then merged into one mesh per material so a town
+// full of traffic stays cheap to draw.
+const TINT = 0x223140, TIRE = 0x1d1e22, TRIM = 0x2b2d33, CHROME = 0xd9d9de;
+const glassMat = () => mat(TINT, { roughness: 0.12, metalness: 0.7 });
+function mergeVehicle(g) {
+  g.updateMatrixWorld(true);
+  const byMat = new Map();
+  g.traverse(o => {
+    if (!o.isMesh) return;
+    let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
+    if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    geo.applyMatrix4(o.matrixWorld);
+    if (!byMat.has(o.material)) byMat.set(o.material, { geos: [], shadow: o.castShadow });
+    byMat.get(o.material).geos.push(geo);
+  });
+  const out = new THREE.Group();
+  for (const [m, { geos, shadow }] of byMat) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos), m);
+    mesh.castShadow = shadow; mesh.receiveShadow = true;
+    out.add(mesh);
+    geos.forEach(x => x.dispose());
   }
-  return g;
+  return out;
+}
+function wheel(g, x, z, r = 0.21, w = 0.16) {
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 14), mat(TIRE, { roughness: 0.9 }));
+  t.rotation.x = Math.PI / 2; t.position.set(x, r, z); g.add(t);
+  const side = Math.sign(z);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.02, 10), mat(CHROME));
+  hub.rotation.x = Math.PI / 2; hub.position.set(x, r, z + side * (w / 2 + 0.005)); g.add(hub);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.2, r * 0.2, 0.03, 8), mat(TRIM));
+  cap.rotation.x = Math.PI / 2; cap.position.set(x, r, z + side * (w / 2 + 0.015)); g.add(cap);
+}
+// a slanted pane of glass across the car (front or back window)
+function pane(g, x, y, h, lean, width) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, h, width), glassMat());
+  m.position.set(x, y, 0); m.rotation.z = lean; g.add(m);
+}
+function lights(g, front, back, y, zs, w = 0.16) {
+  for (const z of zs) {
+    g.add(flatBox(0.05, 0.09, w, 0xfff6d8, front, y, z, { emissive: 0xfff0c0, night: 3 }));
+    g.add(flatBox(0.05, 0.09, w, 0x8a1f1f, back, y, z, { emissive: 0xff2a1a, night: 2 }));
+  }
+}
+function mirrors(g, x, y, half, color) {
+  for (const sd of [-1, 1]) {
+    g.add(flatBox(0.1, 0.08, 0.1, color, x, y, sd * (half + 0.05)));
+  }
+}
+
+// box truck that carries goods between factories, pointing +x
+// (flat = an open flatbed, for carrying goods you can see)
+export function truck(color, flat = false) {
+  const g = new THREE.Group();
+  const W = 0.96;
+  // chassis rail and bumpers
+  g.add(flatBox(2.3, 0.12, 0.8, TRIM, -0.05, 0.2, 0));
+  g.add(box(0.12, 0.16, W, TRIM, 1.2, 0.2, 0), box(0.1, 0.14, W - 0.1, TRIM, -1.2, 0.2, 0));
+  // cargo box with a coloured stripe and roll-up door ribs at the back
+  if (flat) {
+    g.add(box(1.55, 0.1, W, 0x6b5a48, -0.42, 0.3, 0));                       // wooden deck
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) g.add(flatBox(0.05, 0.22, 0.05, TRIM, -1.12 + i * 0.45, 0.4, sd * (W / 2 - 0.03)));   // stake posts
+    g.add(box(0.06, 0.55, W, TRIM, 0.33, 0.38, 0));                          // headboard
+  } else {
+    g.add(box(1.5, 1.02, W, 0xf3f0e8, -0.42, 0.32, 0));
+    for (const sd of [-1, 1]) g.add(flatBox(1.42, 0.14, 0.02, color, -0.42, 0.62, sd * (W / 2 + 0.005)));
+    for (let i = 0; i < 4; i++) g.add(flatBox(0.02, 0.025, W - 0.16, 0xc9c5ba, -1.175, 0.45 + i * 0.2, 0));
+  }
+  // cab
+  g.add(box(0.72, 0.62, W, color, 0.78, 0.3, 0));
+  g.add(box(0.5, 0.36, W - 0.04, color, 0.66, 0.9, 0));
+  pane(g, 0.97, 1.06, 0.36, 0.32, W - 0.16);
+  for (const sd of [-1, 1]) g.add(flatBox(0.34, 0.24, 0.02, TINT, 0.7, 0.96, sd * (W / 2 - 0.01)));
+  g.add(flatBox(0.03, 0.22, 0.5, TRIM, 1.15, 0.38, 0));                       // grille
+  for (let i = 0; i < 3; i++) g.add(flatBox(0.035, 0.02, 0.46, CHROME, 1.155, 0.42 + i * 0.06, 0));
+  mirrors(g, 1.0, 0.95, W / 2, TRIM);
+  g.add(cyl(0.035, 0.035, 0.75, CHROME, 0.4, 0.55, W / 2 - 0.08, 8));           // exhaust stack
+  g.add(flatBox(0.04, 0.1, 0.3, 0xf2f2f2, -1.205, 0.24, 0));                  // plate
+  lights(g, 1.165, -1.2, 0.5, [-0.34, 0.34], 0.14);
+  g.add(flatBox(0.16, 0.05, 0.16, 0xffa31a, 0.66, 1.26, 0, { emissive: 0xff8a00, night: 1.5 }));   // roof beacon
+  for (const x of [-0.75, -0.3, 0.8]) for (const z of [-0.42, 0.42]) wheel(g, x, z, 0.23, 0.17);
+  return mergeVehicle(g);
+}
+
+// a passenger car, pointing +x: sedans, hatchbacks, SUVs and pickups
+const BODY = ['sedan', 'sedan', 'hatch', 'suv', 'pickup'];
+let carN = 0;
+export function car(color, kind = BODY[carN++ % BODY.length]) {
+  const g = new THREE.Group();
+  const W = 0.9, L = kind === 'hatch' ? 1.55 : kind === 'sedan' ? 1.8 : 1.85;
+  const lift = kind === 'suv' || kind === 'pickup' ? 0.06 : 0;
+  const base = 0.15 + lift, bodyH = kind === 'suv' ? 0.42 : 0.36;
+  const f = L / 2, r = -L / 2;
+  // body, with a dark sill and bumpers
+  g.add(box(L, bodyH, W, color, 0, base + 0.04, 0));
+  g.add(flatBox(L - 0.5, 0.06, W + 0.01, TRIM, 0, base + 0.02, 0));
+  g.add(box(0.1, 0.12, W, TRIM, f - 0.02, base, 0), box(0.1, 0.12, W, TRIM, r + 0.02, base, 0));
+  const top = base + 0.04 + bodyH;
+  // the cabin: roof, windows all round, a slanted windscreen and rear window
+  let cx, cl, ch = kind === 'suv' ? 0.4 : 0.34;
+  if (kind === 'sedan') { cx = -0.1; cl = 0.82; }
+  else if (kind === 'hatch') { cx = -0.18; cl = 0.82; }
+  else if (kind === 'suv') { cx = -0.18; cl = 1.15; }
+  else { cx = 0.18; cl = 0.62; }
+  g.add(box(cl, ch, W - 0.06, TINT, cx, top - 0.02, 0, { roughness: 0.12, metalness: 0.7 }));
+  g.add(box(cl - 0.08, 0.06, W - 0.04, color, cx, top + ch - 0.05, 0));       // roof
+  for (const sd of [-1, 1]) g.add(flatBox(0.05, ch - 0.06, 0.02, color, cx + 0.02, top, sd * (W / 2 - 0.03)));   // door pillar
+  pane(g, cx + cl / 2 + 0.07, top + ch / 2 - 0.02, ch * 0.95, 0.5, W - 0.14);
+  if (kind === 'sedan') pane(g, cx - cl / 2 - 0.08, top + ch / 2 - 0.03, ch * 0.9, -0.55, W - 0.14);
+  // details: door seams, handles, mirrors, grille, plate
+  for (const sd of [-1, 1]) {
+    g.add(flatBox(0.015, bodyH - 0.1, 0.01, TRIM, cx + 0.02, base + 0.09, sd * (W / 2 + 0.003)));
+    for (const hx of [cx + 0.18, cx - 0.22]) g.add(flatBox(0.09, 0.025, 0.012, CHROME, hx, top - 0.1, sd * (W / 2 + 0.005)));
+  }
+  mirrors(g, cx + cl / 2 - 0.02, top + 0.02, W / 2, color);
+  g.add(flatBox(0.02, 0.1, 0.36, TRIM, f + 0.035, base + 0.12, 0));
+  g.add(flatBox(0.02, 0.07, 0.22, 0xf2f2f2, r - 0.035, base + 0.05, 0));
+  if (kind === 'pickup') {
+    // open bed behind the cab
+    const bx = (r + cx - cl / 2) / 2, bl = cx - cl / 2 - r - 0.04;
+    g.add(flatBox(bl, 0.03, W - 0.14, TRIM, bx, top - 0.01, 0));
+    for (const sd of [-1, 1]) g.add(flatBox(bl, 0.12, 0.05, color, bx, top, sd * (W / 2 - 0.03)));
+    g.add(flatBox(0.05, 0.12, W - 0.06, color, r + 0.03, top, 0));
+  }
+  if (kind === 'suv') for (const sd of [-1, 1]) g.add(flatBox(cl - 0.2, 0.04, 0.04, TRIM, cx, top + ch + 0.01, sd * (W / 2 - 0.12)));   // roof rails
+  if (kind === 'sedan' && carN % 3 === 0) g.add(flatBox(0.06, 0.04, W - 0.2, color, r + 0.08, top, 0));   // little spoiler
+  lights(g, f + 0.03, r - 0.03, base + 0.22, [-0.3, 0.3], 0.16);
+  const wz = W / 2 - 0.05, wr = kind === 'suv' || kind === 'pickup' ? 0.22 : 0.19;
+  for (const x of [f - 0.36, r + 0.36]) for (const z of [-wz, wz]) wheel(g, x, z, wr, 0.15);
+  return mergeVehicle(g);
 }
 
 // ---- scenery for each map theme ----
@@ -413,7 +589,8 @@ Object.assign(BUILDERS, {
     g.add(cyl(0.45, 0.55, 4.6, shade(color, -0.25), 1.6, 0, -1.6));
     g.add(box(2.2, 1.4, 2.2, 0xe8dcc4, 2.2, 0, 1.2));
     for (let i = 0; i < 3; i++) g.add(box(0.5, 0.05, 1.4, 0x9fd6ff, 1.5 + i * 0.6, 1.42, 1.2, { transparent: true, opacity: 0.8 }));
-    return { group: g, top: 5.4, smoke: [new THREE.Vector3(1.6, 4.8, -1.6)] };
+    stackHole(g, 1.6, 4.6, -1.6, 0.45);
+    return { group: g, top: 5.4, smoke: [new THREE.Vector3(1.6, 4.65, -1.6)] };
   },
   solarfab(color) {
     const g = new THREE.Group();
@@ -429,7 +606,7 @@ Object.assign(BUILDERS, {
     g.add(box(4.2, 0.2, 4.6, 0x8a8f99, -1.0, 2.2, -0.2));
     for (const [x, z] of [[2.3, -1.4], [2.3, 0.6], [2.3, 2.4]]) {
       g.add(cyl(0.75, 0.75, 2.6, 0x2a2d33, x, 0, z, 16));
-      g.add(cyl(0.77, 0.77, 0.6, color, x, 2.0, z, 16));
+      g.add(cyl(0.78, 0.78, 0.5, color, x, 1.95, z, 16));   // band stops short of the top, so the two don't flicker
       g.add(cyl(0.25, 0.25, 0.3, 0xd9d9d9, x, 2.6, z, 10));
     }
     const bolt = box(0.15, 1.2, 0.1, 0xffd23f, -1.0, 0.5, 2.03, { emissive: 0xffc23d, emissiveIntensity: 0.6 });
@@ -604,5 +781,54 @@ Object.assign(BUILDERS, {
     // cryostat tanks
     for (const z of [-1.2, 0.6]) g.add(cyl(0.6, 0.6, 2.0, 0xd8dbe2, 2.6, 0, z, 14));
     return { group: g, top: 5.2, anim(t) { ringA.rotation.x = t * 1.3; ringB.rotation.y = t * 1.7; orb.scale.setScalar(1 + Math.sin(t * 4) * 0.12); } };
+  },
+
+  // ---- headquarters, one per world ----
+  hq(color) {
+    const g = new THREE.Group();
+    g.add(box(3.4, 6.4, 3.4, color, -0.8, 0, -0.8));
+    for (let k = 0; k < 6; k++) for (const [w, d, x, z] of [[3.42, 0.02, -0.8, 0.91], [0.02, 3.42, 0.91, -0.8]])
+      g.add(box(w === 3.42 ? 3.0 : 0.06, 0.45, d === 3.42 ? 3.0 : 0.06, 0x9fd6ff, x, 0.6 + k * 0.95, z));
+    g.add(box(3.6, 0.25, 3.6, shade(color, -0.35), -0.8, 6.4, -0.8));
+    g.add(box(4.4, 1.6, 2.6, shade(color, 0.25), 1.6, 0, 1.6));
+    g.add(box(1.2, 1.0, 0.08, 0x3a3f48, 1.6, 0, 2.92));
+    // flag on the roof
+    g.add(box(0.08, 1.8, 0.08, 0xdddddd, 0.3, 6.65, 0.3));
+    const flag = box(0.9, 0.55, 0.04, 0xffd23f, 0.75, 7.75, 0.3);
+    g.add(flag);
+    return { group: g, top: 8.9, anim(t) { flag.rotation.y = Math.sin(t * 3) * 0.25; } };
+  },
+  hqdesert(color) {
+    const g = new THREE.Group();
+    g.add(box(5.6, 2.6, 4.2, color, 0, 0, -0.4));
+    g.add(box(3.0, 1.6, 2.6, shade(color, 0.12), -0.8, 2.6, -0.8));
+    for (let i = 0; i < 5; i++) g.add(box(0.18, 0.18, 1.0, 0x8a5a33, -2.4 + i * 1.2, 2.2, 1.9));
+    windows(g, 3, 0.8, 1.0, 1.72, 0x9fd6ff, 1.5, -1.5);
+    g.add(box(1.0, 1.4, 0.1, 0x6b4a2b, 2.0, 0, 1.72));
+    for (let i = 0; i < 2; i++) g.add(panel(1.4, 1.2, 0x2a4f8f, 1.6, 2.85, -1.6 + i * 1.4));
+    const mast = new THREE.Group();
+    mast.add(box(0.1, 2.4, 0.1, 0xdddddd, 0, 0, 0));
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), mat(0xf2f2f2, { side: THREE.DoubleSide }));
+    dish.rotation.x = Math.PI / 2.3; dish.position.y = 2.3; mast.add(dish);
+    mast.position.set(-0.8, 4.2, -0.8);
+    g.add(mast);
+    return { group: g, top: 7.4, anim(t) { mast.rotation.y = t * 0.6; } };
+  },
+  hqmoon(color) {
+    const g = new THREE.Group();
+    g.add(dome(2.6, color, -0.6, 0, -0.6));
+    g.add(cyl(2.65, 2.65, 0.5, shade(color, -0.3), -0.6, 0, -0.6, 20));
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      g.add(box(0.5, 0.35, 0.05, 0x5fd3ff, -0.6 + Math.cos(a) * 2.0, 1.3, -0.6 + Math.sin(a) * 2.0, { emissive: 0x2fb6ff, emissiveIntensity: 0.7 }));
+    }
+    g.add(box(1.4, 1.4, 2.0, 0xd8d4c8, 2.4, 0, 1.6));
+    const mast = new THREE.Group();
+    mast.add(box(0.12, 2.0, 0.12, 0xcfd3da, 0, 0, 0));
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.8, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), mat(0xf2f2f2, { side: THREE.DoubleSide }));
+    dish.rotation.x = Math.PI / 2.5; dish.position.y = 2.0; mast.add(dish);
+    mast.position.set(2.4, 1.4, 1.6);
+    g.add(mast);
+    return { group: g, top: 5.8, anim(t) { mast.rotation.y = Math.sin(t * 0.4) * 1.2; } };
   },
 });

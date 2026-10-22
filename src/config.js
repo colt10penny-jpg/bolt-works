@@ -13,11 +13,11 @@ export const ADMOB = {
 export const ANALYTICS = {
   posthogKey: 'phc_uFLGLoCrwfXGmDvvvdiKNnmFHQP8yVDcYouhg5NaBMgD',
   posthogHost: 'https://us.i.posthog.com',
-  appVersion: '0.5.0',
+  appVersion: '0.17.0',
 };
 
 export const GAME = {
-  saveKey: 'boltworks.save.classic5',
+  saveKey: 'boltworks.save.v5',
   offlineCapHours: 4,     // max hours of offline earnings
   boostMinutesPerAd: 30,  // each boost ad adds this much ×2 time
   boostMaxMinutes: 240,   // boost time can stack up to this
