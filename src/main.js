@@ -862,7 +862,7 @@ function hintText() {
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
   if (full) return `Your ${def(full.id).name} is full. Tap it to collect!`;
-  if (!emptyLot() && FACTORIES.some(f => !game.built(f.id)) && game.built('press') && game.canAfford(game.landPrice() * 2)) return 'Tap overgrown land to clear it for your next building';
+  if (!emptyLot() && FACTORIES.some(f => !game.built(f.id)) && game.built('press') && game.canAfford(game.landPrice() * 2)) return (game.s.current === 'colorado' ? 'Tap overgrown land' : 'Tap empty land') + ' to clear it for your next building';
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
   if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;

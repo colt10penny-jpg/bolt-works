@@ -28,14 +28,14 @@ const GradeShader = {
 // key moments of the day: [time, sun colour, sun strength, sky light, ground light, sky strength, window glow, haze colour]
 const DAY = {
   earth: [
-    [0.00, 0xa9bcff, 0.6, 0x8197d6, 0x3a4766, 1.05, 1.0, 0x3b4f7c],   // night
+    [0.00, 0xa9bcff, 0.7, 0x93a6de, 0x7a6450, 1.35, 1.0, 0x3b4f7c],   // night (warm bounce from the lit streets)
     [0.06, 0xffa86b, 1.3, 0xffd2b0, 0x6b5a4a, 1.0, 0.55, 0xf2b98f],    // sunrise
     [0.14, 0xfff1dc, 2.6, 0xfff6e5, 0x5d7a46, 1.25, 0.0, 0xcfe3f0],    // morning
     [0.55, 0xffffff, 2.8, 0xfff6e5, 0x5d7a46, 1.3, 0.0, 0xd6e7f2],     // afternoon
     [0.66, 0xffb46b, 1.8, 0xffd9b8, 0x6b5a4a, 1.05, 0.25, 0xf3c08e],   // golden hour
     [0.72, 0xff7f5a, 0.9, 0xc99ab0, 0x4a3f50, 0.9, 0.8, 0xc78a92],     // sunset
-    [0.80, 0xa9bcff, 0.6, 0x8197d6, 0x3a4766, 1.05, 1.0, 0x3b4f7c],   // night
-    [1.00, 0xa9bcff, 0.6, 0x8197d6, 0x3a4766, 1.05, 1.0, 0x3b4f7c],
+    [0.80, 0xa9bcff, 0.7, 0x93a6de, 0x7a6450, 1.35, 1.0, 0x3b4f7c],   // night
+    [1.00, 0xa9bcff, 0.7, 0x93a6de, 0x7a6450, 1.35, 1.0, 0x3b4f7c],
   ],
   // the Moon has no air: always hard white sunlight, and "night" is earthlight
   moon: [

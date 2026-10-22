@@ -1030,10 +1030,10 @@ export class World {
     if (this.roadData?.lampMat) this.roadData.lampMat.emissiveIntensity = n * 2.4;
     if (this.roadData?.edgeMat) this.roadData.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
     if (this.glow) { this.glow.material.opacity = n * 0.5; this.glow.material.size = 15 * this.zoom; }
-    if (this.pools) this.pools.material.opacity = n * 0.34;
+    if (this.pools) this.pools.material.opacity = n * 0.22;
     if (this.cones) this.cones.material.opacity = n * 0.07;
     if (this.bldDirty) this.#buildingGlow();
-    if (this.bldPools) this.bldPools.material.opacity = n * 0.3;
+    if (this.bldPools) this.bldPools.material.opacity = n * 0.14;
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
     for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
     if (this.look.sunDir) {

@@ -550,8 +550,8 @@ export function buildRoads(name, T, stateOf) {
   edgeM.userData.night = 2.2;
   let seed = 4242;
   const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  const good = [], worn = [];
-  for (const [k, { a, b }] of NET.segs) { const st = stateOf(k); if (st === 'good') good.push({ a, b }); else if (st === 'worn') worn.push({ a, b }); }
+  const good = [], worn = [], plan = [];
+  for (const [k, { a, b }] of NET.segs) { const st = stateOf(k); if (st === 'good') good.push({ a, b }); else if (st === 'worn') worn.push({ a, b }); else plan.push({ a, b }); }
   // a road out of town only shows once the town's roads reach the spot where it starts
   const liveExits = NET.exits.filter(e => NET.adj.has(e.node.x + ',' + e.node.z));
   for (const e of liveExits) good.push({ a: e.node, b: exitFar(e), exit: true });
@@ -592,6 +592,27 @@ export function buildRoads(name, T, stateOf) {
         const wz = sp.along === 'x' ? sp.line + (r() < 0.5 ? -1 : 1) * (HW - 0.2 - r() * 0.6) : i + r();
         w.translate(wx, 0.1, wz); road.add(weedM, w);
       }
+    }
+  }
+  // roads not built yet (the Mojave and the Moon): a graded track marked out with survey
+  // stakes, so you can see where the plots and streets will go
+  if (plan.length) {
+    const trackM = withClouds(std(moon ? 0xb9b9c0 : 0xead9b0, { roughness: 1 }));
+    const edgeTM = std(moon ? 0x9a9aa2 : 0xc9ad78, { roughness: 1 });
+    const stakeM = std(0xf2efe6, { roughness: 0.8 });
+    const tipM = std(0xff6a2a, { roughness: 0.6 });
+    const stakes = new Map();
+    for (const sg of plan) {
+      const sp = span(sg);
+      strip(trackM, sp, sp.lo - HW + 0.4, sp.hi + HW - 0.4, 0.05, ROAD_W - 0.8);
+      // tyre ruts along the middle of each lane
+      for (const off of [-LANE, LANE]) strip(edgeTM, { ...sp, line: sp.line + off }, sp.lo + HW, sp.hi - HW, 0.056, 0.22);
+      for (const n of [sg.a, sg.b]) stakes.set(n.x + ',' + n.z, n);
+    }
+    for (const n of stakes.values()) for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const x = n.x + dx * (HW + 0.35), z = n.z + dz * (HW + 0.35);
+      road.add(stakeM, boxAt(0.1, 0.55, 0.1, x, 0, z));
+      road.add(tipM, boxAt(0.12, 0.14, 0.12, x, 0.55, z));
     }
   }
   // in good repair
