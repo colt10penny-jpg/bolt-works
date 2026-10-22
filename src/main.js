@@ -14,6 +14,7 @@ import { initAnalytics, track, flush } from './analytics.js';
 import { GAME } from './config.js';
 import { skin } from './worlds.js';
 import { ACHIEVEMENTS, checkAchievements } from './achievements.js';
+import { createTutorial } from './tutorial.js';
 
 if (import.meta.env.MODE === 'artifact') {
   const l = document.createElement('link');
@@ -861,7 +862,7 @@ function openSettings() {
       openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
-        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); toast('Fresh start!'); }
+        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); tutorial.start(); }
       });
     }
   });
@@ -913,6 +914,18 @@ function offlineModal(seconds, capped, byWorld) {
       game.emit('change'); sfx.reward(); toast(here >= 1 ? `+$${fmt(here)} more` : 'Doubled!');
     } else offlineModal(seconds, capped, byWorld);   // ad closed early: offer it again
   });
+}
+
+// ---------- the story tutorial (see tutorial.js) and Rosie's later tips ----------
+const tutorial = createTutorial({ game, world, def, openModal, sfx, save });
+function laterTips() {
+  if (tutorial.active || current) return;
+  if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock * 0.6))
+    tutorial.tip('hq', `Getting tired of tapping all those coins? Walt kept an office by the mine. Build the <b>${def('hq').name}</b> and you can hire <b>managers</b> who collect for you, even while you're away.`);
+  if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost()))
+    tutorial.tip('manager', `Your first manager is ready to hire. Send them to your busiest factory so it never fills up.`);
+  if (game.canLaunch())
+    tutorial.tip('rocket', `Look at that: a finished rocket. Walt would have cried. <b>Launch it</b> for Engineering Points (a bonus on everything you earn, forever) and a new place to build.`);
 }
 
 // ---------- tutorial hints ----------
@@ -1066,6 +1079,7 @@ function loop(now) {
   perfCheck(now, dt);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
+  tutorial.frame();
   $('cash').textContent = '$' + (game.cash < 1000 ? Math.floor(game.cash) : fmt(game.cash));
   $('rate').textContent = `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`;
   uiT -= dt;
@@ -1085,7 +1099,8 @@ function loop(now) {
     const nxt = game.nextWorld();
     const showLaunch = game.canLaunch() && (game.launchPreview() >= 1 || (nxt && !game.s.worlds[nxt.id])) && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;
-    const h = world.selected || showLaunch ? '' : hintText();
+    const h = world.selected || showLaunch || tutorial.active ? '' : hintText();
+    laterTips();
     if (h !== hintCache) { hintCache = h; $('hint').textContent = h; $('hint').hidden = !h; }
     renderContract();
     if (!sheet.hidden) renderSheet();
@@ -1121,6 +1136,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   welcomeBack();
   maybeDaily();
   dayCheck();
+  tutorial.start();
   step('starting loop');
   ads.init();
   requestAnimationFrame(loop);

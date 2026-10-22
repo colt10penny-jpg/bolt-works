@@ -53,7 +53,7 @@ export function freshState() {
     nextContractAt: Date.now() + 90_000,
     contractsDone: 0,
     daily: { lastDay: '', streak: 0 },
-    tutorial: { opened: false, collected: false, upgraded: false, done: false },
+    tutorial: { opened: false, collected: false, upgraded: false, done: false, step: 0, tips: {} },   // step: where the opening tutorial is (-1 = finished)
     settings: { sound: true },
     adsWatched: 0,
     achievements: {},    // id -> time unlocked
@@ -112,7 +112,8 @@ export class Game {
         ...base, ...saved, worlds,
         current: worlds[saved.current] ? saved.current : Object.keys(worlds)[0],
         daily: { ...base.daily, ...saved.daily },
-        tutorial: { ...base.tutorial, ...saved.tutorial },
+        // saves from before the story tutorial existed skip it (unless nothing's happened yet)
+        tutorial: { ...base.tutorial, ...saved.tutorial, step: saved.tutorial?.step ?? ((saved.totalEarned || 0) > 0 ? -1 : 0) },
         settings: { ...base.settings, ...saved.settings },
         achievements: { ...(saved.achievements || {}) },
       };

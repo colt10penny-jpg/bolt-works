@@ -427,3 +427,44 @@ body.has-ep .contract { top: calc(112px + var(--sa-t)); }
 
 body.selecting .toast { bottom: calc(var(--sheet-h, 0px) + 12px); }
 @keyframes toastIn { from { transform: translate(-50%, 10px); opacity: 0; } }
+
+/* ---- the story tutorial: Rosie's card, the pointing arrow, and the will ---- */
+.coach {
+  position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 118px); z-index: 30;
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px 12px 10px;
+  background: var(--paper); border-radius: 18px; box-shadow: 0 5px 0 rgba(0,0,0,.14), 0 10px 24px rgba(0,0,0,.18);
+  animation: coach-in .35s cubic-bezier(.2,1.4,.4,1);
+}
+.coach[hidden] { display: none; }
+@keyframes coach-in { from { transform: translateY(-14px) scale(.96); opacity: 0; } }
+.coach-face { flex-shrink: 0; width: 56px; height: 56px; border-radius: 999px; overflow: hidden; box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,.2); }
+.coach-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.coach-name { font: 800 14px var(--display); color: #2f6fb0; }
+.coach-text { font: 600 14.5px/1.38 var(--body); color: var(--ink); }
+.coach-text b { color: var(--ink); font-weight: 800; }
+.coach-next { align-self: flex-start; margin-top: 4px; }
+.tut-finger { position: absolute; left: 0; top: 0; z-index: 31; pointer-events: none; margin: -40px 0 0 -17px; }
+.tut-finger svg { display: block; filter: drop-shadow(0 3px 2px rgba(0,0,0,.3)); animation: tut-bob .8s ease-in-out infinite; }
+.tut-finger[hidden] { display: none; }
+.tut-finger.up { margin-top: 0; }
+.tut-finger.up svg { transform: rotate(180deg); animation: tut-bob-up .8s ease-in-out infinite; }
+@keyframes tut-bob-up { 0%, 100% { transform: rotate(180deg); } 50% { transform: rotate(180deg) translateY(-9px); } }
+@keyframes tut-bob { 50% { transform: translateY(-9px); } }
+body.tutorial #contract, body.tutorial #boost-btn, body.tutorial #hint, body.tutorial #map-btn, body.tutorial #ep { display: none !important; }
+.coach-modal { display: flex; gap: 12px; align-items: flex-start; text-align: left; }
+.coach-modal p { margin: 4px 0 0; line-height: 1.4; }
+
+.letter {
+  position: relative; text-align: left; padding: 18px 18px 22px; border-radius: 6px;
+  background: #fbf6e9; color: #3b3326; font: 15px/1.5 Georgia, 'Times New Roman', serif;
+  box-shadow: inset 0 0 0 1px #e8dcc0, inset 0 0 40px rgba(180,150,90,.18);
+  max-height: 62vh; overflow-y: auto;
+}
+.letter p { margin: 0 0 10px; color: #3b3326; }
+.letter-head { font: 700 11px/1.3 Georgia, serif; letter-spacing: .08em; text-transform: uppercase; color: #8a7350; border-bottom: 1px solid #e3d5b5; padding-bottom: 8px; margin-bottom: 12px; }
+.letter .will { margin: 6px 0 12px; padding: 10px 12px; background: #f3ead2; border-left: 3px solid #b8924a; font-style: italic; }
+.letter .sig { display: block; text-align: right; margin-top: 6px; font: italic 700 22px 'Brush Script MT', 'Segoe Script', cursive; color: #2c4a7a; }
+.letter .sig.small { display: inline; font-size: 19px; }
+.letter-sign { margin-bottom: 0 !important; }
+.letter .seal { position: absolute; right: 14px; bottom: 12px; width: 40px; height: 40px; border-radius: 999px; background: radial-gradient(circle at 35% 35%, #d9484a, #8f1f22); color: #f6d3c0; display: grid; place-items: center; font: 700 18px Georgia, serif; box-shadow: 0 2px 4px rgba(0,0,0,.3); transform: rotate(-12deg); }
+.btn.gold svg { vertical-align: -4px; margin-right: 4px; }

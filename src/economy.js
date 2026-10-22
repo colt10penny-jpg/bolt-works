@@ -126,20 +126,28 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
 }
 
 // Upgrade prices. Each level costs `growth` times the one before up to level KNEE, which
-// sets the pace of a new town; after that prices rise more gently (LATE_GROWTH per
-// level) so the long climb to 100 and 250 stays within reach.
-export const KNEE = 25, LATE_GROWTH = 1.08;
+// sets the pace of a new town; then LATE_GROWTH times the one before up to level LINEAR;
+// after that each level costs the same fixed amount more than the last (a straight line),
+// so the long climb past 100 never runs away.
+export const KNEE = 25, LATE_GROWTH = 1.08, LINEAR = 100;
 // price of going from `level` to level + 1
 export function levelPrice(def, level) {
   const g = def.growth;
-  return level <= KNEE ? def.baseCost * Math.pow(g, level - 1) : def.baseCost * Math.pow(g, KNEE - 1) * Math.pow(LATE_GROWTH, level - KNEE);
+  if (level <= KNEE) return def.baseCost * Math.pow(g, level - 1);
+  if (level <= LINEAR) return def.baseCost * Math.pow(g, KNEE - 1) * Math.pow(LATE_GROWTH, level - KNEE);
+  const p = levelPrice(def, LINEAR);
+  return p + (level - LINEAR) * p * (LATE_GROWTH - 1);
 }
 const geo = (a, r, n) => n <= 0 ? 0 : a * (Math.pow(r, n) - 1) / (r - 1);
 // Cost of buying `n` levels starting at `level`.
 export function upgradeCost(def, level, n = 1) {
-  if (def.first && level === 1) return def.first + (n > 1 ? upgradeCost(def, 2, n - 1) : 0);
-  const early = Math.max(0, Math.min(n, KNEE + 1 - level));   // levels bought at the early rate
-  return geo(levelPrice(def, level), def.growth, early) + geo(levelPrice(def, level + early), LATE_GROWTH, n - early);
+  if (n <= 0) return 0;
+  if (def.first && level === 1) return def.first + upgradeCost(def, 2, n - 1);
+  if (level <= KNEE) { const k = Math.min(n, KNEE + 1 - level); return geo(levelPrice(def, level), def.growth, k) + upgradeCost(def, level + k, n - k); }
+  if (level <= LINEAR) { const k = Math.min(n, LINEAR + 1 - level); return geo(levelPrice(def, level), LATE_GROWTH, k) + upgradeCost(def, level + k, n - k); }
+  // an arithmetic run: n prices from levelPrice(level) going up by a fixed step each time
+  const a = levelPrice(def, level), step = levelPrice(def, LINEAR) * (LATE_GROWTH - 1);
+  return n * a + step * n * (n - 1) / 2;
 }
 // how many levels you can buy with `cash`
 export function maxAffordable(def, level, cash, cap = LEVEL_CAP - level) {

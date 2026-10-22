@@ -1201,6 +1201,13 @@ export class World {
     return { x: (p.x * 0.5 + 0.5) * this.canvas.clientWidth, y: (-p.y * 0.5 + 0.5) * this.canvas.clientHeight };
   }
 
+  // where a lot's building appears on screen (in CSS pixels), at height y above the ground
+  // (by default the top of the building), for pointing things at it
+  screenOf(id, y = null) {
+    const L = this.lots[id];
+    if (!L) return null;
+    return this.#project(new THREE.Vector3(L.group.position.x, y ?? (L.top * L.grow * 0.55 + 0.15), L.group.position.z));
+  }
   #labels(dt, labelFor) {
     // shrink labels when zoomed out so they don't pile on top of each other
     const labelScale = Math.min(1, Math.max(0.62, this.zoom * 0.95)).toFixed(2);
