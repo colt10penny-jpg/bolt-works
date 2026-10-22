@@ -5,40 +5,24 @@
 // fast as its supplier feeds it, so a slow supplier becomes a visible bottleneck.
 
 // The production chain, in order. Each one turns the previous product into its own.
-// Every upgrade is a big step: output x1.5 (`mult`) for a price that rises x1.9
-// (`growth`), so upgrades are few, costly, and you feel each one.
 export const FACTORIES = [
-  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0,     first: 12, baseCost: 6,     growth: 2.2,  mult: 1.5, perLevel: 1,        value: 0.4,     need: 0 },
-  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90,    baseCost: 55,    growth: 2.15, mult: 1.5, perLevel: 0.5,      value: 3,       need: 2 },
-  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 1500,  baseCost: 900,   growth: 2.1,  mult: 1.5, perLevel: 0.25,     value: 48,      need: 2 },
-  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 27000, baseCost: 16000, growth: 2.05, mult: 1.5, perLevel: 0.125,    value: 720,     need: 2 },
-  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 4.2e5, baseCost: 2.5e5, growth: 2.0,  mult: 1.5, perLevel: 0.0625,   value: 11200,   need: 2 },
-  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 4.5e6, baseCost: 2.7e6, growth: 1.95, mult: 1.5, perLevel: 0.03125,  value: 160000,  need: 2 },
-  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 5.2e7, baseCost: 3.1e7, growth: 1.9,  mult: 1.5, perLevel: 0.015625, value: 2.24e6,  need: 2 },
+  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0,         baseCost: 4,         growth: 1.07, perLevel: 4,      value: 0.25,   need: 0 },
+  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 25,        baseCost: 25,        growth: 1.09, perLevel: 2,      value: 1.5,    need: 2 },
+  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 200,       baseCost: 200,       growth: 1.15, perLevel: 1,      value: 20,     need: 2 },
+  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 4000,      baseCost: 4000,      growth: 1.15, perLevel: 0.5,    value: 180,    need: 2 },
+  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 120000,    baseCost: 120000,    growth: 1.15, perLevel: 0.25,   value: 1440,   need: 2 },
+  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 5000000,   baseCost: 5000000,   growth: 1.15, perLevel: 0.125,  value: 17280,  need: 2 },
+  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 120000000, baseCost: 120000000, growth: 1.15, perLevel: 0.0625, value: 103680, need: 2 },
 ];
 
 // Support buildings: not part of the chain, they help every factory.
 // Power Plant makes electricity (MW). Data Center turns electricity into compute,
 // and compute makes every factory run faster.
 export const SUPPORT = [
-  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 150000, baseCost: 90000,  growth: 2.0, mult: 1.5, perLevel: 3, need: 0 },
-  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 400000, baseCost: 250000, growth: 2.0, mult: 1.5, perLevel: 1, need: 3, needUnit: 'MW' },
+  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 100000,  baseCost: 100000,  growth: 1.13, perLevel: 3, need: 0 },
+  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 300000,  baseCost: 300000,  growth: 1.14, perLevel: 1, need: 3, needUnit: 'MW' },
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
-// Headquarters: where you hire managers and send them out to factories.
-export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 400, baseCost: 400, growth: 1, perLevel: 0, need: 0 };
-export const BUILDINGS = [...ALL, HQ];
-// Open land around town: develop a plot, then build an extra factory of any kind on it.
-export { isPlot } from './layout.js';
-// land costs more for each plot you develop (and more in later worlds)
-// Every building now needs a plot, so land is cheap at first and rises gently.
-export const landCost = (developed, world) => 40 * Math.pow(2.3, developed) * (world?.cost || 1);
-// Roads: restoring an old one is cheaper than building one from scratch.
-export const roadCost = (kind, built, world) => (kind === 'none' ? 45 : 15) * (1 + built * 0.08) * (world?.cost || 1);
-// an extra copy costs more to build and upgrade than the first one
-export const EXTRA_BUILD = 2, EXTRA_UPGRADE = 3;
-// Each manager you hire costs 10× the one before. Managers can be moved between factories.
-export const hireCost = n => 100 * Math.pow(10, n);
 export const isSupport = id => SUPPORT.some(s => s.id === id);
 
 // Compute speeds up every factory, with diminishing returns:
@@ -59,48 +43,24 @@ export const FACTS = {
   datacenter: 'Data centers spend a big share of their electricity on cooling, because nearly all the power the servers use turns into heat.',
 };
 
-// Ten levels per building, and every one is a big step that changes how it looks.
-// The numbers above are written per "small step"; each real level is three of them:
-// output x mult^3, and the price of a level is three small steps' worth.
-export const MAX_LEVEL = 10;
-for (const d of [...FACTORIES, ...SUPPORT]) {
-  const g = d.growth;
-  d.baseCost *= 1 + g + g * g;
-  d.growth = g * g * g;
-  d.mult = Math.pow(d.mult || 1.5, 3);
-}
-// how the building looks: one new look per level (0 at level 1, 9 at level 10)
-export const lookTier = level => Math.max(0, Math.min(MAX_LEVEL, level) - 1);
-// kept for older code: every level is a milestone now
-export const MILESTONES = Array.from({ length: MAX_LEVEL - 1 }, (_, i) => i + 2);
-export const milestoneCount = lookTier;
-export const nextMilestone = level => level < MAX_LEVEL ? level + 1 : null;
+// Every milestone level doubles a building's speed.
+export const MILESTONES = [10, 25, 50, 100, 200, 300, 400, 500];
+export const milestoneCount = level => MILESTONES.filter(m => level >= m).length;
+export const nextMilestone = level => MILESTONES.find(m => level < m) ?? null;
 
-// Units per second a building makes at a level (before the compute boost).
+// Units per second a building could make if fully supplied (before the compute boost).
 export function capacity(def, level) {
   if (level <= 0) return 0;
-  return def.perLevel * Math.pow(def.mult || 1.5, level - 1);
+  return def.perLevel * level * Math.pow(2, milestoneCount(level));
 }
 
 // Actual flow through the town given everyone's levels.
 // Returns chain entries { id, cap, made, util, starved, used, surplus }, support entries,
 // the compute speed multiplier, and total income per second.
-// `extras` are the extra buildings on developed land: [{ type, level }]; they add their
-// capacity to that product.
-// `effCore` / `e.eff`: how well each building is supplied, from its distance to the
-// nearest building that makes what it needs (see supplyEff).
-export function totalCap(def, levels, extras = [], effCore = {}) {
-  let c = capacity(def, levels[def.id] || 0) * (effCore[def.id] ?? 1);
-  for (const e of extras) if (e.type === def.id) c += capacity(def, e.level) * (e.eff ?? 1);
-  return c;
-}
-// Closer suppliers mean shorter truck trips: next door 125%, two blocks 100%,
-// three blocks 75%, four or more 50%.
-export const supplyEff = blocks => Math.max(0.5, Math.min(1.25, 1 + 0.25 * (2 - blocks)));
-export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
+export function flow(levels, mult = 1, perks = {}) {
   const pw = SUPPORT[0], dc = SUPPORT[1];
-  const powerMade = totalCap(pw, levels, extras, effCore) * (perks.power || 1);
-  const dcCap = totalCap(dc, levels, extras, effCore);
+  const powerMade = capacity(pw, levels.power || 0) * (perks.power || 1);
+  const dcCap = capacity(dc, levels.datacenter || 0);
   const compute = Math.min(dcCap, powerMade / dc.need);
   const powerUsed = compute * dc.need;
   const speed = speedFromCompute(compute);
@@ -114,12 +74,12 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
   let upstream = Infinity;
   for (let i = 0; i < FACTORIES.length; i++) {
     const d = FACTORIES[i];
-    const cap = totalCap(d, levels, extras, effCore) * speed * (perks[d.id] || 1);
+    const cap = capacity(d, levels[d.id] || 0) * speed * (perks[d.id] || 1);
     const canFeed = d.need ? upstream / d.need : Infinity;
     const made = Math.min(cap, canFeed);
     out.push({ id: d.id, cap, made, util: cap ? made / cap : 0, starved: cap > 0 && made < cap * 0.98 });
-    income += made * d.value * (perks.value || 1) * mult;
-    upstream = cap > 0 ? made : 0;
+    income += made * d.value * mult;
+    upstream = (levels[d.id] || 0) > 0 ? made : 0;
   }
   for (let i = 0; i < out.length; i++) {
     const next = out[i + 1];
@@ -130,17 +90,14 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
   return { per: out, support, speed, compute, income };
 }
 
-// Cost of buying `n` levels starting at `level` (the next one costs baseCost * growth^(level-1)).
+// Cost of buying `n` levels starting at `level`.
 export function upgradeCost(def, level, n = 1) {
-  // a building can have a cheap first upgrade (the Ore Mine does, so a new player has
-  // something to do straight away)
-  if (def.first && level === 1) return def.first + (n > 1 ? upgradeCost(def, 2, n - 1) : 0);
   const r = def.growth;
-  return def.baseCost * Math.pow(r, level - 1) * (Math.pow(r, n) - 1) / (r - 1);
+  return def.baseCost * Math.pow(r, level) * (Math.pow(r, n) - 1) / (r - 1);
 }
-export function maxAffordable(def, level, cash, cap = MAX_LEVEL - level) {
+export function maxAffordable(def, level, cash, cap = 1000) {
   const r = def.growth;
-  const first = def.baseCost * Math.pow(r, level - 1);
+  const first = def.baseCost * Math.pow(r, level);
   if (cash < first) return 0;
   const n = Math.floor(Math.log(cash * (r - 1) / first + 1) / Math.log(r));
   return Math.min(cap, Math.max(0, n));
@@ -155,29 +112,16 @@ export const THEMES = ['colorado', 'desert', 'moon'];
 
 // Each world is its own town. Launching a rocket unlocks the next one, and you can
 // travel back and forth. Each has a perk so it's worth revisiting.
-// Each later world costs much more to build in than it pays back, so it's a real step up.
 export const WORLDS = [
-  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 }, cost: 1, value: 1 },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3, value: 12 }, cost: 40, value: 12 },
-  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2, value: 150 }, cost: 1600, value: 150 },
+  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
+  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 } },
 ];
-// a building's numbers in a given world (prices scale up in later worlds)
-export function inWorld(def, world) {
-  if (!def || !world || world.cost === 1) return def;
-  return { ...def, unlock: def.unlock * world.cost, baseCost: def.baseCost * world.cost, first: def.first ? def.first * world.cost : undefined, value: def.value !== undefined ? def.value * world.value : def.value };
-}
 export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 
 // Factories store the money they make until you tap to collect it.
 // Storage holds this many seconds of the building's earnings.
-export const BIN_SECONDS = 600;
-
-// Building and upgrading take time: a few seconds for the first buildings, longer the
-// further along the chain a building is and the higher the level. Later worlds are slower.
-export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 90, power: 150, datacenter: 210, engine: 300, turbine: 600, rocket: 900 };
-const worldPace = world => 1 + 0.5 * Math.max(0, WORLDS.findIndex(w => w.id === world?.id));
-export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 30) * worldPace(world));
-export const upgradeSecs = (type, toLevel, world) => Math.max(3, Math.round((BUILD_SECS[type] || 30) * 0.6 * Math.pow(1.45, Math.max(0, toLevel - 2)) * worldPace(world)));
+export const BIN_SECONDS = 300;
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };

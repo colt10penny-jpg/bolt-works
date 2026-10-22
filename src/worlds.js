@@ -14,7 +14,6 @@ export const SKINS = {
     turbine: C('Turbine Shop', 'turbines', 'turbines', 0x2fa39a, 'turbine', 'Jet engine turbine blades run in gas hotter than their own melting point. Cooling air through tiny internal channels and ceramic coatings keep them alive.'),
     rocket: C('Rocket Bay', 'rockets', 'rockets', 0xe8e4da, 'rocket', 'To stay in low Earth orbit, a rocket has to reach about 7.8 km/s, roughly 28,000 km/h.'),
     power: C('Power Plant', 'electricity', 'MW', 0x6f8fa8, 'power', 'The white plume from a power plant’s cooling tower is water vapor, not smoke: it is heat from the plant leaving as evaporating water.'),
-    hq: C('Headquarters', 'managers', 'managers', 0x5b7a99, 'hq', 'Many factory towns grew around one company office, where managers planned shifts and sent supervisors out to each plant.'),
     datacenter: C('Data Center', 'compute', 'PFLOPS', 0x3d4b6b, 'datacenter', 'Data centers spend a big share of their electricity on cooling, because nearly all the power the servers use turns into heat.'),
   },
   desert: {
@@ -26,7 +25,6 @@ export const SKINS = {
     turbine: C('Rover Factory', 'rovers', 'rovers', 0xb84a3a, 'rover', 'NASA engineers have tested Mars rover prototypes in the Mojave Desert, because its dry, rocky ground resembles Mars.'),
     rocket: C('Launch Pad', 'rockets', 'rockets', 0xd8d2c4, 'launchpad', 'Rockets are usually launched toward the east to pick up a free speed boost from Earth’s rotation.'),
     power: C('Solar Farm', 'electricity', 'MW', 0x2a4f8f, 'solarfarm', 'A solar farm’s output peaks around midday, so many are paired with big batteries to keep power flowing after sunset.'),
-    hq: C('Desert HQ', 'managers', 'managers', 0xd9b38c, 'hqdesert', 'Thick adobe walls soak up the desert sun by day and release the heat at night, keeping the inside comfortable.'),
     datacenter: C('Desert Data Center', 'compute', 'PFLOPS', 0xb8946a, 'datacenter', 'Data centers in dry places can use evaporative cooling, which works best when the air is hot and dry.'),
   },
   moon: {
@@ -38,7 +36,6 @@ export const SKINS = {
     turbine: C('Telescope Works', 'telescopes', 'telescopes', 0x6b5fb5, 'telescope', 'A radio telescope on the Moon’s far side would be shielded from Earth’s radio noise, which is why astronomers want to build one there.'),
     rocket: C('Starship Yard', 'starships', 'starships', 0xcfd3da, 'starship', 'Leaving the Moon takes far less speed than leaving Earth: about 2.4 km/s to escape the Moon versus about 11.2 km/s for Earth.'),
     power: C('Fusion Reactor', 'electricity', 'MW', 0x7a4fc0, 'fusion', 'Fusion reactors try to recreate what powers the Sun: fusing light atoms together to release energy.'),
-    hq: C('Mission Control', 'managers', 'managers', 0xcfd3da, 'hqmoon', 'Radio signals take about 1.3 seconds to travel between the Earth and the Moon, so every conversation with Mission Control has a small delay.'),
     datacenter: C('Quantum Lab', 'compute', 'PFLOPS', 0x2d6a8f, 'quantum', 'Quantum computers use qubits that can hold a mix of 0 and 1 at once, and most kinds must be chilled close to absolute zero.'),
   },
 };
