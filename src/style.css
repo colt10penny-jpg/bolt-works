@@ -275,7 +275,7 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .w-card { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 10px; background: var(--mint); }
 .w-card.here { outline: 3px solid var(--sel); }
 .w-card.locked { opacity: .6; }
-.w-swatch { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; box-shadow: 0 3px 0 rgba(0,0,0,.15); display: block; overflow: hidden; }
+.w-swatch { width: 46px; height: 46px; flex-shrink: 0; display: block; filter: drop-shadow(0 2px 0 rgba(0,0,0,.15)); }
 .w-swatch svg { display: block; }
 .w-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .w-info b { font: 800 16px var(--display); }
@@ -386,3 +386,23 @@ body.selecting .boost, body.selecting #contract, body.selecting #ep, body.select
 .shop-row .s-price s { font: 800 12px var(--body); color: var(--ink-soft); }
 .shop-row .s-price b { font: 800 14px var(--body); color: #fff; background: var(--green); border-radius: 999px; padding: 4px 10px; }
 .shop-best { font: 800 10px var(--body); background: #e85a3c; color: #fff; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+
+.sh-save { display: flex; align-items: center; gap: 8px; }
+.sh-save .sh-bar { flex: 1; }
+.sh-save small { font: 800 12px var(--body); color: var(--ink-soft); flex-shrink: 0; }
+
+/* phones held sideways: the game is made for portrait */
+#rotate { display: none; }
+@media (orientation: landscape) and (max-height: 540px) {
+  #rotate { display: flex; position: fixed; inset: 0; z-index: 1000; background: var(--ink); color: #fff; align-items: center; justify-content: center; text-align: center; }
+  #rotate > div { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #rotate svg { animation: tilt 1.8s ease-in-out infinite; }
+  #rotate b { font: 800 22px var(--display); }
+  #rotate small { font: 800 14px var(--body); opacity: .75; }
+}
+@keyframes tilt { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0deg); } }
+
+.sh-how { margin: 0; font: 700 12.5px/1.35 var(--body); color: var(--ink-soft); }
+.sh-how b { color: var(--ink); }
+
+.link.danger { color: #c4462d; font: 800 13px var(--body); background: none; border: none; padding: 6px 0 0; align-self: center; text-decoration: underline; }

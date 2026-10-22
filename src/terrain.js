@@ -351,8 +351,7 @@ export function buildLand(name, T, blocks) {
       const g = rect(fx - w / 2, fz - d / 2, fx + w / 2, fz + d / 2, H(fx, fz) + 0.06, 6);
       far.add(fieldM.get(color), g);
     }
-    // a little dock on the lake
-    near.add(std(0x8a5a3c), boxAt(1.4, 0.18, 7, LAKE.x - LAKE.r + 2, -0.35, LAKE.z));
+
   } else if (name === 'desert') {
     place(420, S.saguaro, { pad: 0.5 });
     place(260, S.joshua, { pad: 0.5 });

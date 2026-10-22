@@ -84,6 +84,13 @@ const shade = (hex, f) => {
 };
 
 // Each builder returns { group, anim(t, dt), top } where top is the label anchor height.
+// the open top of a chimney: a dark hole inside a little rim, so smoke comes out of it
+function stackHole(g, x, y, z, r) {
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.78, 0.03, 16), mat(0x17181b, { roughness: 1 }));
+  hole.position.set(x, y + 0.006, z); g.add(hole);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r * 0.9, r * 0.12, 6, 18), mat(0x4a4c52, { roughness: 0.8 }));
+  rim.rotation.x = Math.PI / 2; rim.position.set(x, y + 0.02, z); g.add(rim);
+}
 export const BUILDERS = {
   mine(color) {
     const g = new THREE.Group();
@@ -128,7 +135,9 @@ export const BUILDERS = {
     const tower = new THREE.Mesh(new THREE.LatheGeometry(pts, 20), mat(0xe9e6df, { side: THREE.DoubleSide }));
     tower.position.set(-1.6, 0, -1.2); tower.castShadow = true; tower.receiveShadow = true;
     g.add(tower);
-    g.add(cyl(1.0, 1.0, 0.25, 0xcfcac0, -1.6, 5.8, -1.2, 20));
+    // the tower's open mouth: a dark hollow inside its rim
+    { const rim = new THREE.Mesh(new THREE.TorusGeometry(1.49, 0.1, 6, 24), mat(0xcfcac0)); rim.rotation.x = Math.PI / 2; rim.position.set(-1.6, 6.0, -1.2); g.add(rim);
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(1.36, 24), mat(0x3a3b3e, { roughness: 1 })); hole.rotation.x = -Math.PI / 2; hole.position.set(-1.6, 5.2, -1.2); g.add(hole); }
     // turbine hall + transformer yard
     g.add(box(3.4, 2.4, 3.4, color, 2.0, 0, -0.4));
     g.add(box(3.6, 0.25, 3.6, shade(color, -0.35), 2.0, 2.4, -0.4));
@@ -180,7 +189,8 @@ export const BUILDERS = {
     for (const [x, h] of [[-1.6, 5.2], [0.2, 4.2]]) {
       g.add(cyl(0.48, 0.55, h, shade(color, -0.3), x, 3.5, -1.2));
       g.add(cyl(0.52, 0.52, 0.35, 0xf3efe6, x, 3.5 + h - 1.2, -1.2));
-      stacks.push(new THREE.Vector3(x, 3.5 + h, -1.2));
+      stackHole(g, x, 3.5 + h, -1.2, 0.48);
+      stacks.push(new THREE.Vector3(x, 3.5 + h + 0.05, -1.2));
     }
     g.add(box(1.4, 1, 1.4, 0x8a8f99, 2, 3.55, -0.9));
     return { group: g, top: 9, smoke: stacks };
@@ -577,7 +587,8 @@ Object.assign(BUILDERS, {
     g.add(cyl(0.45, 0.55, 4.6, shade(color, -0.25), 1.6, 0, -1.6));
     g.add(box(2.2, 1.4, 2.2, 0xe8dcc4, 2.2, 0, 1.2));
     for (let i = 0; i < 3; i++) g.add(box(0.5, 0.05, 1.4, 0x9fd6ff, 1.5 + i * 0.6, 1.42, 1.2, { transparent: true, opacity: 0.8 }));
-    return { group: g, top: 5.4, smoke: [new THREE.Vector3(1.6, 4.8, -1.6)] };
+    stackHole(g, 1.6, 4.6, -1.6, 0.45);
+    return { group: g, top: 5.4, smoke: [new THREE.Vector3(1.6, 4.65, -1.6)] };
   },
   solarfab(color) {
     const g = new THREE.Group();

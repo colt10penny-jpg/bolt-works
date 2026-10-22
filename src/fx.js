@@ -28,22 +28,22 @@ const GradeShader = {
 // key moments of the day: [time, sun colour, sun strength, sky light, ground light, sky strength, window glow, haze colour]
 const DAY = {
   earth: [
-    [0.00, 0xa9bcff, 0.7, 0x93a6de, 0x7a6450, 1.35, 1.0, 0x3b4f7c],   // night (warm bounce from the lit streets)
-    [0.06, 0xffa86b, 1.3, 0xffd2b0, 0x6b5a4a, 1.0, 0.55, 0xf2b98f],    // sunrise
+    [0.00, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night: moonlit blue, but everything still easy to see
+    [0.06, 0xffa86b, 1.7, 0xffd2b0, 0x7a6a5a, 1.25, 0.55, 0xf2b98f],    // sunrise
     [0.14, 0xfff1dc, 2.6, 0xfff6e5, 0x5d7a46, 1.25, 0.0, 0xcfe3f0],    // morning
     [0.55, 0xffffff, 2.8, 0xfff6e5, 0x5d7a46, 1.3, 0.0, 0xd6e7f2],     // afternoon
     [0.66, 0xffb46b, 1.8, 0xffd9b8, 0x6b5a4a, 1.05, 0.25, 0xf3c08e],   // golden hour
-    [0.72, 0xff7f5a, 0.9, 0xc99ab0, 0x4a3f50, 0.9, 0.8, 0xc78a92],     // sunset
-    [0.80, 0xa9bcff, 0.7, 0x93a6de, 0x7a6450, 1.35, 1.0, 0x3b4f7c],   // night
-    [1.00, 0xa9bcff, 0.7, 0x93a6de, 0x7a6450, 1.35, 1.0, 0x3b4f7c],
+    [0.72, 0xff8f6a, 1.6, 0xc9a6c0, 0x6a5a60, 1.3, 0.8, 0xc78a92],     // sunset
+    [0.80, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night: moonlit blue, but everything still easy to see
+    [1.00, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night: moonlit blue, but everything still easy to see
   ],
   // the Moon has no air: always hard white sunlight, and "night" is earthlight
   moon: [
-    [0.00, 0xb8c8ff, 1.0, 0x7f8fc4, 0x2a2d3a, 0.95, 1.0, 0x1b2030],
+    [0.00, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
     [0.08, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
     [0.70, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
-    [0.80, 0xb8c8ff, 1.0, 0x7f8fc4, 0x2a2d3a, 0.95, 1.0, 0x1b2030],
-    [1.00, 0xb8c8ff, 1.0, 0x7f8fc4, 0x2a2d3a, 0.95, 1.0, 0x1b2030],
+    [0.80, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
+    [1.00, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
   ],
 };
 const ca = new THREE.Color(), cb = new THREE.Color();
@@ -132,14 +132,16 @@ export class Look {
     // haze matches the ground colour by day, and the sky by night
     if (this.groundBase) this.scene.fog.color.copy(this.groundBase).lerp(T.haze, 0.45 + this._night * 0.4);
     this.scene.background = this.scene.fog.color;
-    this.scene.environmentIntensity = (0.25 + 0.25 * (1 - this._night)) * this.envScale;
+    this.scene.environmentIntensity = (0.4 + 0.1 * (1 - this._night)) * this.envScale;
     const n = this._night;
     for (const m of GLOW.glass) m.emissiveIntensity = n * m.userData.glow;
     for (const m of GLOW.lit) m.emissiveIntensity = (m.userData.baseGlow ?? 1) * (1 + n * 1.2);
     if (this.bloom) { this.bloom.strength = 0.25 + n * 0.5; this.bloom.threshold = 1.15 - n * 0.35; }
     if (this.grade) {
-      this.grade.uniforms.vignette.value = 0.28 + n * 0.05;
-      this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02, 1, 1 + n * 0.05);
+      this.grade.uniforms.vignette.value = 0.28;
+      // night: a cool moonlit cast and a little less colour, without making anything darker
+      this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17, 1 - n * 0.07, 1 + n * 0.12);
+      this.grade.uniforms.sat.value = 1.08 - n * 0.2;
     }
   }
 

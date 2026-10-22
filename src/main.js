@@ -6,6 +6,7 @@ import {
 } from './economy.js';
 import { Game } from './state.js';
 import { World } from './world.js';
+import { lookText } from './upgrades.js';
 import { plotIds } from './layout.js';
 import { ads } from './ads.js';
 import { sfx } from './sound.js';
@@ -167,20 +168,21 @@ function head(d, badge, title, sub) {
     ${factOpen ? `<p class="sh-fact">${d.fact}</p>` : ''}`;
 }
 // what each level adds to the building (index = the level it arrives at)
-const LOOKS = { 2: 'a new wing', 3: 'a water tower', 4: 'a second wing', 5: 'a radio mast', 6: 'a third wing and solar panels', 7: 'a lit rooftop sign', 8: 'rooftop gardens and a flag', 9: 'floodlights and taller wings', 10: 'a golden beacon' };
-function mileBar(lv) {
+function mileBar(lv, type) {
   const pct = (lv / MAX_LEVEL) * 100;
-  return `<div class="sh-mile"><span>${lv < MAX_LEVEL ? `Next: ${LOOKS[lv + 1]}` : 'Fully built'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${lv}/${MAX_LEVEL}</span></div>`;
+  return `<div class="sh-mile"><span>${lv < MAX_LEVEL ? `Next: ${lookText(type, lv + 1)}` : 'Fully built'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${lv}/${MAX_LEVEL}</span></div>`;
 }
 function buyRow(d, lv) {
   if (lv >= MAX_LEVEL) return `<div class="sh-buy"><button class="btn green" disabled>Max level</button></div>`;
   const cost = upgradeCost(d, lv, 1);
   const afford = game.canAfford(cost);
   return `<div class="sh-buy">
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>${afford ? `Upgrade to Lv ${lv + 1} · $${fmtCost(cost)}` : `Lv ${lv + 1} · need $${fmtCost(cost - game.cash)}`}</button>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + 1} · $${fmtCost(cost)}</button>
     </div>
+    ${afford ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${Math.min(100, game.cash / cost * 100).toFixed(1)}%"></i></span><small>Saving up: ${Math.floor(Math.min(99, game.cash / cost * 100))}%</small></div>`}
     ${afford ? '' : cashAdButton(cost - game.cash)}`;
 }
+const demolishRow = d => `<button class="link danger" data-act="demolish">Demolish ${d.name}</button>`;
 function managerRow(d) {
   if (game.hasManager(d.id)) return '';
   const store = `<span>${ICON.person}<span>Storage <b>$${fmt(game.bin(d.id))}</b> / $${fmt(game.binCap(d.id))}</span></span>`;
@@ -217,7 +219,7 @@ function plotSheet(lot) {
     const sub = first ? 'Start your town: clear it and build a road in' : roadWords ? `Clear it and ${roadWords}` : 'Clear it (its roads are already good)';
     return top(first ? 'Empty land' : 'Overgrown land', sub) +
       `<div class="sh-cost"><span>Land <b>$${fmtCost(q.land)}</b></span>${q.list.length ? `<span>Roads <b>$${fmtCost(q.roads)}</b></span>` : ''}</div>
-      <button class="btn green" data-act="develop" ${ok ? '' : 'disabled'}>${ok ? `Develop · $${fmtCost(q.total)}` : `Develop · $${fmtCost(q.total)} (need $${fmtCost(q.total - game.cash)} more)`}</button>
+      <button class="btn green" data-act="develop" ${ok ? '' : 'disabled'}>Develop · $${fmtCost(q.total)}</button>
       ${ok ? '' : cashAdButton(q.total - game.cash)}
       <p class="sh-note">Building next to roads you already fixed is cheaper.</p>`;
   }
@@ -261,9 +263,9 @@ function hqSheet(d) {
   }).join('');
   const sub = staff ? `${staff} manager${staff > 1 ? 's' : ''} · ${free} waiting for a job` : 'Hire managers to collect money for you';
   return head(d, ICON.hq, d.name, sub) + `
-    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${!more ? 'One manager per factory: build more to hire more' : afford ? `Hire a manager · $${fmtCost(cost)}` : `Next manager · need $${fmtCost(cost - game.cash)}`}</button></div>
+    <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${!more ? 'One manager per factory: build more to hire more' : `Hire a manager · $${fmtCost(cost)}`}</button></div>
     ${afford || !more ? '' : cashAdButton(cost - game.cash)}
-    <div class="hq-list">${rows}</div>`;
+    <div class="hq-list">${rows}</div>${demolishRow(d)}`;
 }
 
 function renderSheet(force = false) {
@@ -284,7 +286,7 @@ function renderSheet(force = false) {
     const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
     const made = t === 'power' ? `${fmtRate(game.info(id).made)} MW` : `${fmtRate(game.info(id).made)} PFLOPS`;
     const sub = `Lv ${lv} · ${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
-    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus({ ...d, id: t }) + mileBar(lv) + buyRow(d, lv);
+    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub) + supportStatus({ ...d, id: t }) + mileBar(lv, t) + buyRow(d, lv) + demolishRow(d);
   } else if (lv > 0) {
     const f = game.info(id);
     const earn = f.made * d.value * game.mult();
@@ -292,10 +294,16 @@ function renderSheet(force = false) {
     const rocket = t === 'rocket' ? (() => {
       const pts = game.launchPreview(), next = game.nextWorld(), unlocks = next && !game.s.worlds[next.id];
       const can = game.canLaunch() && (pts >= 1 || unlocks);
-      return `<div class="sh-row"><span>${Math.floor(game.run.rocketsBuilt)} ${d.unit} ready</span>
+      // how rockets get built: parts arrive by truck, the bay puts them together, then you launch
+      const prev = def(FACTORIES[idx('rocket') - 1].id), made = game.typeInfo('rocket')?.made || 0;
+      const ready = Math.floor(game.run.rocketsBuilt), frac = game.run.rocketsBuilt - ready;
+      const eta = made > 0 ? fmtTime((1 - frac) / made) : null;
+      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}; this bay puts every ${d.need} together into one ${one(d.unit)}. When one is ready, launch it.</p>`;
+      const prog = ready >= 1 ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `Next ${one(d.unit)}: ${Math.floor(frac * 100)}% · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
+      return how + prog + `<div class="sh-row"><span>${ready} ${ready === 1 ? one(d.unit) : d.unit} ready</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + supplyLine(d) + rocket + mileBar(lv) + buyRow(d, lv) + managerRow(d);
+    html = head(d, ICON.factory, d.name, sub) + statusLine(d) + supplyLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   const key = lot + ':' + (id || '');
@@ -351,6 +359,15 @@ sheet.addEventListener('click', async e => {
     if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`); }
   }
   if (act === 'launch') openLaunch();
+  if (act === 'demolish' && id) {
+    const d = def(id);
+    openModal(`<div class="big-icon">${ICON.factory}</div><h2>Demolish the ${d.name}?</h2>
+      <p>It's knocked down and its levels are lost. The cleared lot stays yours, ready for something else.${game.hasManager(id) ? ' Its manager goes back to headquarters.' : ''}</p>
+      <button class="btn red" data-act="yes">Demolish</button><button class="btn plain" data-act="dismiss">Keep it</button>`, a => {
+      if (a !== 'yes') return;
+      if (game.demolish(id)) { sfx.build(); toast(`${d.name} demolished`); track('demolished', { type: game.typeOf(id) || d.type }); world.select(lot); }
+    });
+  }
   if (act === 'hire' && game.hire()) { sfx.milestone(); world.bounce(lotOf('hq')); toast('Manager hired! Send them to a factory.'); track('manager_hired', { staff: game.staff() }); }
   if (act === 'assign' && game.assign(b.dataset.id)) { sfx.upgrade(); toast(`Manager on the way to the ${def(b.dataset.id).name}`); track('manager_sent', { factory: b.dataset.id }); }
   if (act === 'recall' && game.recall(b.dataset.id)) { sfx.tap(); toast(`Manager heading back to the ${def('hq').name}`); }
@@ -401,7 +418,7 @@ world.onPick = id => {
   addEventListener('pointermove', e => {
     if (y0 == null) return;
     dy = Math.max(0, e.clientY - y0);
-    if (dy > 8) { sheet.style.transition = 'none'; sheet.style.transform = `translateY(${dy}px)`; }
+    if (dy > 14) { sheet.style.transition = 'none'; sheet.style.transform = `translateY(${dy - 14}px)`; }
   });
   const end = () => {
     if (y0 == null) return;
@@ -411,7 +428,8 @@ world.onPick = id => {
       sheet.style.transform = `translateY(${sheet.offsetHeight}px)`;
       setTimeout(() => { world.select(null); sheet.style.transform = ''; }, 180);
     } else sheet.style.transform = '';
-    if (dy > 8) { sheet.dataset.swiped = '1'; setTimeout(() => delete sheet.dataset.swiped, 50); }
+    // only a real drag counts as a swipe: a tap with a little finger wobble still presses the button
+    if (dy > 24) { sheet.dataset.swiped = '1'; setTimeout(() => delete sheet.dataset.swiped, 50); }
     y0 = null;
   };
   addEventListener('pointerup', end); addEventListener('pointercancel', end);
@@ -632,21 +650,30 @@ async function doLaunch(mult) {
 
 // ---------- world map ----------
 // little cartoon scenes for each world
+// little cartoon globes, one for each world's land
+const globe = (id, body, extra = '') => `<svg viewBox="0 0 48 48" width="46" height="46"><defs><clipPath id="g-${id}"><circle cx="24" cy="24" r="20"/></clipPath>
+    <radialGradient id="s-${id}" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient></defs>
+    <g clip-path="url(#g-${id})">${body}</g><circle cx="24" cy="24" r="20" fill="url(#s-${id})"/><circle cx="24" cy="24" r="20" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>${extra}</svg>`;
 const WORLD_ART = {
-  colorado: `<svg viewBox="0 0 48 48" width="44" height="44"><defs><clipPath id="wc"><rect width="48" height="48" rx="12"/></clipPath></defs><g clip-path="url(#wc)">
-    <rect width="48" height="48" fill="#8fd0f5"/><circle cx="38" cy="11" r="5" fill="#ffe27a"/>
-    <path d="M-2 34 L14 12 L24 25 L32 15 L50 34 Z" fill="#7d8ea3"/><path d="M14 12 L10 17.5 L13 16 L15 18 L18 16.5 Z M32 15 L28.6 19.5 L31.5 18 L33.5 20 L35.5 18.6 Z" fill="#fff"/>
-    <path d="M-2 33 Q12 27 24 31 T50 30 V50 H-2 Z" fill="#6fbf4a"/><path d="M-2 40 Q16 35 30 39 T50 38 V50 H-2 Z" fill="#4f9e38"/>
-    <path d="M37 24 L32 33 L35 33 L31 39 L43 39 L39 33 L42 33 Z" fill="#2f6f3e"/><rect x="36" y="39" width="2" height="4" fill="#6b4a2b"/></g></svg>`,
-  desert: `<svg viewBox="0 0 48 48" width="44" height="44"><defs><clipPath id="wd"><rect width="48" height="48" rx="12"/></clipPath><linearGradient id="wds" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb46b"/><stop offset="1" stop-color="#ffe0a3"/></linearGradient></defs><g clip-path="url(#wd)">
-    <rect width="48" height="48" fill="url(#wds)"/><circle cx="14" cy="14" r="7" fill="#fff3b0"/>
-    <path d="M-2 30 Q14 22 28 29 T50 26 V50 H-2 Z" fill="#e7b877"/><path d="M-2 38 Q18 31 34 37 T50 35 V50 H-2 Z" fill="#d79c5a"/>
-    <path d="M33 40 V24 a3 3 0 0 1 6 0 V40 Z M33 32 h-3 a2 2 0 0 1 -2 -2 v-4 a1.5 1.5 0 0 1 3 0 v3 h2 Z M39 30 h3 v-4 a1.5 1.5 0 0 1 3 0 v5 a2 2 0 0 1 -2 2 h-4 Z" fill="#4f8a3c"/></g></svg>`,
-  moon: `<svg viewBox="0 0 48 48" width="44" height="44"><defs><clipPath id="wm"><rect width="48" height="48" rx="12"/></clipPath></defs><g clip-path="url(#wm)">
-    <rect width="48" height="48" fill="#1d2440"/><circle cx="8" cy="9" r="1" fill="#fff"/><circle cx="22" cy="6" r=".8" fill="#fff"/><circle cx="30" cy="16" r=".9" fill="#fff"/><circle cx="6" cy="22" r=".7" fill="#fff"/>
-    <circle cx="38" cy="12" r="6" fill="#3f8fd8"/><path d="M35 9 q3 1 2 4 q-2 1 -3 -1 Z M39 14 q3 -1 4 1 q-1 3 -4 1 Z" fill="#5fb85a"/>
-    <path d="M-2 32 Q20 24 50 31 V50 H-2 Z" fill="#b9b9c2"/><ellipse cx="12" cy="38" rx="5" ry="2" fill="#9a9aa4"/><ellipse cx="32" cy="42" rx="7" ry="2.6" fill="#9a9aa4"/><ellipse cx="40" cy="35" rx="3" ry="1.2" fill="#9a9aa4"/>
-    <rect x="23" y="18" width="1.4" height="14" fill="#e8e8ee"/><path d="M24.4 18 h8 v5 h-8 Z" fill="#e85a3c"/></g></svg>`,
+  // green continents and blue sea, with snowy mountains and a pine forest
+  colorado: globe('co', `<rect width="48" height="48" fill="#4aa3df"/>
+    <path d="M6 14 Q14 6 24 9 Q30 11 28 18 Q34 20 33 27 Q30 33 22 31 Q16 36 10 31 Q4 26 6 20 Z" fill="#6fbf4a"/>
+    <path d="M34 32 Q40 30 44 35 Q42 42 35 41 Q31 37 34 32 Z" fill="#6fbf4a"/>
+    <path d="M12 22 L17 14 L22 22 Z" fill="#8a96a8"/><path d="M17 14 L15 17.5 L17 16.6 L19 17.5 Z" fill="#fff"/>
+    <path d="M19 22 L23 16 L27 22 Z" fill="#7d8ea3"/><path d="M23 16 L21.6 18.4 L23 17.8 L24.4 18.4 Z" fill="#fff"/>
+    <path d="M14 29 l2 -5 l2 5 Z M19 30 l2 -5 l2 5 Z M24 28 l2 -5 l2 5 Z" fill="#2f6f3e"/>`),
+  // a sandy planet with dunes, cacti and a bright sun
+  desert: globe('de', `<rect width="48" height="48" fill="#f2c178"/>
+    <path d="M0 22 Q12 16 24 21 T48 19 V48 H0 Z" fill="#e5a75e"/><path d="M0 32 Q14 26 28 31 T48 30 V48 H0 Z" fill="#d48c45"/>
+    <path d="M14 26 v-7 a1.6 1.6 0 0 1 3.2 0 v7 Z M14 23 h-2 a1 1 0 0 1 -1 -1 v-2 a.9.9 0 0 1 1.8 0 v1.4 h1.2 Z" fill="#3f7a35"/>
+    <path d="M31 33 v-6 a1.4 1.4 0 0 1 2.8 0 v6 Z M33.8 30 h1.6 v-2 a.9.9 0 0 1 1.8 0 v2.4 a1 1 0 0 1 -1 1 h-2.4 Z" fill="#3f7a35"/>
+    <circle cx="33" cy="12" r="4" fill="#fff4b8"/>`),
+  // grey and cratered, with a little flag planted on top
+  moon: globe('mo', `<rect width="48" height="48" fill="#b7b7c0"/>
+    <circle cx="15" cy="16" r="5" fill="#9b9ba6"/><circle cx="15.8" cy="16.8" r="3.6" fill="#a9a9b3"/>
+    <circle cx="31" cy="29" r="7" fill="#9b9ba6"/><circle cx="32" cy="30" r="5.2" fill="#a9a9b3"/>
+    <circle cx="13" cy="33" r="3" fill="#9b9ba6"/><circle cx="33" cy="13" r="2.4" fill="#9b9ba6"/><circle cx="24" cy="40" r="2" fill="#9b9ba6"/>`,
+    `<rect x="23.3" y="1" width="1.4" height="6" fill="#e8e8ee"/><path d="M24.7 1 h6 v3.6 h-6 Z" fill="#e85a3c"/>`),
 };
 function openMap() {
   sfx.tap();
@@ -886,6 +913,10 @@ function hintText() {
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
   if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;
+  if (game.built('rocket') && !game.canLaunch()) {
+    const r = def('rocket'), p = def('turbine');
+    return game.typeInfo('rocket')?.made > 0 ? `Your ${r.name} is putting a rocket together from ${p.unit}: ${Math.floor(game.run.rocketsBuilt * 100)}%` : `Your ${r.name} needs ${p.unit} from a ${p.name} to build a rocket`;
+  }
   const nextF = FACTORIES.find(f => !game.built(f.id));
   if (nextF && !emptyLot() && plotIds(game.s.current).some(p => !game.developed(p)) && game.canAfford(game.landPrice() * 2 + def(nextF.id).unlock * 0.5)) return `Clear more land for a ${def(nextF.id).name}`;
   if (nextF && emptyLot() && game.canAfford(def(nextF.id).unlock)) return `Build a ${def(nextF.id).name} on your empty lot`;
@@ -908,7 +939,7 @@ game.on('recall', id => world.sendManager(lotOf(id), lotOf('hq')));
 game.on('upgrade', (id, before, after) => {
   world.setGrowth(lotOf(id), milestoneCount(after));
   sfx.milestone();
-  toast(after >= MAX_LEVEL ? `${def(id).name} is fully built!` : `${def(id).name} level ${after}: ${LOOKS[after]}!`);
+  toast(after >= MAX_LEVEL ? `${def(id).name} is fully built!` : `${def(id).name} level ${after}: ${lookText(game.typeOf(id), after)}!`);
   track('milestone', { factory: id, level: after });
 });
 
@@ -921,6 +952,7 @@ function syncBuilt() {
   }
 }
 game.on('developed', lot => world.setLand(lot, true));
+game.on('demolished', (lot, type, promoted) => { world.clearDeliveries(); syncBuilt(); world.bounce(lot); });
 game.on('roads', () => world.roadsChanged());
 
 // ---------- save ----------
@@ -993,7 +1025,7 @@ function loop(now) {
     bb.setAttribute('aria-label', left > 0 ? `Double earnings active, ${fmtTime(left)} left. Watch an ad to add more.` : 'Watch an ad for double earnings');
     if (game.s.ep > 0) { $('ep').hidden = false; $('ep').textContent = `+${fmt(game.s.ep * EP_BONUS * 100)}% · ${game.s.ep} EP`; }
     else $('ep').hidden = true;
-    world.setRocketReady(game.canLaunch());
+    world.setRocketReady(game.canLaunch(), game.run.rocketsBuilt % 1);
     const mb = $('map-btn'); const wl = game.unlockedWorlds().length;
     mb.hidden = wl < 2; mb.setAttribute('aria-label', `Your worlds (now in ${game.world.short})`);
     const nxt = game.nextWorld();

@@ -12,6 +12,7 @@ import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
 import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, NET } from './traffic.js';
 
 import { plotsOf, boundsOf, startView } from './layout.js';
+import { STYLE, PROPS, styledWing } from './upgrades.js';
 const LOT = 10;
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
 let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
@@ -479,58 +480,18 @@ export class World {
       }
       return null;
     };
-    const later = [];   // rooftop gear with no room on the main roof goes on a wing instead
-    if (tier >= 2) {
-      const p = roofSpot(0.6, 0.6);
-      if (p) {
-        const tank = new THREE.Group();
-        for (const [dx, dz] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) tank.add(box(0.1, 0.7, 0.1, 0x5b5f66, dx, 0, dz));
-        tank.add(cylY(0.55, 0.9, 0x8a8f99, 0, 0.7, 0), cylY(0.6, 0.12, 0x5b5f66, 0, 1.6, 0));
-        tank.position.copy(p); g.add(tank);
-      } else later.push(() => { const t = new THREE.Group(); for (const [dx, dz] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) t.add(box(0.1, 0.7, 0.1, 0x5b5f66, dx, 0, dz)); t.add(cylY(0.55, 0.9, 0x8a8f99, 0, 0.7, 0), cylY(0.6, 0.12, 0x5b5f66, 0, 1.6, 0)); return t; });
-    }
-    if (tier >= 4) {
-      const p = roofSpot(0.3, 0.3, 2.5);
-      if (p) {
-        const mast = new THREE.Group();
-        mast.add(box(0.12, 3.2, 0.12, 0xdddddd, 0, 0, 0), box(0.5, 0.06, 0.06, 0xdddddd, 0, 2.2, 0), box(0.06, 0.06, 0.5, 0xdddddd, 0, 2.7, 0));
-        mast.add(box(0.14, 0.14, 0.14, 0xff3b2f, 0, 3.2, 0, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
-        mast.position.copy(p); g.add(mast);
-      } else later.push(() => { const m = new THREE.Group(); m.add(box(0.12, 3.2, 0.12, 0xdddddd, 0, 0, 0), box(0.5, 0.06, 0.06, 0xdddddd, 0, 2.2, 0), box(0.14, 0.14, 0.14, 0xff3b2f, 0, 3.2, 0, { emissive: 0xff2a1a, emissiveIntensity: 1.5 })); return m; });
-    }
-    if (tier >= 6) {
-      const p = roofSpot(1.2, 0.3);
-      if (p) {
-        const sign = new THREE.Group();
-        sign.add(box(0.1, 0.9, 0.1, 0x3a3f48, -0.9, 0, 0), box(0.1, 0.9, 0.1, 0x3a3f48, 0.9, 0, 0));
-        sign.add(box(2.2, 0.8, 0.12, 0xffd23f, 0, 0.8, 0, { emissive: 0xffb300, emissiveIntensity: 0.6 }));
-        sign.add(box(1.6, 0.3, 0.14, 0xffffff, 0, 1.05, 0, { emissive: 0xffffff, emissiveIntensity: 0.8 }));
-        sign.position.copy(p); sign.rotation.y = Math.PI / 4; g.add(sign);
-      } else later.push(() => { const sg = new THREE.Group(); sg.add(box(0.1, 0.7, 0.1, 0x3a3f48, -0.7, 0, 0), box(0.1, 0.7, 0.1, 0x3a3f48, 0.7, 0, 0), box(1.7, 0.7, 0.12, 0xffd23f, 0, 0.6, 0, { emissive: 0xffb300, emissiveIntensity: 0.6 })); sg.rotation.y = Math.PI / 4; return sg; });
-    }
-    if (tier >= 7) {
-      // a flag on the roof
-      const p = roofSpot(0.3, 0.3);
-      if (p) {
-        const flag = new THREE.Group();
-        flag.add(box(0.08, 2.6, 0.08, 0xdddddd, 0, 0, 0));
-        const cloth = box(0.9, 0.55, 0.04, color === 0xe8e4da ? 0xe85a3c : color, 0.48, 1.95, 0);
-        flag.add(cloth, box(0.14, 0.14, 0.14, 0xffc23d, 0, 2.6, 0));
-        flag.position.copy(p); g.add(flag);
-      } else later.push(() => { const f = new THREE.Group(); f.add(box(0.08, 2.6, 0.08, 0xdddddd, 0, 0, 0), box(0.9, 0.55, 0.04, color === 0xe8e4da ? 0xe85a3c : color, 0.48, 1.95, 0)); return f; });
-    }
-    if (tier >= 9) {
-      // fully built: a golden beacon on top
-      const p = roofSpot(0.5, 0.5);
-      if (p) {
-        const b = new THREE.Group();
-        b.add(cylY(0.45, 0.35, 0x5b5f66, 0, 0, 0), cylY(0.16, 2.2, 0xffc23d, 0, 0.35, 0));
-        b.add(cylY(0.32, 0.12, 0xffc23d, 0, 1.2, 0));
-        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), mat(0xffd76a, { emissive: 0xffb300, emissiveIntensity: 1.6 }));
-        orb.position.y = 2.75; b.add(orb);
-        b.position.copy(p); g.add(b);
-      } else later.push(() => { const bb2 = new THREE.Group(); bb2.add(cylY(0.16, 2.2, 0xffc23d, 0, 0, 0)); const o = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), mat(0xffd76a, { emissive: 0xffb300, emissiveIntensity: 1.6 })); o.position.y = 2.4; bb2.add(o); return bb2; });
-    }
+    // each kind of building has its own upgrades: what goes on the roof (or the yard) at
+    // levels 3, 5, 7 and 8, and a golden beacon at level 10
+    const style = STYLE[this.typeOf?.(id)] || STYLE.default;
+    const later = [], ground = [];   // no room on the main roof: onto a wing, or into the yard
+    [2, 4, 6, 7, 9].forEach((need, k) => {
+      if (tier < need) return;
+      const name = k < 4 ? style.props[k] : 'beacon';
+      const P = PROPS[name](color, k);
+      if (P.ground) { ground.push(P.g); return; }
+      const p = roofSpot(P.fw, P.fd, P.minY || 1.8);
+      if (p) { P.g.position.copy(p); g.add(P.g); } else later.push(P.g);
+    });
     // on the lot itself
     const ex = new THREE.Group();
     const lx = L.group.position.x, lz = L.group.position.z;
@@ -546,11 +507,15 @@ export class World {
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8))
       .filter(([cx, cz]) => { const hit = topAt(lx + cx, lz + cz); return !(hit && hit.point.y > 0.6); });
     const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
-    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { const wg = this.#wing(cx, cz, color, tier, i); ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
-    // anything that didn't fit on the main roof: on a wing roof, or on the ground in a free corner
-    const spare = corners.slice(wings);
-    later.forEach((make, i) => {
-      const it = make();
+    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { const wg = this.#wing(cx, cz, color, tier, i, style.wing); ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
+    // yard props take the free corners first; anything that didn't fit on the main roof
+    // goes on a wing roof, or failing that into a free corner
+    let spare = corners.slice(wings);
+    ground.forEach(it => {
+      const c = spare.shift();
+      if (c) { it.position.set(c[0], 0.15, c[1]); ex.add(it); } else later.push(it);
+    });
+    later.forEach((it, i) => {
       const at = wingTops[i % Math.max(1, wingTops.length)] || (spare[i] ? [spare[i][0], 0.15, spare[i][1]] : null);
       if (!at) return;
       it.position.set(at[0], at[1], at[2]); ex.add(it);
@@ -572,13 +537,13 @@ export class World {
     }
     if (tier >= 7) {
       // a smart new campus: white planters with young trees in the free corners
-      for (const [cx, cz] of corners.slice(wings, wings + 1)) {
+      for (const [cx, cz] of spare.slice(0, 1)) {
         ex.add(box(1.3, 0.45, 1.3, 0xf2f2f0, cx, 0.15, cz));
         ex.add(cyl(0.07, 0.09, 0.9, 0x6b4a2b, cx, 0.6, cz, 6));
         const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), mat(0x4fa152, { flatShading: true })); crown.position.set(cx, 1.65, cz); ex.add(crown);
       }
     }
-    if (this.themeName !== 'moon') for (const [cx, cz] of corners.slice(wings + (tier <= 1 ? 2 : tier >= 7 ? 1 : 0))) {
+    if (this.themeName !== 'moon') for (const [cx, cz] of spare.slice(tier <= 1 ? 2 : tier >= 7 ? 1 : 0)) {
       if (rnd() < 0.45) continue;
       const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
       const c = car(colors[Math.floor(rnd() * colors.length)]);
@@ -668,7 +633,8 @@ export class World {
     return g;
   }
   // an extra wing added by an upgrade tier
-  #wing(cx, cz, color, tier, i) {
+  #wing(cx, cz, color, tier, i, kind = 'brick') {
+    if (kind !== 'brick') return styledWing(kind, cx, cz, color, tier, i);
     const g = new THREE.Group();
     const h = 1.6 + Math.min(9, tier) * 0.32 + (tier >= 8 ? 0.7 : 0) + (i === 0 ? 0.5 : 0);
     if (tier >= 7) {
@@ -765,11 +731,15 @@ export class World {
     }
   }
 
-  setRocketReady(ready) {
+  // the rocket on the pad: while it's being put together it rises section by section
+  // inside the scaffold; once it's finished the scaffold comes down
+  setRocketReady(ready, progress = 0) {
     const L = this.lots[this.lotsOf('rocket')[0]];
     if (!L || !L.rocket) return;
     if (this.launching) return;
-    L.rocket.visible = ready; L.scaffold.visible = !ready;
+    const k = ready ? 1 : Math.max(0.08, Math.round(progress * 8) / 8);
+    L.rocket.visible = ready || progress > 0.01; L.scaffold.visible = !ready;
+    L.rocket.scale.set(1, k, 1);
   }
 
   // per-frame supply-chain info from the economy: [{id, made, util, surplus, starved}]
@@ -1143,10 +1113,10 @@ export class World {
     if (this.roadData?.lampMat) this.roadData.lampMat.emissiveIntensity = n * 2.4;
     if (this.roadData?.edgeMat) this.roadData.edgeMat.emissiveIntensity = 0.4 + n * 1.8;
     if (this.glow) { this.glow.material.opacity = n * 0.5; this.glow.material.size = 15 * this.zoom; }
-    if (this.pools) this.pools.material.opacity = n * 0.22;
+    if (this.pools) this.pools.material.opacity = n * 0.16;
     if (this.cones) this.cones.material.opacity = n * 0.07;
     if (this.bldDirty) this.#buildingGlow();
-    if (this.bldPools) this.bldPools.material.opacity = n * 0.14;
+    if (this.bldPools) this.bldPools.material.opacity = n * 0.1;
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
     for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
     if (this.look.sunDir) {

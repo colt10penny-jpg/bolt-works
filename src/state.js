@@ -178,9 +178,7 @@ export class Game {
     // Colorado starts with the Ore Mine on the front corner, and the roads round it fixed up
     run.levels.mine = 1; run.pos.mine = START_PLOT; run.at[START_PLOT] = 'mine'; run.land[START_PLOT] = true;
     for (const r of this.roadsFor(START_PLOT, w, run)) run.roads[r.k] = true;
-    // and the old main street through town, from one way out to another past the mine,
-    // is still in use, so there's a little traffic from day one
-    if (this.exitsOf(w).length > 1) for (const r of this.roadsFor(START_PLOT, w, run, this.lastExit)) run.roads[r.k] = true;
+
   }
   // older saves: put the buildings onto the new plots. Colorado (now 4x4) gets its
   // production line laid out in order, side by side; the other worlds keep their places.
@@ -444,6 +442,33 @@ export class Game {
   }
 
   canAfford(cost) { return this.s.cash >= cost - 1e-9; }
+
+  // knock a building down: the lot stays cleared (ready for something else), money in its
+  // storage goes to your wallet, and a manager working there goes back to headquarters.
+  // If you have another of the same kind, that one becomes the main one.
+  demolish(id) {
+    const run = this.run, t = this.typeOf(id), plot = this.plotOf(id);
+    if (!t || !plot || this.level(id) <= 0) return false;
+    if (run.bins[id]) this.s.cash += run.bins[id];
+    delete run.bins[id]; delete run.managers[id];
+    let promoted = null;
+    if (isPlot(id)) delete run.extra[id];
+    else {
+      delete run.at[plot]; delete run.pos[t]; run.levels[t] = 0;
+      const other = Object.entries(run.extra).find(([, e]) => e?.type === t && e.level > 0);
+      if (other) {
+        const [q, e] = other;
+        run.levels[t] = e.level; run.pos[t] = q; run.at[q] = t; delete run.extra[q];
+        if (run.bins[q]) { run.bins[t] = run.bins[q]; delete run.bins[q]; }
+        if (run.managers[q]) { run.managers[t] = true; delete run.managers[q]; }
+        promoted = q;
+      }
+    }
+    this.invalidate();
+    this.emit('demolished', plot, t, promoted);
+    this.emit('change');
+    return true;
+  }
 
   buyLevels(id, n) {
     const def = this.slotDef(id);

@@ -480,9 +480,14 @@ export class Traffic {
         // (never stop with my tail still in the junction behind me)
         const inJunction = [...car.held].some(k => /^-?\d/.test(k));
         const giveWay = !inJunction && t && t.car !== car && t.car.waiting && this.cars.includes(t.car) && this.clock - t.since < 4 && car.s + HALF < st.enter;
-        if (dist < 7 && !giveWay && (!this.holds.has(st.key) || this.holds.get(st.key) === car)) { this.#take(car, st); car.ai++; }
+        if (dist < 7 && !giveWay && (!this.holds.has(st.key) || this.holds.get(st.key) === car)) { this.#take(car, st); car.ai++; car.wait = 0; if (t?.car === car) this.turn.delete(st.key); }
         else if (car.s + HALF > st.enter + 0.3) car.ai++;
-        else if (dist <= 0.12) { target = 0; car.waiting = car.v < 0.3; car.why = giveWay ? 'turn:' + t.car.id : 'held:' + this.holds.get(st.key)?.id; }
+        else if (dist <= 0.12) {
+          target = 0; car.waiting = car.v < 0.3; car.why = giveWay ? 'turn:' + t.car.id : 'held:' + this.holds.get(st.key)?.id;
+          // trucks keep turning in here: after a short wait it's my turn to drive past
+          car.wait += dt;
+          if (car.wait > 2.5 && !giveWay && (!t || !this.cars.includes(t.car))) this.turn.set(st.key, { car, since: this.clock });
+        }
         else target = Math.min(target, Math.sqrt(2 * DECEL * 0.8 * Math.max(0, dist)) + 0.05);
       } else if (st && car.ghost <= 0) {
         const stopAt = st.enter - HALF - 0.15;
