@@ -418,6 +418,9 @@ export class World {
       L.color = color;
       this.#decorate(L, m, id, L.tier || 0, color);
       bakeModel(m);
+      this.#ageLook(m.group, L.tier || 0);
+      if (L.extras) this.#ageLook(L.extras, L.tier || 0);
+      this.#padLook(L, L.tier || 0);
       m.group.traverse(o => { o.userData.lotId = id; });
       L.model = m.group; L.anim = m.anim || null; L.top = m.top;
       L.smokeAt = m.smoke || [];
@@ -552,7 +555,30 @@ export class World {
       if (!at) return;
       it.position.set(at[0], at[1], at[2]); ex.add(it);
     });
-    if (this.themeName !== 'moon') for (const [cx, cz] of corners.slice(wings)) {
+    if (tier <= 1) {
+      // an old yard: rusty drums, a pile of tyres, oil stains and weeds pushing up
+      for (const [cx, cz] of corners.slice(wings, wings + 2)) {
+        for (let k = 0; k < 3; k++) ex.add(cyl(0.26, 0.26, 0.62, [0x8a4b2a, 0x6b5a3a, 0x7d3f26][k], cx + (k - 1) * 0.55, 0.15, cz + (k % 2) * 0.4, 10));
+        for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.12, 6, 12), mat(0x24252a)); t.rotation.x = Math.PI / 2; t.position.set(cx + 0.2, 0.27 + k * 0.22, cz - 0.9); ex.add(t); }
+      }
+      const stainM = this.stainM ||= new THREE.MeshBasicMaterial({ color: 0x2a2620, transparent: true, opacity: 0.35, depthWrite: false });
+      for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.4 + rnd() * 0.5, 10), stainM); st.rotation.x = -Math.PI / 2; st.scale.set(1.5, 1, 1); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
+      const weedM = mat(0x6f8f3c, { flatShading: true });
+      for (let k = 0; k < 18; k++) {
+        const side = Math.floor(rnd() * 4), u = (rnd() - 0.5) * 8.6, e = 4.35;
+        const x = side < 2 ? (side ? e : -e) : u, z = side < 2 ? u : (side === 2 ? e : -e);
+        const wd = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35 + rnd() * 0.25, 4), weedM); wd.position.set(x, 0.3, z); ex.add(wd);
+      }
+    }
+    if (tier >= 7) {
+      // a smart new campus: white planters with young trees in the free corners
+      for (const [cx, cz] of corners.slice(wings, wings + 1)) {
+        ex.add(box(1.3, 0.45, 1.3, 0xf2f2f0, cx, 0.15, cz));
+        ex.add(cyl(0.07, 0.09, 0.9, 0x6b4a2b, cx, 0.6, cz, 6));
+        const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), mat(0x4fa152, { flatShading: true })); crown.position.set(cx, 1.65, cz); ex.add(crown);
+      }
+    }
+    if (this.themeName !== 'moon') for (const [cx, cz] of corners.slice(wings + (tier <= 1 ? 2 : tier >= 7 ? 1 : 0))) {
       if (rnd() < 0.45) continue;
       const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
       const c = car(colors[Math.floor(rnd() * colors.length)]);
@@ -563,6 +589,54 @@ export class World {
     L.group.add(ex);
     L.extras = ex;
   }
+  // Low levels look old and run down: faded, dusty paint, matte and grimy. High levels
+  // look new and sleek: richer colour, smooth satin finishes with a bit of shine.
+  // (Lights and windows keep their own materials so they still glow at night.)
+  #ageLook(group, tier) {
+    const age = Math.max(0, Math.min(1, (3 - tier) / 3)), modern = Math.max(0, Math.min(1, (tier - 5) / 4));
+    if (!age && !modern) return;
+    this.ageCache ||= new Map();
+    const dirt = new THREE.Color(0x857866), hsl = {};
+    group.traverse(o => {
+      if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+      const m0 = o.material;
+      if (!m0.isMeshStandardMaterial || m0.userData.night || m0.userData.glow || m0.userData.baseGlow || (m0.emissiveIntensity > 0 && m0.emissive?.getHex())) return;
+      const key = m0.uuid + '|' + tier;
+      let m = this.ageCache.get(key);
+      if (!m) {
+        m = m0.clone(); m.userData = { ...m0.userData };
+        if (m0.onBeforeCompile) m.onBeforeCompile = m0.onBeforeCompile;
+        if (age) {
+          m.color.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          m.roughness = Math.min(1, m.roughness + 0.25 * age); m.metalness *= 1 - age;
+        } else {
+          m.color.getHSL(hsl);
+          m.color.setHSL(hsl.h, Math.min(1, hsl.s * (1 + 0.35 * modern)), Math.min(0.92, hsl.l + 0.05 * modern));
+          m.roughness = m.roughness + (0.3 - m.roughness) * modern * 0.85;
+          m.metalness = Math.max(m.metalness, 0.22 * modern);
+        }
+        this.ageCache.set(key, m);
+      }
+      o.material = m;
+    });
+  }
+  // the concrete yard: cracked and dusty when old, clean and bright when new
+  #padLook(L, tier) {
+    const base = this.padMats?.[this.themeName];
+    if (!base) return;
+    this.padLooks ||= new Map();
+    const key = this.themeName + '|' + tier;
+    if (!this.padLooks.has(key)) {
+      const m = base.clone(); m.userData = { ...base.userData };
+      if (base.onBeforeCompile) m.onBeforeCompile = base.onBeforeCompile;
+      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.45); m.roughness = 1; }
+      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.2);
+      else if (tier >= 7) { m.color.lerp(new THREE.Color(0xffffff), 0.35); m.roughness = 0.6; }
+      this.padLooks.set(key, m);
+    }
+    L.pad.material = this.padLooks.get(key);
+  }
+
   // which sides of a lot trucks drive in and out of: every side with good road
   #baySides(id) {
     const [lx, lz] = this.P[id];
@@ -596,14 +670,38 @@ export class World {
   // an extra wing added by an upgrade tier
   #wing(cx, cz, color, tier, i) {
     const g = new THREE.Group();
-    const c = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.12).getHex();
     const h = 1.6 + Math.min(9, tier) * 0.32 + (tier >= 8 ? 0.7 : 0) + (i === 0 ? 0.5 : 0);
+    if (tier >= 7) {
+      // a sleek modern block: a glass box in a crisp white frame, with a light strip on top
+      g.add(box(2.2, h, 2.1, 0x9fe8ff, 0, 0, 0));
+      const white = 0xf4f4f2;
+      for (const [fx, fz] of [[-1.1, -1.05], [1.1, -1.05], [-1.1, 1.05], [1.1, 1.05]]) g.add(box(0.12, h, 0.12, white, fx, 0, fz));
+      for (let f = 1; f <= Math.floor(h / 0.85); f++) { g.add(box(2.24, 0.06, 2.14, white, 0, Math.min(h - 0.06, f * 0.85), 0)); }
+      for (const fx of [-0.37, 0.37]) { g.add(box(0.05, h, 0.04, white, fx, 0, 1.06)); g.add(box(0.05, h, 0.04, white, fx, 0, -1.06)); g.add(box(0.04, h, 0.05, white, 1.11, 0, fx)); g.add(box(0.04, h, 0.05, white, -1.11, 0, fx)); }
+      g.add(box(2.4, 0.18, 2.3, white, 0, h, 0));
+      g.add(box(2.42, 0.05, 2.32, 0x7fe0ff, 0, h + 0.18, 0, { emissive: 0x4fd0ff, night: 2.2 }));
+      const sx = Math.sign(cx), sz = Math.sign(cz);
+      if (tier >= 8) for (const [fx, fz] of [[sx * 1.05, sz * 1.0], [-sx * 1.05, sz * 1.0]]) {
+        g.add(box(0.08, 0.5, 0.08, 0x3a3f48, fx, h + 0.23, fz));
+        g.add(box(0.3, 0.2, 0.2, 0xfff1cf, fx, h + 0.69, fz, { emissive: 0xffe2a8, night: 3 }));
+      }
+      g.add(box(1.6, 0.06, 1.5, 0x5f9e3c, 0, h + 0.23, 0));
+      g.position.set(cx, 0.15, cz);
+      g.userData.top = h + 0.3;
+      return g;
+    }
+    // older wings are plain brick with small windows; mid levels get the building's colours
+    const c = tier <= 3 ? new THREE.Color(color).lerp(new THREE.Color(0x9a5a44), 0.55).multiplyScalar(0.9).getHex() : new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.12).getHex();
     g.add(box(2.3, h, 2.2, c, 0, 0, 0));
     g.add(box(2.45, 0.16, 2.35, new THREE.Color(color).multiplyScalar(0.6).getHex(), 0, h, 0));
     const sx = Math.sign(cx), sz = Math.sign(cz);
     for (let f = 0; f < Math.floor(h / 0.9); f++) {
       g.add(box(1.7, 0.36, 0.06, 0x9fd6ff, 0, 0.45 + f * 0.85, sz * 1.11));
       g.add(box(0.06, 0.36, 1.6, 0x9fd6ff, sx * 1.16, 0.45 + f * 0.85, 0));
+      if (tier <= 2 && f % 2 === 0) {
+        // boarded-up windows on the old wing
+        g.add(box(1.2, 0.12, 0.05, 0x7a5a3a, -0.2, 0.47 + f * 0.85, sz * 1.15), box(1.0, 0.12, 0.05, 0x6b4f33, 0.3, 0.63 + f * 0.85, sz * 1.15));
+      }
     }
     if (tier >= 7) {
       // a rooftop garden
@@ -886,7 +984,7 @@ export class World {
     c.addEventListener('wheel', e => { e.preventDefault(); this.setZoom(this.zoom * (e.deltaY < 0 ? 1.1 : 0.9)); }, { passive: false });
   }
 
-  setZoom(z) { this.zoom = Math.min(2.2, Math.max(0.6, z)); this.#updateCamera(); }
+  setZoom(z) { this.zoom = Math.min(2.2, Math.max(0.48, z)); this.#updateCamera(); }
 
   #panBy(dx, dy) {
     const rect = this.canvas.getBoundingClientRect();
@@ -949,14 +1047,18 @@ export class World {
   // a soft round puff that always faces the camera
   #puff(color, hot, size) {
     if (!this.puffTex) {
-      const c = document.createElement('canvas'); c.width = c.height = 64;
-      const g = c.getContext('2d');
-      for (let i = 0; i < 7; i++) {
-        const x = 32 + (Math.random() - 0.5) * 18, y = 32 + (Math.random() - 0.5) * 18, r = 12 + Math.random() * 10;
-        const gr = g.createRadialGradient(x, y, 0, x, y, r);
-        gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      // one soft, round, slightly lumpy puff: a smooth falloff with gentle noise in it
+      const N = 128, c = document.createElement('canvas'); c.width = c.height = N;
+      const g = c.getContext('2d'), img = g.createImageData(N, N);
+      const lumps = Array.from({ length: 6 }, () => [Math.random() * 6.28, 0.06 + Math.random() * 0.08, 2 + Math.floor(Math.random() * 3)]);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const dx = (x - N / 2 + 0.5) / (N / 2), dy = (y - N / 2 + 0.5) / (N / 2), a = Math.atan2(dy, dx);
+        let edge = 0.82; for (const [ph, amp, f] of lumps) edge += Math.sin(a * f + ph) * amp * 0.5;
+        const r = Math.hypot(dx, dy) / edge;
+        const v = r >= 1 ? 0 : Math.pow(1 - r * r, 1.8) * (0.9 + 0.1 * Math.sin(dx * 9 + dy * 7));
+        const i = (y * N + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = Math.max(0, Math.min(255, v * 255));
       }
+      g.putImageData(img, 0, 0);
       this.puffTex = new THREE.CanvasTexture(c);
     }
     const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.puffTex, color, transparent: true, depthWrite: false, opacity: 0.9, rotation: Math.random() * 6.28, blending: hot ? THREE.AdditiveBlending : THREE.NormalBlending }));
@@ -966,12 +1068,13 @@ export class World {
 
   #emitSmoke(L) {
     for (const p of L.smokeAt) {
-      const big = L.def.id === 'power';
-      const m = this.#puff(0xf4f4f4, false, big ? 2.6 : 1.3);
+      const big = L.def.id === 'power' || this.typeOf?.(L.def.id) === 'power';
+      const m = this.#puff(0xffffff, false, (big ? 1.6 : 0.8) * (0.85 + Math.random() * 0.3));
       const wp = p.clone(); L.model.localToWorld(wp);
-      m.position.copy(wp);
+      m.position.copy(wp).add(new THREE.Vector3((Math.random() - 0.5) * 0.2, 0, (Math.random() - 0.5) * 0.2));
       this.scene.add(m);
-      this.smoke.push({ m, age: 0, life: big ? 3.2 : 2.4 });
+      // a gentle plume: rises, slows, spreads and drifts with the breeze as it fades
+      this.smoke.push({ m, age: 0, life: (big ? 4.2 : 3.2) * (0.85 + Math.random() * 0.3), plume: true, rise: big ? 1.5 : 1.1, spin: (Math.random() - 0.5) * 0.6, grow: big ? 3.2 : 2.6, op: big ? 0.5 : 0.42, shade: 0.88 + Math.random() * 0.1 });
     }
   }
 
@@ -1002,7 +1105,7 @@ export class World {
         L.bounce = Math.max(0, L.bounce - dt * 2.5);
         const b = Math.sin(L.bounce * Math.PI) * 0.12 * L.bounce;
         L.model.scale.set(L.grow * (1 - b * 0.5), L.grow * (1 + b), L.grow * (1 - b * 0.5));
-        if (L.smokeAt.length && L.speed > 0 && (L.smokeT = (L.smokeT || 0) - dt) <= 0) { L.smokeT = 0.7 / Math.max(0.3, L.speed); this.#emitSmoke(L); }
+        if (L.smokeAt.length && L.speed > 0 && (L.smokeT = (L.smokeT || 0) - dt) <= 0) { L.smokeT = (0.22 + Math.random() * 0.1) / Math.max(0.3, L.speed); this.#emitSmoke(L); }
         // crates pile up when this factory makes more than the next one can use
         const i = FACTORIES.findIndex(d => d.id === type);
         const nextBuilt = i >= 0 && i < FACTORIES.length - 1 && (info[FACTORIES[i + 1].id]?.cap || 0) > 0;
@@ -1014,11 +1117,21 @@ export class World {
       const s = this.smoke[i];
       s.age += dt;
       const k = s.age / s.life;
-      s.m.position.y += dt * (s.spread ? 0.4 : 1.6); s.m.position.x -= dt * 0.5;
-      s.m.scale.setScalar((s.m.userData.size || 1) * (1 + k * (s.spread ? 2.4 : 1.6)));
-      s.m.material.opacity = 0.85 * (1 - k) * Math.min(1, s.age * 6);
-      // smoke picks up the colour of the light (warm at sunset, dim at night)
-      if (!s.m.material.blending || s.m.material.blending === THREE.NormalBlending) s.m.material.color.setScalar(0.95 - this.look.night * 0.55);
+      if (s.plume) {
+        // quick to leave the stack, slowing as it rises; the breeze takes it more the higher it gets
+        s.m.position.y += dt * s.rise * (1 - k * 0.7);
+        s.m.position.x -= dt * (0.25 + k * 0.9); s.m.position.z += dt * 0.15 * k;
+        s.m.material.rotation += dt * s.spin;
+        s.m.scale.setScalar(s.m.userData.size * (1 + Math.sqrt(k) * s.grow));
+        s.m.material.opacity = s.op * Math.min(1, s.age * 3) * Math.pow(1 - k, 1.5);
+        s.m.material.color.setScalar(s.shade * (1 - this.look.night * 0.5));
+      } else {
+        s.m.position.y += dt * (s.spread ? 0.4 : 1.6); s.m.position.x -= dt * 0.5;
+        s.m.scale.setScalar((s.m.userData.size || 1) * (1 + k * (s.spread ? 2.4 : 1.6)));
+        s.m.material.opacity = 0.85 * (1 - k) * Math.min(1, s.age * 6);
+        // smoke picks up the colour of the light (warm at sunset, dim at night)
+        if (!s.m.material.blending || s.m.material.blending === THREE.NormalBlending) s.m.material.color.setScalar(0.95 - this.look.night * 0.55);
+      }
       if (k >= 1) { this.scene.remove(s.m); s.m.material.dispose(); this.smoke.splice(i, 1); }
     }
     this.stepTraffic(dt);

@@ -275,10 +275,8 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .w-card { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 10px; background: var(--mint); }
 .w-card.here { outline: 3px solid var(--sel); }
 .w-card.locked { opacity: .6; }
-.w-swatch { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; box-shadow: inset 0 -3px 0 rgba(0,0,0,.15); }
-.w-colorado .w-swatch { background: #8cc65f; }
-.w-desert .w-swatch { background: #e2c58f; }
-.w-moon .w-swatch { background: #9c9ca2; }
+.w-swatch { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; box-shadow: 0 3px 0 rgba(0,0,0,.15); display: block; overflow: hidden; }
+.w-swatch svg { display: block; }
 .w-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .w-info b { font: 800 16px var(--display); }
 .w-info small { font-size: 12px; color: var(--ink-soft); line-height: 1.3; }

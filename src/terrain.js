@@ -594,25 +594,38 @@ export function buildRoads(name, T, stateOf) {
       }
     }
   }
-  // roads not built yet (the Mojave and the Moon): a graded track marked out with survey
-  // stakes, so you can see where the plots and streets will go
+  // roads not built yet (the Mojave and the Moon): a faint, trampled path in the ground,
+  // ragged at the edges like Colorado's old roads, with a little surveyor's stake at each
+  // corner, so you can make out the plots without it shouting
   if (plan.length) {
-    const trackM = withClouds(std(moon ? 0xb9b9c0 : 0xead9b0, { roughness: 1 }));
-    const edgeTM = std(moon ? 0x9a9aa2 : 0xc9ad78, { roughness: 1 });
-    const stakeM = std(0xf2efe6, { roughness: 0.8 });
-    const tipM = std(0xff6a2a, { roughness: 0.6 });
+    const trackM = withClouds(std(moon ? 0xa3a3a9 : 0xe4cd9c, { roughness: 1 }));
+    const blendM = withClouds(std(moon ? 0x98989e : 0xdcbd86, { roughness: 1 }));
+    const pebM = std(moon ? 0x8a8a90 : 0xbf9466, { flatShading: true, roughness: 1 });
+    const stakeM = std(0xcaa877, { roughness: 0.9 });
+    const tipM = std(0xff7a3a, { roughness: 0.6 });
     const stakes = new Map();
     for (const sg of plan) {
       const sp = span(sg);
-      strip(trackM, sp, sp.lo - HW + 0.4, sp.hi + HW - 0.4, 0.05, ROAD_W - 0.8);
-      // tyre ruts along the middle of each lane
-      for (const off of [-LANE, LANE]) strip(edgeTM, { ...sp, line: sp.line + off }, sp.lo + HW, sp.hi - HW, 0.056, 0.22);
+      strip(trackM, sp, sp.lo - HW + 0.6, sp.hi + HW - 0.6, 0.045, ROAD_W - 1.2);
+      // ground creeping back in over the edges
+      for (let i = sp.lo - HW + 0.6; i < sp.hi + HW - 0.6; i += 0.8 + r() * 0.9) for (const sd of [-1, 1]) {
+        const rad = 0.3 + r() * 0.45, ins = HW - 0.6 - rad * 0.3 - r() * 0.2;
+        const g = new THREE.CircleGeometry(rad, 7); g.rotateX(-Math.PI / 2); g.scale(1.5, 1, 1);
+        if (sp.along === 'z') g.rotateY(Math.PI / 2);
+        g.translate(sp.along === 'x' ? i : sp.line + sd * ins, 0.05 + r() * 0.003, sp.along === 'x' ? sp.line + sd * ins : i);
+        road.add(blendM, g);
+      }
+      for (let i = sp.lo + 1; i < sp.hi - 1; i += 2 + r() * 2.5) {
+        const w = new THREE.IcosahedronGeometry(0.1 + r() * 0.12, 0); w.scale(1, 0.5, 1);
+        const off = (r() - 0.5) * (ROAD_W - 1.4);
+        w.translate(sp.along === 'x' ? i : sp.line + off, 0.06, sp.along === 'x' ? sp.line + off : i); road.add(pebM, w);
+      }
       for (const n of [sg.a, sg.b]) stakes.set(n.x + ',' + n.z, n);
     }
-    for (const n of stakes.values()) for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-      const x = n.x + dx * (HW + 0.35), z = n.z + dz * (HW + 0.35);
-      road.add(stakeM, boxAt(0.1, 0.55, 0.1, x, 0, z));
-      road.add(tipM, boxAt(0.12, 0.14, 0.12, x, 0.55, z));
+    for (const n of stakes.values()) {
+      const x = n.x + HW + 0.5, z = n.z + HW + 0.5;
+      road.add(stakeM, boxAt(0.07, 0.4, 0.07, x, 0, z));
+      road.add(tipM, boxAt(0.09, 0.08, 0.09, x, 0.4, z));
     }
   }
   // in good repair

@@ -226,7 +226,10 @@ function plotSheet(lot) {
   const fresh = types.filter(f => !game.built(f.id)), more = types.filter(f => game.built(f.id));
   // new buildings appear in order: the next factory in the chain, plus the helpers once you're going
   const nextF = FACTORIES.find(f => !game.built(f.id));
-  const nextNew = fresh.filter(f => f === nextF || (f.id === 'hq' || f.id === 'power') && game.built('furnace') || f.id === 'datacenter' && game.built('power'));
+  // only the next factory in the chain is new; helper buildings unlock along the way:
+  // headquarters after the furnace, power after the gear cutter, the data center after power
+  const helperReady = { hq: game.built('furnace'), power: game.built('gear'), datacenter: game.built('power') };
+  const nextNew = fresh.filter(f => f === nextF || helperReady[f.id]);
   const row = (f, name, sub) => {
     const cost = game.buildCost(f.id), ok = game.canAfford(cost);
     return `<div class="hq-row"><span class="hq-dot" style="background:${tint(def(f.id))}"></span>
@@ -628,6 +631,23 @@ async function doLaunch(mult) {
 }
 
 // ---------- world map ----------
+// little cartoon scenes for each world
+const WORLD_ART = {
+  colorado: `<svg viewBox="0 0 48 48" width="44" height="44"><defs><clipPath id="wc"><rect width="48" height="48" rx="12"/></clipPath></defs><g clip-path="url(#wc)">
+    <rect width="48" height="48" fill="#8fd0f5"/><circle cx="38" cy="11" r="5" fill="#ffe27a"/>
+    <path d="M-2 34 L14 12 L24 25 L32 15 L50 34 Z" fill="#7d8ea3"/><path d="M14 12 L10 17.5 L13 16 L15 18 L18 16.5 Z M32 15 L28.6 19.5 L31.5 18 L33.5 20 L35.5 18.6 Z" fill="#fff"/>
+    <path d="M-2 33 Q12 27 24 31 T50 30 V50 H-2 Z" fill="#6fbf4a"/><path d="M-2 40 Q16 35 30 39 T50 38 V50 H-2 Z" fill="#4f9e38"/>
+    <path d="M37 24 L32 33 L35 33 L31 39 L43 39 L39 33 L42 33 Z" fill="#2f6f3e"/><rect x="36" y="39" width="2" height="4" fill="#6b4a2b"/></g></svg>`,
+  desert: `<svg viewBox="0 0 48 48" width="44" height="44"><defs><clipPath id="wd"><rect width="48" height="48" rx="12"/></clipPath><linearGradient id="wds" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb46b"/><stop offset="1" stop-color="#ffe0a3"/></linearGradient></defs><g clip-path="url(#wd)">
+    <rect width="48" height="48" fill="url(#wds)"/><circle cx="14" cy="14" r="7" fill="#fff3b0"/>
+    <path d="M-2 30 Q14 22 28 29 T50 26 V50 H-2 Z" fill="#e7b877"/><path d="M-2 38 Q18 31 34 37 T50 35 V50 H-2 Z" fill="#d79c5a"/>
+    <path d="M33 40 V24 a3 3 0 0 1 6 0 V40 Z M33 32 h-3 a2 2 0 0 1 -2 -2 v-4 a1.5 1.5 0 0 1 3 0 v3 h2 Z M39 30 h3 v-4 a1.5 1.5 0 0 1 3 0 v5 a2 2 0 0 1 -2 2 h-4 Z" fill="#4f8a3c"/></g></svg>`,
+  moon: `<svg viewBox="0 0 48 48" width="44" height="44"><defs><clipPath id="wm"><rect width="48" height="48" rx="12"/></clipPath></defs><g clip-path="url(#wm)">
+    <rect width="48" height="48" fill="#1d2440"/><circle cx="8" cy="9" r="1" fill="#fff"/><circle cx="22" cy="6" r=".8" fill="#fff"/><circle cx="30" cy="16" r=".9" fill="#fff"/><circle cx="6" cy="22" r=".7" fill="#fff"/>
+    <circle cx="38" cy="12" r="6" fill="#3f8fd8"/><path d="M35 9 q3 1 2 4 q-2 1 -3 -1 Z M39 14 q3 -1 4 1 q-1 3 -4 1 Z" fill="#5fb85a"/>
+    <path d="M-2 32 Q20 24 50 31 V50 H-2 Z" fill="#b9b9c2"/><ellipse cx="12" cy="38" rx="5" ry="2" fill="#9a9aa4"/><ellipse cx="32" cy="42" rx="7" ry="2.6" fill="#9a9aa4"/><ellipse cx="40" cy="35" rx="3" ry="1.2" fill="#9a9aa4"/>
+    <rect x="23" y="18" width="1.4" height="14" fill="#e8e8ee"/><path d="M24.4 18 h8 v5 h-8 Z" fill="#e85a3c"/></g></svg>`,
+};
 function openMap() {
   sfx.tap();
   const cards = WORLDS.map((w, i) => {
@@ -637,7 +657,7 @@ function openMap() {
       : open ? `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`
       : '<span class="w-lock" aria-label="Locked"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>';
     return `<div class="w-card ${here ? 'here' : ''} ${open ? '' : 'locked'} w-${w.id}">
-      <span class="w-swatch" aria-hidden="true"></span>
+      <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
       <span class="w-info"><b>${w.name}</b></span>
       ${status}
     </div>`;
@@ -869,7 +889,7 @@ function hintText() {
   const nextF = FACTORIES.find(f => !game.built(f.id));
   if (nextF && !emptyLot() && plotIds(game.s.current).some(p => !game.developed(p)) && game.canAfford(game.landPrice() * 2 + def(nextF.id).unlock * 0.5)) return `Clear more land for a ${def(nextF.id).name}`;
   if (nextF && emptyLot() && game.canAfford(def(nextF.id).unlock)) return `Build a ${def(nextF.id).name} on your empty lot`;
-  if (!game.built('power') && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
+  if (!game.built('power') && game.built('gear') && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
   if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return `Build the ${def('datacenter').name} to turn power into speed`;
   return '';
 }
