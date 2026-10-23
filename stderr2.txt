@@ -1,0 +1,1 @@
+2026-10-23 16:20:46.870 App[14033:46268] DiskCookieStorage changing policy from 2 to 0, cookie file: file:///Users/runner/Library/Developer/CoreSimulator/Devices/DC4CD8B3-4457-4153-9087-A0D7A2F9BFD9/data/Containers/Data/Application/2CB62909-EB8C-4AFB-911C-51F09B27428C/Library/Cookies/com.boltworks.idlefactory.binarycookies
