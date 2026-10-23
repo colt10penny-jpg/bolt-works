@@ -855,10 +855,10 @@ function openMenu() {
 // testing, so you can move through the game quickly. Each pack is worth a stretch of
 // your current income (with a floor, so they still matter early on).
 const PACKS = [
-  { id: 'cash_s', name: 'Handful of cash', price: '$0.99', minutes: 15, floor: 1e3, icon: '$' },
-  { id: 'cash_m', name: 'Bag of cash', price: '$4.99', minutes: 120, floor: 2.5e4, icon: '$$' },
-  { id: 'cash_l', name: 'Vault of cash', price: '$9.99', minutes: 480, floor: 2.5e5, icon: '$$$', best: true },
-  { id: 'cash_xl', name: 'Bank of cash', price: '$19.99', minutes: 1440, floor: 2.5e6, icon: '$$$$' },
+  { id: 'cash_s', name: 'Handful of cash', price: '$0.99', minutes: 60, floor: 5e3, icon: '$' },
+  { id: 'cash_m', name: 'Bag of cash', price: '$4.99', minutes: 480, floor: 1e5, icon: '$$' },
+  { id: 'cash_l', name: 'Vault of cash', price: '$9.99', minutes: 1440, floor: 1e6, icon: '$$$', best: true },
+  { id: 'cash_xl', name: 'Bank of cash', price: '$19.99', minutes: 4320, floor: 1e7, icon: '$$$$' },
 ];
 const packAmount = k => Math.max(k.floor, game.totalRate() * 60 * k.minutes);
 function openShop() {

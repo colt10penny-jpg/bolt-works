@@ -1114,17 +1114,55 @@ export class World {
   }
 
   // ---------- tumbleweeds (the Mojave) ----------
-  // Every so often a tumbleweed blows through: it comes in from off screen on the wind,
-  // bouncing and spinning as it rolls, and leaves on the far side.
+  // Every so often a tumbleweed blows past outside town: in from off screen on the wind,
+  // bouncing and spinning as it rolls, and out the far side. It never crosses the town,
+  // the landing spot or a mesa.
   #tumbleweed() {
-    const g = new THREE.Group(), m = mat(0xa8844f, { roughness: 1 }), m2 = mat(0x8a6a3c, { roughness: 1 });
-    for (let i = 0; i < 9; i++) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42 + Math.random() * 0.14, 0.035, 4, 10), i % 3 ? m : m2);
-      ring.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      ring.castShadow = true; g.add(ring);
+    // a tangle of thin, bent twigs round a darker, denser middle, merged into two meshes
+    const twigs = [], core = [];
+    for (let i = 0; i < 70; i++) {
+      const len = 0.18 + Math.random() * 0.22, t = new THREE.CylinderGeometry(0.012, 0.016, len, 3, 1);
+      t.translate(0, len / 2, 0);
+      t.rotateZ((Math.random() - 0.5) * 0.9);
+      // point it roughly round the ball's surface, at a random spot on it
+      const u = Math.random() * Math.PI * 2, v = Math.acos(2 * Math.random() - 1), rr = 0.24 + Math.random() * 0.2;
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6.3, Math.random() * 6.3, Math.random() * 6.3));
+      t.applyQuaternion(q);
+      t.translate(rr * Math.sin(v) * Math.cos(u), rr * Math.cos(v), rr * Math.sin(v) * Math.sin(u));
+      twigs.push(t.toNonIndexed());
     }
-    const spin = new THREE.Group(); spin.add(g);
+    for (let i = 0; i < 6; i++) { const g = new THREE.IcosahedronGeometry(0.16 + Math.random() * 0.08, 0); g.translate((Math.random() - 0.5) * 0.18, (Math.random() - 0.5) * 0.18, (Math.random() - 0.5) * 0.18); core.push(g.toNonIndexed()); }
+    const ball = new THREE.Group();
+    const tw = new THREE.Mesh(mergeGeometries(twigs), mat(0xc29a62, { roughness: 1, flatShading: true }));
+    const co = new THREE.Mesh(mergeGeometries(core), mat(0x7d5f36, { roughness: 1, flatShading: true }));
+    tw.castShadow = true; ball.add(tw, co);
+    twigs.forEach(g => g.dispose()); core.forEach(g => g.dispose());
+    const spin = new THREE.Group(); spin.add(ball);
     return spin;
+  }
+  // a path past the town: a straight run along one side of it, out on open ground
+  #weedPath() {
+    const ps = Object.values(this.P || {});
+    if (!ps.length) return null;
+    const x0 = Math.min(...ps.map(p => p[0])) - 14, x1 = Math.max(...ps.map(p => p[0])) + 14;
+    const z0 = Math.min(...ps.map(p => p[1])) - 14, z1 = Math.max(...ps.map(p => p[1])) + 14;
+    for (let tries = 0; tries < 12; tries++) {
+      const alongX = Math.random() < 0.5, back = Math.random() < 0.5;
+      const lane = alongX ? (back ? z0 - 2 - Math.random() * 14 : z1 + 2 + Math.random() * 14) : (back ? x0 - 2 - Math.random() * 14 : x1 + 2 + Math.random() * 14);
+      const sgn = Math.random() < 0.5 ? 1 : -1, span = 46;
+      const dir = new THREE.Vector3(alongX ? sgn : 0, 0, alongX ? 0 : sgn);
+      const mid = alongX ? (x0 + x1) / 2 : (z0 + z1) / 2;
+      const at = k => alongX ? new THREE.Vector3(mid + k, 0, lane) : new THREE.Vector3(lane, 0, mid + k);
+      const start = at(-sgn * span);
+      // clear of the landing spot and any high ground all the way along
+      let ok = true;
+      for (let k = -span; k <= span && ok; k += 3) {
+        const p = at(k);
+        if (Math.hypot(p.x - LANDER_AT[0], p.z - LANDER_AT[1]) < 7 || (this.heightAt?.(p.x, p.z) ?? 0) > 1.8) ok = false;
+      }
+      if (ok) return { start, dir, length: span * 2 };
+    }
+    return null;
   }
   #updateTumbleweeds(dt) {
     const list = (this.weeds ||= []);
@@ -1135,26 +1173,25 @@ export class World {
     this.weedT = (this.weedT ?? 5) - dt;
     if (this.weedT <= 0 && list.length < 2 && !this.launching) {
       this.weedT = 10 + Math.random() * 18;
-      const dir = new THREE.Vector3(1, 0, 0.45 + (Math.random() - 0.5) * 0.4).normalize();
-      const side = new THREE.Vector3(-dir.z, 0, dir.x);
-      const c = this.target || new THREE.Vector3();
-      const start = c.clone().addScaledVector(dir, -38).addScaledVector(side, (Math.random() - 0.5) * 34);
-      const m = this.#tumbleweed(), size = 1.3 + Math.random() * 0.6;
-      m.scale.setScalar(size);
-      this.scene.add(m);
-      list.push({ m, pos: start, dir, speed: 3.2 + Math.random() * 2.4, t: 0, hop: Math.random() * 6, size, axis: new THREE.Vector3(dir.z, 0, -dir.x) });
+      const path = this.#weedPath();
+      if (path) {
+        const m = this.#tumbleweed(), size = 0.85 + Math.random() * 0.35;
+        m.scale.setScalar(size);
+        this.scene.add(m);
+        list.push({ m, pos: path.start, dir: path.dir, left: path.length, speed: 2.6 + Math.random() * 1.8, t: 0, hop: Math.random() * 6, size, axis: new THREE.Vector3(path.dir.z, 0, -path.dir.x) });
+      }
     }
     for (let i = list.length - 1; i >= 0; i--) {
       const w = list[i];
       w.t += dt;
-      // gusts: the speed swells and drops a little
-      const v = w.speed * (0.75 + 0.35 * Math.sin(w.t * 1.3 + w.hop));
-      w.pos.addScaledVector(w.dir, v * dt);
+      // gusts: the speed swells and drops a little, and it hops now and then
+      const v = w.speed * (0.7 + 0.4 * Math.sin(w.t * 1.3 + w.hop));
+      w.pos.addScaledVector(w.dir, v * dt); w.left -= v * dt;
       const ground = this.heightAt?.(w.pos.x, w.pos.z) ?? 0;
-      const bounce = Math.abs(Math.sin(w.t * 2.6 + w.hop)) * 0.7 * w.size;
-      w.m.position.set(w.pos.x, ground + 0.45 * w.size + bounce, w.pos.z);
-      w.m.children[0].rotateOnWorldAxis(w.axis, -v * dt / (0.45 * w.size));
-      if (w.t > 24) { this.scene.remove(w.m); w.m.traverse(o => o.geometry?.dispose()); list.splice(i, 1); }
+      const bounce = Math.pow(Math.abs(Math.sin(w.t * 2.2 + w.hop)), 1.6) * 0.45 * w.size;
+      w.m.position.set(w.pos.x, ground + 0.4 * w.size + bounce, w.pos.z);
+      w.m.children[0].rotateOnWorldAxis(w.axis, -v * dt / (0.4 * w.size));
+      if (w.left <= 0) { this.scene.remove(w.m); w.m.traverse(o => o.geometry?.dispose()); list.splice(i, 1); }
     }
   }
 

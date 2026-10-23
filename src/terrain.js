@@ -198,6 +198,32 @@ const LAKE = { x: 66, z: 64, r: 15 };
 // farm fields near the lake (Colorado): [x, z, width, depth, colour]
 const FIELDS = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
 
+// Flat-topped mesas round the edge of the map (the Mojave and Mars): [x, z, half-length,
+// half-width, height, turn]. Placed clear of the town, the two roads out, the landing
+// spot (40, 40) and the Mojave's salt flat.
+const MESAS = {
+  desert: [[-42, 14, 14, 7, 8, 0.78], [42, -16, 14, 7, 8, 0.78], [-50, 40, 13, 8, 8, 0.75], [44, -44, 14, 9, 9, 0.8], [-52, -50, 16, 10, 10, -0.2], [6, -64, 15, 9, 9, 0.1],
+    [-66, 18, 9, 7, 7, 0.3], [-14, 66, 13, 8, 8, -0.4], [68, -4, 10, 7, 7, 0.5], [30, 92, 14, 9, 8, 0.6], [-8, -98, 20, 12, 12, 0.2]],
+  mars: [[-42, 14, 13, 7, 9, 0.78], [42, -16, 14, 7, 8, 0.78], [-48, 44, 12, 8, 9, -0.6], [46, -40, 13, 9, 8, 0.9], [-56, -46, 15, 10, 10, 0.3], [10, -66, 14, 9, 9, -0.2],
+    [-66, 20, 9, 7, 8, 0.1], [-16, 68, 12, 8, 8, 0.4], [70, -2, 10, 7, 7, -0.3], [64, 84, 13, 9, 9, 0.2], [-12, -100, 20, 12, 12, -0.1]],
+};
+// how far up a mesa this point is: { h: height, top: the mesa's full height } (h 0 off it)
+function mesaAt(name, x, z) {
+  let best = 0, top = 0;
+  for (const [cx, cz, a, b, ht, rot] of MESAS[name] || []) {
+    const dx = x - cx, dz = z - cz;
+    if (Math.abs(dx) > a + b + 12 || Math.abs(dz) > a + b + 12) continue;
+    const c = Math.cos(rot), s = Math.sin(rot);
+    const u = (dx * c + dz * s) / a, v = (-dx * s + dz * c) / b;
+    const d = Math.hypot(u, v) + (fbm(x / 7, z / 7, 2, 23) - 0.5) * 0.28;   // ragged edges
+    // a flat top, steep cliffs, a narrow ledge part way down and a skirt of scree at the foot
+    const cliff = smooth(1.02, 0.86, d), ledge = smooth(1.12, 1.0, d) * 0.42, scree = smooth(1.45, 1.05, d) * 0.12;
+    const h = ht * Math.max(cliff, ledge, scree);
+    if (h > best) { best = h; top = ht; }
+  }
+  return { h: best, top };
+}
+
 // the shape of the land, before flattening it for town and roads
 function rawHeight(name, x, z) {
   const back = clamp01((-(x + z) - 95) / 90);              // far behind town (top of the screen)
@@ -229,7 +255,7 @@ function rawHeight(name, x, z) {
     h += back * 3 * fbm(x / 60, z / 60, 3, 2);
     const ds = Math.hypot(x - 66, z - 64);
     if (ds < 22) h = h * smooth(14, 22, ds) + 0.02;   // the salt flat
-    return h;
+    return Math.max(h, mesaAt(name, x, z).h);
   }
   if (name === 'mars') {
     // wind-carved ripples, a wide canyon across the back, a giant shield volcano off to the
@@ -246,7 +272,7 @@ function rawHeight(name, x, z) {
       const d = Math.hypot(x - c[0], z - c[1]), r = c[2];
       if (d < r * 1.8) h += -c[3] * Math.max(0, 1 - (d / r) ** 2) + c[3] * 0.5 * Math.exp(-(((d - r) / (r * 0.3)) ** 2));
     }
-    return h;
+    return Math.max(h, mesaAt(name, x, z).h);
   }
   // moon: bumpy ground and craters
   let h = (fbm(x / 20, z / 20, 4, 3) - 0.5) * 1.6;
@@ -329,6 +355,14 @@ export function buildLand(name, T, blocks) {
       for (const cr of MARS_CRATERS) { const d = Math.hypot(x - cr[0], z - cr[1]); if (d < cr[2] * 0.75) c.lerp(c2.setHex(P.snow), smooth(cr[2] * 0.75, cr[2] * 0.3, d) * 0.85); }
       if (h > 14) c.lerp(c2.setHex(0x5a2a1e), smooth(14, 26, h));
     }
+    // mesas: layered rock in bands up the cliffs, a paler cap on top
+    const ms = (name === 'desert' || name === 'mars') ? mesaAt(name, x, z) : null;
+    if (ms && ms.h > 0.6) {
+      const bands = name === 'desert' ? [0xc4693f, 0xdb8f58, 0xb0583a, 0xe3a86e] : [0x7a3420, 0x9c4a2e, 0x5a2a1e, 0xb25a36];
+      const k = Math.floor((ms.h + (n2 - 0.5) * 0.8) / 1.5) % 4;
+      c.lerp(c2.setHex(bands[k]), smooth(0.6, 1.6, ms.h) * 0.9);
+      if (ms.h > ms.top * 0.93) c.lerp(c2.setHex(name === 'desert' ? 0xd9a066 : 0xa8502e), 0.75);
+    }
     if (name === 'desert') c.lerp(c2.setHex(0xefe6d2), smooth(21, 12, Math.hypot(x - 66, z - 64) + (n2 - 0.5) * 6) * 0.9);   // salt flat
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
@@ -398,6 +432,8 @@ export function buildLand(name, T, blocks) {
       if (blocked(x, z, pad)) continue;
       if (where && !where(x, z)) continue;
       const h = H(x, z);
+      // nothing stands on a mesa's cliffs (the flat top and the ground round it are fine)
+      if (name === 'desert' || name === 'mars') { const m = mesaAt(name, x, z); if (m.h > 0.4 && m.h < m.top * 0.9) continue; }
       // low ground only matters where there's water: Colorado's hollows away from the lake get trees too
       if (h > maxH || h < minH && (name !== 'colorado' || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 14)) continue;
       const obj = make(r, h);
