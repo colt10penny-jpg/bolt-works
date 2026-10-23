@@ -1113,6 +1113,51 @@ export class World {
     }
   }
 
+  // ---------- tumbleweeds (the Mojave) ----------
+  // Every so often a tumbleweed blows through: it comes in from off screen on the wind,
+  // bouncing and spinning as it rolls, and leaves on the far side.
+  #tumbleweed() {
+    const g = new THREE.Group(), m = mat(0xa8844f, { roughness: 1 }), m2 = mat(0x8a6a3c, { roughness: 1 });
+    for (let i = 0; i < 9; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42 + Math.random() * 0.14, 0.035, 4, 10), i % 3 ? m : m2);
+      ring.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      ring.castShadow = true; g.add(ring);
+    }
+    const spin = new THREE.Group(); spin.add(g);
+    return spin;
+  }
+  #updateTumbleweeds(dt) {
+    const list = (this.weeds ||= []);
+    if (this.themeName !== 'desert') {
+      for (const w of list) { this.scene.remove(w.m); w.m.traverse(o => o.geometry?.dispose()); }
+      list.length = 0; this.weedT = 4 + Math.random() * 6; return;
+    }
+    this.weedT = (this.weedT ?? 5) - dt;
+    if (this.weedT <= 0 && list.length < 2 && !this.launching) {
+      this.weedT = 10 + Math.random() * 18;
+      const dir = new THREE.Vector3(1, 0, 0.45 + (Math.random() - 0.5) * 0.4).normalize();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x);
+      const c = this.target || new THREE.Vector3();
+      const start = c.clone().addScaledVector(dir, -38).addScaledVector(side, (Math.random() - 0.5) * 34);
+      const m = this.#tumbleweed(), size = 1.3 + Math.random() * 0.6;
+      m.scale.setScalar(size);
+      this.scene.add(m);
+      list.push({ m, pos: start, dir, speed: 3.2 + Math.random() * 2.4, t: 0, hop: Math.random() * 6, size, axis: new THREE.Vector3(dir.z, 0, -dir.x) });
+    }
+    for (let i = list.length - 1; i >= 0; i--) {
+      const w = list[i];
+      w.t += dt;
+      // gusts: the speed swells and drops a little
+      const v = w.speed * (0.75 + 0.35 * Math.sin(w.t * 1.3 + w.hop));
+      w.pos.addScaledVector(w.dir, v * dt);
+      const ground = this.heightAt?.(w.pos.x, w.pos.z) ?? 0;
+      const bounce = Math.abs(Math.sin(w.t * 2.6 + w.hop)) * 0.7 * w.size;
+      w.m.position.set(w.pos.x, ground + 0.45 * w.size + bounce, w.pos.z);
+      w.m.children[0].rotateOnWorldAxis(w.axis, -v * dt / (0.45 * w.size));
+      if (w.t > 24) { this.scene.remove(w.m); w.m.traverse(o => o.geometry?.dispose()); list.splice(i, 1); }
+    }
+  }
+
   // the rocket you arrived in, standing on open ground outside town in every world
   // after the first. look = { model, color } of this world's rocket, or null for none.
   setLander(look) {
@@ -1368,6 +1413,7 @@ export class World {
     this.stepTraffic(dt);
     this.#updateLaunch(dt);
     this.#updateLanding(dt);
+    this.#updateTumbleweeds(dt);
     // day/night, sun follows the view so shadows stay crisp where you're looking
     this.look.update(dt);
     SHARED.time.value = this.t;

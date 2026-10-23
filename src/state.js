@@ -783,7 +783,7 @@ export class Game {
     if (!this.hasRocket() || !this.launchTargets().includes(to)) return null;
     const from = this.s.current;
     let unlocked = null;
-    if (!this.s.worlds[to]) { this.#startWorld(to); unlocked = to; }
+    if (!this.s.worlds[to]) { this.#startWorld(to); unlocked = to; this.s.worlds[to].from = from; }   // the rocket you came in stays parked there
     const k = this.routeKey(from, to), before = this.s.trade[k] || 0;
     this.s.trade[k] = Math.min(TRADE_MAX, before + levels);
     this.s.launches++;

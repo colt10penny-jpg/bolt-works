@@ -416,7 +416,8 @@ body.selecting .boost, body.selecting #contract, body.selecting #ep, body.select
 .shop-list { display: flex; flex-direction: column; gap: 8px; }
 .shop-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: none; border-radius: 16px; background: var(--mint); text-align: left; color: var(--ink); }
 .shop-row:active { background: var(--mint-2); }
-.shop-row .s-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--gold); color: var(--gold-ink); font: 800 18px var(--display); flex-shrink: 0; }
+.shop-row .s-ic { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: #fff3cf; box-shadow: inset 0 -3px 0 rgba(201,138,18,.25); color: var(--gold-ink); font: 800 18px var(--display); flex-shrink: 0; }
+.shop-row .s-ic svg { display: block; }
 .shop-row .s-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .shop-row .s-t b { font: 800 16px var(--body); }
 .shop-row .s-t small { font: 800 13px var(--body); color: var(--green); }
