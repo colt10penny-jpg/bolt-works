@@ -86,13 +86,15 @@ const NONE = { cls: '', html: '', aria: '' };
 const canBuildHere = lot => lotReady(lot) && game.canAfford(game.buildCost(lotType(lot)));
 // can you clear this spot, or build on it, right now?
 const canStart = lot => lotReady(lot) && (game.developed(lot) ? canBuildHere(lot) : game.canAfford(game.developQuote(lot).total));
-const plusSpot = lot => game.s.current === 'colorado' && lotType(lot) === 'furnace' && !game.s.tutorial.tips?.plus;
+const firstPlus = lot => game.s.current === 'colorado' && lotType(lot) === 'furnace';
 function labelFor(lot) {
   const id = slotAt(lot);
   if (!id) {
-    // a + only on the forest spot for the Steel Furnace in the first town (the tutorial
-    // points at it), once you can afford it. It goes away for good once you tap it.
-    return plusSpot(lot) && canStart(lot) ? { cls: 'bub plus', html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>', aria: `Spot for the ${def(lotType(lot)).name}. Tap to build.` } : NONE;
+    // a + on the spot for the next building once you can afford it. The first one (the
+    // Steel Furnace's forest spot in the first town, which the tutorial points at) pulses,
+    // and goes away for good once you tap it.
+    if (!canStart(lot) || firstPlus(lot) && game.s.tutorial.tips?.plus) return NONE;
+    return { cls: firstPlus(lot) ? 'bub plus pulse' : 'bub plus', html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>', aria: `Spot for the ${def(lotType(lot)).name}. Tap to build.` };
   }
   const d = def(id), lv = game.level(id);
   const job = game.jobOf(id);
@@ -438,7 +440,7 @@ world.onTap = id => {
 };
 
 world.onPick = id => {
-  if (id && labelFor(id).cls === 'bub plus') {   // the one-time + is used up
+  if (id && labelFor(id).cls === 'bub plus pulse') {   // the one-time + is used up
     (game.s.tutorial.tips ||= {}).plus = true;
     track('tip', { id: 'plus_tapped' });
     save();
@@ -996,7 +998,7 @@ const nextSet = () => {
 const nextInLine = () => LINEAGE.find(t => !game.built(t)) || null;
 const emptyLot = () => plotIds(game.s.current).find(p => game.developed(p) && !slotAt(p));
 // the spot where a + is showing right now (if any), and the hint that goes with it
-const plusLot = () => plotIds(game.s.current).find(p => !slotAt(p) && labelFor(p).cls === 'bub plus');
+const plusLot = () => plotIds(game.s.current).find(p => !slotAt(p) && labelFor(p).cls.startsWith('bub plus'));
 const plusHint = () => {
   const p = plusLot();
   if (p) return game.developed(p) ? `Tap the + to build your ${def(lotType(p)).name}` : `Tap the + to clear the spot for your ${def(lotType(p)).name}`;
@@ -1006,7 +1008,7 @@ const plusHint = () => {
 function hintText() {
   // a brand-new town on a new world: nothing here yet
   if (!game.built('mine')) {
-    if (!Object.keys(game.run.land).length) return 'Tap the land to start your town';
+    if (!Object.keys(game.run.land).length) return 'Tap the land with a + to start your town';
     return emptyLot() ? `Tap your cleared lot and build a ${def('mine').name}` : '';
   }
   if (game.s.launches === 0 && !game.s.tutorial.done) {

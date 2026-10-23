@@ -320,7 +320,7 @@ export function buildLand(name, T, blocks) {
       // a sandy beach ringing the lake, wet and darker right at the water
       const dl = Math.hypot(x - LAKE.x, z - LAKE.z) + (fbm(x / 9, z / 9, 3, 41) - 0.5) * 9;
       c.lerp(c2.setHex(0xd8c597), smooth(LAKE.r + 9, LAKE.r + 5, dl + (n2 - 0.5) * 2) * 0.9);
-      if (h < -0.35) c.lerp(c2.setHex(0x9c8a64), 0.7);
+      if (h < -0.35 && dl < LAKE.r + 9) c.lerp(c2.setHex(0x9c8a64), 0.7);   // the lake bed (not dry hollows elsewhere)
     }
     if (name === 'mars') {
       // dark basalt showing through the dust in streaks, and frost in the crater floors
@@ -386,7 +386,7 @@ export function buildLand(name, T, blocks) {
   const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(name === 'colorado' ? 7 : name === 'desert' ? 11 : 13);
   const blocked = (x, z, pad) => {
     if (roadDist(x, z) < HW + SW + pad) return true;
-    if (name === 'colorado' && (H(x, z) < -0.3 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
+    if (name === 'colorado' && (H(x, z) < -0.3 && Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 20 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
     if (name !== 'colorado' && Math.hypot(x - 40, z - 40) < 4 + pad * 2) return true;   // the landing spot for the rocket you arrive in (world.js LANDER_AT)
     return townDist(x, z) < 0.5 + pad * 0.3;
   };
@@ -398,7 +398,8 @@ export function buildLand(name, T, blocks) {
       if (blocked(x, z, pad)) continue;
       if (where && !where(x, z)) continue;
       const h = H(x, z);
-      if (h > maxH || h < minH) continue;
+      // low ground only matters where there's water: Colorado's hollows away from the lake get trees too
+      if (h > maxH || h < minH && (name !== 'colorado' || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 14)) continue;
       const obj = make(r, h);
       obj.position.set(x, h, z);
       obj.rotation.y = r() * Math.PI * 2;
@@ -713,7 +714,8 @@ export function buildRoads(name, T, stateOf) {
   // bends on the edge of town (two roads meeting at a right angle, with nothing at all
   // on the outside of the corner) get a curved outer edge instead of a square one. The
   // curve is centred on the inside corner, so the road keeps its width all the way round.
-  const anySeg = (n, dx, dz) => NET.segs.has(segKey(n, { x: n.x + dx * BLOCK, z: n.z + dz * BLOCK })) || NET.exits.some(e => e.node.x === n.x && e.node.z === n.z && e.dir.x === dx && e.dir.z === dz);
+  // (an old worn-out road carrying on past the corner doesn't count: it gets curbed off)
+  const anySeg = (n, dx, dz) => NET.good.has(segKey(n, { x: n.x + dx * BLOCK, z: n.z + dz * BLOCK })) || liveExits.some(e => e.node.x === n.x && e.node.z === n.z && e.dir.x === dx && e.dir.z === dz);
   const round = new Map();   // node key -> { sx, sz }: the outside corner
   for (const sg of good) for (const n of [sg.a, sg.b]) {
     const k = n.x + ',' + n.z;
