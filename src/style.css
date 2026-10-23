@@ -269,6 +269,11 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
   border: 2px solid #fff; box-shadow: 0 3px 0 rgba(0,0,0,.25);
 }
 .lot-label.bub.plus.pulse { animation: plus-pulse 1.6s ease-out infinite; }
+.lot-label.bub.plus.dim { opacity: .72; }
+/* each world's + matches its land: forest green, desert clay, moon steel blue, Mars rust */
+body[data-world="desert"] .lot-label.bub.plus { background: #b5532a; border-color: #fff4e0; }
+body[data-world="moon"] .lot-label.bub.plus { background: #36486e; }
+body[data-world="mars"] .lot-label.bub.plus { background: #7a2a1a; border-color: #ffe2cf; }
 @keyframes plus-pulse { 0% { box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 0 rgba(255,255,255,.75); } 70%, 100% { box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 7px rgba(255,255,255,0); } }
 @keyframes bob { 50% { margin-top: -4px; } }
 .pop.big { font-size: 22px; color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,.4); }

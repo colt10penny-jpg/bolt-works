@@ -90,11 +90,12 @@ const firstPlus = lot => game.s.current === 'colorado' && lotType(lot) === 'furn
 function labelFor(lot) {
   const id = slotAt(lot);
   if (!id) {
-    // a + on the spot for the next building once you can afford it. The first one (the
-    // Steel Furnace's forest spot in the first town, which the tutorial points at) pulses,
-    // and goes away for good once you tap it.
-    if (!canStart(lot) || firstPlus(lot) && game.s.tutorial.tips?.plus) return NONE;
-    return { cls: firstPlus(lot) ? 'bub plus pulse' : 'bub plus', html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>', aria: `Spot for the ${def(lotType(lot)).name}. Tap to build.` };
+    // a + on the spot for the next building: faded until you can afford it, full colour
+    // once you can. The first one (the Steel Furnace's forest spot in the first town, which
+    // the tutorial points at) pulses, and goes away for good once you tap it.
+    if (!lotReady(lot) || firstPlus(lot) && game.s.tutorial.tips?.plus) return NONE;
+    const can = canStart(lot);
+    return { cls: !can ? 'bub plus dim' : firstPlus(lot) ? 'bub plus pulse' : 'bub plus', html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>', aria: `Spot for the ${def(lotType(lot)).name}. ${can ? 'Tap to build.' : 'Save up to build it here.'}` };
   }
   const d = def(id), lv = game.level(id);
   const job = game.jobOf(id);
@@ -1006,7 +1007,7 @@ const nextSet = () => {
 const nextInLine = () => LINEAGE.find(t => !game.built(t)) || null;
 const emptyLot = () => plotIds(game.s.current).find(p => game.developed(p) && !slotAt(p));
 // the spot where a + is showing right now (if any), and the hint that goes with it
-const plusLot = () => plotIds(game.s.current).find(p => !slotAt(p) && labelFor(p).cls.startsWith('bub plus'));
+const plusLot = () => plotIds(game.s.current).find(p => !slotAt(p) && labelFor(p).cls.startsWith('bub plus') && !labelFor(p).cls.includes('dim'));
 const plusHint = () => {
   const p = plusLot();
   if (p) return game.developed(p) ? `Tap the + to build your ${def(lotType(p)).name}` : `Tap the + to clear the spot for your ${def(lotType(p)).name}`;
@@ -1163,6 +1164,7 @@ function loop(now) {
     bb.classList.toggle('on', left > 0);
     $('boost-text').textContent = left > 0 ? fmtTime(left) : '×2';
     bb.setAttribute('aria-label', left > 0 ? `Double earnings active, ${fmtTime(left)} left. Watch an ad to add more.` : 'Watch an ad for double earnings');
+    document.body.dataset.world = game.s.current;   // per-world colours (the + over empty land)
     const trade = Math.round((game.tradeMult() - 1) * 100) / 100;
     document.body.classList.toggle('has-ep', trade > 0);
     if (trade > 0) { $('ep').hidden = false; $('ep').textContent = `Trade +${Math.round(trade * 100)}% income`; }
