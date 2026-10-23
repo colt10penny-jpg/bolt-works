@@ -624,7 +624,7 @@ game.on('contract', c => {
 // what a world sends on its trade rockets (what its second building makes)
 const good = w => skin(w, 'furnace').makes;
 const pips = level => `<span class="pips" aria-label="level ${level} of ${TRADE_MAX}">${Array.from({ length: TRADE_MAX }, (_, i) => `<i class="${i < level ? 'on' : ''}"></i>`).join('')}</span>`;
-const routeLine = (a, b) => { const l = game.routeLevel(a, b); return `level ${l}, <b>+${fmt(l * TRADE_STEP * 100)}%</b> income in ${worldById(a).short} and ${worldById(b).short}`; };
+const routeLine = (a, b) => { const l = game.routeLevel(a, b); return `level ${l}, <b>+${Math.round(l * TRADE_STEP * 100)}%</b> income in ${worldById(a).short} and ${worldById(b).short}`; };
 function openLaunch() {
   const here = game.s.current, next = game.nextWorld();
   const unlocks = next && !game.s.worlds[next.id];
@@ -632,12 +632,12 @@ function openLaunch() {
   const ad = id => `<button class="btn small gold" data-act="ad:${id}">${AD} +2</button>`;
   const routes = game.routesOf().map(({ world: w, level }) => `<div class="w-card w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${game.townName(w.id)}</b><small>${good(here)} for ${good(w.id)} · +${fmt(level * TRADE_STEP * 100)}% each</small>${pips(level)}</span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${good(here)} for ${good(w.id)} · +${Math.round(level * TRADE_STEP * 100)}% each</small>${pips(level)}</span>
       ${level >= TRADE_MAX ? '<span class="w-here">Full</span>' : `<span class="tr-btns"><button class="btn small red" data-act="send:${w.id}">Send</button>${level < TRADE_MAX - 1 ? ad(w.id) : ''}</span>`}
     </div>`).join('');
   const newWorld = unlocks ? `<div class="w-card new">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[next.id] || ''}</span>
-      <span class="w-info"><b>${next.name}</b><small>A new world! Start a town there with an Ore Mine and no money, and open a trade route with ${worldById(here).short}. ${next.perk}</small></span>
+      <span class="w-info"><b>${next.name}</b><small>A new world! Start a town there with an Ore Mine and no money (prices ${next.price}×), and open a trade route with ${worldById(here).short}. ${next.perk}</small></span>
       <button class="btn small red" data-act="send:${next.id}">Go</button>
     </div>` : '';
   openModal(`
@@ -701,6 +701,7 @@ async function doLaunch(to, levels = 1) {
       <div class="big-icon red">${ICON.rocket}</div>
       <h2>Welcome to ${nw.name}!</h2>
       <p>A fresh start: an Ore Mine and an empty wallet. ${nw.perk}</p>
+      <p class="small">Everything here costs <b>${nw.price}×</b> what it does in ${WORLDS[0].short}. Trade routes with your other worlds make up for it.</p>
       <p class="small">Your rocket carried ${good(from)} here, opening a trade route: ${routeLine(from, nw.id)}.</p>
       <button class="btn green" data-act="start">Start building</button>
       <p class="small">${game.townName(from)} and its money are saved in ${worldById(from).short}, and it keeps earning. Go back any time with the map button.</p>`,
@@ -717,9 +718,9 @@ async function doLaunch(to, levels = 1) {
     <p>Your ${good(from)} reached ${game.townName(to)}, and ${good(to)} is on its way back.</p>
     <div class="stats">
       <div class="stat"><small>Trade route</small><b>Level ${before} → <em>${level}</em></b></div>
-      <div class="stat"><small>Income in both</small><b><em>+${fmt(level * TRADE_STEP * 100)}%</em></b></div>
+      <div class="stat"><small>Income in both</small><b><em>+${Math.round(level * TRADE_STEP * 100)}%</em></b></div>
     </div>
-    <p class="small">${worldById(from).short} now earns <b>+${fmt((game.tradeMult(from) - 1) * 100)}%</b> from all its trade routes.</p>
+    <p class="small">${worldById(from).short} now earns <b>+${Math.round((game.tradeMult(from) - 1) * 100)}%</b> from all its trade routes.</p>
     <button class="btn green" data-act="dismiss">Keep building</button>`);
 }
 
@@ -764,7 +765,7 @@ function openMap() {
     const status = here ? '<span class="w-here">Here</span>' : `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`;
     return `<div class="w-card ${here ? 'here' : ''} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${game.tradeMult(w.id) > 1 ? ` · trade +${fmt((game.tradeMult(w.id) - 1) * 100)}%` : ''}</small></span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${game.tradeMult(w.id) > 1 ? ` · trade +${Math.round((game.tradeMult(w.id) - 1) * 100)}%` : ''}${w.price > 1 ? ` · prices ${w.price}×` : ''}</small></span>
       ${status}
     </div>`;
   }).join('');
@@ -900,7 +901,7 @@ function openSettings() {
     <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
     <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
     <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
-    <p>Rockets launched: <b>${game.s.launches}</b> · Trade bonus here: <b>+${fmt((game.tradeMult() - 1) * 100)}%</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
+    <p>Rockets launched: <b>${game.s.launches}</b> · Trade bonus here: <b>+${Math.round((game.tradeMult() - 1) * 100)}%</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
     <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it.</p>
     <button class="btn danger" data-act="reset-ask">Start over</button>
     <button class="btn plain" data-act="back">Back</button>`, async act => {
@@ -1162,9 +1163,9 @@ function loop(now) {
     bb.classList.toggle('on', left > 0);
     $('boost-text').textContent = left > 0 ? fmtTime(left) : '×2';
     bb.setAttribute('aria-label', left > 0 ? `Double earnings active, ${fmtTime(left)} left. Watch an ad to add more.` : 'Watch an ad for double earnings');
-    const trade = game.tradeMult() - 1;
+    const trade = Math.round((game.tradeMult() - 1) * 100) / 100;
     document.body.classList.toggle('has-ep', trade > 0);
-    if (trade > 0) { $('ep').hidden = false; $('ep').textContent = `Trade +${fmt(trade * 100)}% income`; }
+    if (trade > 0) { $('ep').hidden = false; $('ep').textContent = `Trade +${Math.round(trade * 100)}% income`; }
     else $('ep').hidden = true;
     world.setRocketReady(game.canLaunch(), game.run.rocketsBuilt % 1);
     const mb = $('map-btn'); const wl = game.unlockedWorlds().length;

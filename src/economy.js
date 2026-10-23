@@ -163,9 +163,13 @@ export function maxAffordable(def, level, cash, cap = LEVEL_CAP - level) {
 // ---- Trade routes between worlds ----
 // Each pair of worlds you've reached can trade. Every rocket you send from one to the
 // other raises their route a level (up to TRADE_MAX), and each level adds TRADE_STEP to
-// the income of both worlds. With four worlds, a world trades with three others, so the
-// most any world can get is +300% (4x income): a reward for travelling, with a ceiling.
-export const TRADE_STEP = 0.25, TRADE_MAX = 4;
+// the income of both worlds. A world can trade with every other world you've reached, so
+// the more worlds there are, the more it can earn, but each route adds only a little.
+export const TRADE_STEP = 0.10, TRADE_MAX = 4;
+// Each world costs a little more than the one before (building, upgrading, land, roads
+// and managers), because later worlds have more trade routes to boost their income:
+// 1x, 1.2x, 1.4x, 1.6x... A straight line, so it never runs away however many worlds.
+export const PRICE_STEP = 0.2;
 export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
 
 // Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
@@ -178,8 +182,8 @@ export const WORLDS = [
   { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: the Rocket Bay builds rockets 2× faster.', perks: { rocket: 2 } },
   { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power.', perks: { power: 3 } },
 ];
-// a building's numbers in a given world. A world with a `price` would scale every cost by
-// it; none do now (they were for Engineering Points, which trade routes replaced).
+WORLDS.forEach((w, i) => { w.price = Math.round((1 + PRICE_STEP * i) * 100) / 100; });
+// a building's numbers in a given world: every cost scales by the world's price
 export function inWorld(def, world) {
   const p = world?.price || 1;
   if (!def || p === 1) return def;
