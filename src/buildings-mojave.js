@@ -70,6 +70,59 @@ function cactusPot(g, x, z, h = 0.9) {
 function vigas(g, axis, a0, w, y, f, n) {
   for (let i = 0; i < n; i++) g.add(onWall(axis, a0 - w / 2 + (w * (i + 0.5)) / n, y, f, 0.16, 0.16, 0.3, 0x7a5230));
 }
+// An adobe hall, the desert's own: thick walls that lean in a little as they rise, a
+// stepped parapet with a raised middle, wooden beam ends (vigas), canales spouting from
+// the roof, and a sandstone footing. Returns the height of the roof.
+function adobeHall(g, { x = 0, z = 0, w, d, h, color = ADOBE, step = true }) {
+  g.add(box(w + 0.24, 0.3, d + 0.24, 0xc9a77c, x, 0, z));                       // sandstone footing
+  const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2); geo.translate(0, h / 2, 0);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) { const k = p.getY(i) / h * 0.035; p.setX(i, p.getX(i) * (1 - k)); p.setZ(i, p.getZ(i) * (1 - k)); }
+  geo.computeVertexNormals();
+  const walls = mesh(geo, color); walls.position.set(x, 0.3, z); g.add(walls);
+  const top = 0.3 + h, wt = w * 0.965, dt = d * 0.965;
+  // a soft, rounded cap all round, and a stepped parapet on the front
+  for (const [pw, pd, px, pz] of [[wt + 0.06, 0.24, x, z + dt / 2 - 0.1], [wt + 0.06, 0.24, x, z - dt / 2 + 0.1], [0.24, dt, x + wt / 2 - 0.1, z], [0.24, dt, x - wt / 2 + 0.1, z]]) {
+    g.add(box(pw, 0.3, pd, color, px, top, pz));
+    g.add(box(pw + 0.04, 0.06, pd + 0.04, shade(color, 0.1), px, top + 0.3, pz));
+  }
+  g.add(box(wt - 0.3, 0.05, dt - 0.3, 0xb89a72, x, top, z));
+  if (step) { g.add(box(wt * 0.4, 0.3, 0.26, color, x, top + 0.3, z + dt / 2 - 0.1), box(wt * 0.18, 0.25, 0.26, color, x, top + 0.6, z + dt / 2 - 0.1)); }
+  vigas(g, 'z', x, wt, top - 0.3, z + d / 2 - 0.02, Math.max(3, Math.round(w / 0.6)));
+  vigas(g, 'x', z, dt, top - 0.3, x + w / 2 - 0.02, Math.max(3, Math.round(d / 0.6)));
+  for (const a of [-wt / 3, wt / 3]) g.add(onWall('z', x + a, top - 0.05, z + d / 2, 0.14, 0.12, 0.5, 0x8a6a45));   // canales
+  // patches where the plaster has worn back to the mud brick
+  for (const [a, y, ww] of [[-w * 0.3, 0.7, 0.5], [w * 0.25, 1.3, 0.35]]) g.add(onWall('z', x + a, y, z + d / 2 - 0.02, ww, 0.28, 0.03, shade(color, -0.18)));
+  return top + 0.36;
+}
+// deep-set desert windows: a turquoise frame round a dark pane
+function deepWin(g, axis, a, y, f, w = 0.55, h = 0.55, frame = TEAL, glass = 0x1c2f3a) {
+  const s = Math.sign(f) || 1;
+  g.add(onWall(axis, a, y - 0.06, f, w + 0.14, h + 0.12, 0.05, frame));
+  g.add(onWall(axis, a, y, f + s * 0.02, w - 0.04, h - 0.04, 0.05, glass, glass === WARM ? { emissive: 0xff8a1f, emissiveIntensity: 0.6 } : undefined));
+  g.add(onWall(axis, a, y - 0.12, f, w + 0.26, 0.06, 0.14, 0x8a6a45));
+}
+// a corrugated quonset hut: a half-round roof of ribbed sheet steel along x, with end walls
+function quonset(g, x, z, len, r, color) {
+  const shell = mesh(new THREE.CylinderGeometry(r, r, len, 24, 1, true, Math.PI / 2, Math.PI), color, { side: THREE.DoubleSide, metalness: 0.35, roughness: 0.55 });
+  shell.rotation.z = Math.PI / 2; shell.rotation.y = 0; shell.position.set(x, 0.3, z); g.add(shell);
+  for (let k = 0; k <= 12; k++) { const rib = mesh(new THREE.TorusGeometry(r + 0.02, 0.03, 4, 20, Math.PI), shade(color, -0.2)); rib.rotation.y = Math.PI / 2; rib.position.set(x - len / 2 + (len * k) / 12, 0.3, z); g.add(rib); }
+  for (const e of [-1, 1]) { const end = mesh(new THREE.CircleGeometry(r, 24, 0, Math.PI), shade(color, 0.12), { side: THREE.DoubleSide }); end.rotation.y = Math.PI / 2; end.position.set(x + e * len / 2, 0.3, z); g.add(end); }
+  g.add(box(len + 0.2, 0.3, r * 2 + 0.2, PLINTH, x, 0, z));
+  return 0.3 + r;
+}
+// a bottle tree: a dead-branch post hung with glass bottles that glint in the sun
+function bottleTree(g, x, z) {
+  g.add(cyl(0.06, 0.09, 1.6, 0x5a4632, x, 0.15, z, 6));
+  const glassC = [0x2f6fd1, 0x3fae8a, 0x2f8fe0, 0x7a4fd1, 0x2fa39a];
+  for (let k = 0; k < 7; k++) {
+    const a = k * 2.4, y = 0.55 + (k % 4) * 0.28, L = 0.32 + (k % 3) * 0.06;
+    const br = box(0.035, L, 0.035, 0x5a4632, x + Math.cos(a) * L * 0.4, 0.15 + y, z + Math.sin(a) * L * 0.4); br.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9); g.add(br);
+    const b = cyl(0.06, 0.06, 0.2, glassC[k % 5], x + Math.cos(a) * L * 0.8, 0.15 + y + L * 0.5, z + Math.sin(a) * L * 0.8, 8, { transparent: true, opacity: 0.85, roughness: 0.1, metalness: 0.2, emissive: glassC[k % 5], emissiveIntensity: 0.15 });
+    b.rotation.x = Math.PI; g.add(b);
+  }
+}
+
 // a little drone: a body, four arms and rotors
 function drone(color) {
   const d = new THREE.Group();
@@ -144,16 +197,22 @@ Object.assign(BUILDERS, {
     };
   },
 
-  // ---- Glass Kiln: a stucco works with a domed melting furnace, its glowing ports and
-  // a banded chimney, batch silos, and sheets of fresh glass sliding out to a rack
+  // ---- Glass Kiln: an adobe glassworks with a stained-glass front, a big domed melting
+  // furnace, two little beehive kilns glowing at the mouth, a banded brick chimney, and a
+  // bottle tree and racks of fresh glass out in the yard
   kiln(color) {
     const g = new THREE.Group();
-    const top = hall(g, { x: 0.35, z: 0.75, w: 4.3, d: 2.4, h: 2.0, color: STUCCO, piers: 1.05, pierColor: 0xdcc9a6 });
-    g.add(box(4.5, 0.16, 2.6, color, 0.35, top - 0.5, 0.75));                 // terracotta band
-    winRow(g, 'z', 0.95, 1.05, 1.95, 3, 0.95, 0.6, 0.7, DARK, WARM);
-    sideDoor(g, 'z', -1.25, 1.95, 0x2fa39a);
-    signBoard(g, 'z', 0.95, 1.95, 1.95, 2.6, color, 5);
-    winRow(g, 'x', 0.75, 1.05, 2.5, 2, 1.1, 0.6, 0.7, DARK, WARM);
+    const top = adobeHall(g, { x: 0.35, z: 0.75, w: 4.3, d: 2.4, h: 2.1, color: ADOBE });
+    // stained-glass windows: coloured panes in a dark frame, lit from inside at night
+    const panes = [0x2f8fe0, 0xffb03a, 0x3fae8a, 0xd9482b, 0x7a4fd1];
+    for (const [i, a] of [-0.9, 0.35, 1.6].entries()) {
+      g.add(onWall('z', a, 0.85, 1.95, 0.85, 1.05, 0.05, 0x3a2a1e));
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) g.add(onWall('z', a - 0.19 + c * 0.38, 0.92 + r * 0.32, 1.98, 0.33, 0.27, 0.03, panes[(i + r + c * 2) % 5], { emissive: panes[(i + r + c * 2) % 5], emissiveIntensity: 0.35, night: 1.4 }));
+      const arch = mesh(new THREE.CircleGeometry(0.43, 14, 0, Math.PI), 0x3a2a1e); arch.position.set(a, 1.9, 2.0); g.add(arch);
+    }
+    sideDoor(g, 'z', -1.65, 1.95, TEAL);
+    signBoard(g, 'x', 0.75, 1.55, 2.5, 1.9, color, 4);
+    deepWin(g, 'x', 0.15, 0.85, 2.5, 0.55, 0.55, TEAL, WARM); deepWin(g, 'x', 1.35, 0.85, 2.5, 0.55, 0.55, TEAL, WARM);
     // the melting furnace: a brick drum under a dome, banded, with glowing ports
     const fx = -1.7, fz = -1.7;
     g.add(cyl(1.22, 1.27, 1.2, color, fx, 0.15, fz, 24));
@@ -165,21 +224,27 @@ Object.assign(BUILDERS, {
       const port = box(0.32, 0.36, 0.1, 0xffa13a, fx + Math.cos(a) * 1.25, 0.45, fz + Math.sin(a) * 1.25, { emissive: 0xff7a12, emissiveIntensity: 1.3 });
       port.rotation.y = -a + Math.PI / 2; port.material = port.material.clone(); g.add(port); ports.push(port);
     }
+    // two beehive kilns: rounded mud-brick domes with a glowing arched mouth
+    for (const [bx, bz, r] of [[2.75, -1.0, 0.62], [2.55, 0.25, 0.5]]) {
+      const hive = mesh(new THREE.SphereGeometry(r, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0xb5684a); hive.scale.y = 1.25; hive.position.set(bx, 0.15, bz); g.add(hive);
+      for (let k = 1; k < 4; k++) { const ring = mesh(new THREE.TorusGeometry(r * Math.cos(k * 0.38), 0.02, 4, 18), 0x8a4a33); ring.rotation.x = Math.PI / 2; ring.position.set(bx, 0.15 + r * 1.25 * Math.sin(k * 0.38), bz); g.add(ring); }
+      const mouth = box(0.26, 0.28, 0.08, 0xffa13a, bx + r * 0.98, 0.15, bz, { emissive: 0xff7a12, emissiveIntensity: 1.2 }); mouth.rotation.y = Math.PI / 2; mouth.material = mouth.material.clone(); g.add(mouth); ports.push(mouth);
+      g.add(cyl(0.07, 0.07, 0.3, 0x6b3a28, bx, 0.15 + r * 1.2, bz, 8));
+    }
     const smoke = [chimney(g, 0.75, -1.85, 0.15, 5.2, 0.36, shade(color, -0.2))];
     pipe(g, [[fx + 0.4, 2.25, fz], [fx + 0.4, 2.7, fz], [0.75, 2.7, fz], [0.75, 2.7, -1.85]], 0.15, 0xb9b4a8);
-    // batch silos feeding the furnace
-    for (const [x, z] of [[2.5, -2.3], [1.65, -2.45]]) { tank(g, x, z, 0.38, 2.2, 0xe9ecf1); }
-    // fresh glass sheets sliding out on rollers to a rack
-    g.add(box(2.0, 0.45, 0.6, IRON, 2.55, 0.15, 2.45));
-    for (let k = 0; k < 7; k++) g.add(cyl(0.05, 0.05, 0.58, 0xc9ced6, 1.65 + k * 0.3, 0.62, 2.45, 8).rotateX(Math.PI / 2));
+    // fresh glass sheets sliding out on rollers to a rack, and a bottle tree
+    g.add(box(2.0, 0.45, 0.6, IRON, -2.15, 0.15, 2.65));
+    for (let k = 0; k < 7; k++) g.add(cyl(0.05, 0.05, 0.58, 0xc9ced6, -3.05 + k * 0.3, 0.62 - 0.29, 2.65, 8).rotateX(Math.PI / 2));
     const sheets = [];
-    for (let i = 0; i < 2; i++) { const sh = box(0.7, 0.03, 0.5, 0x9fe8ff, 0, 0.68, 2.45, { transparent: true, opacity: 0.7, roughness: 0.05, metalness: 0.3 }); g.add(sh); sheets.push(sh); }
-    for (let k = 0; k < 4; k++) { const r = box(0.03, 0.8, 0.6, 0x9fe8ff, 3.25 - k * 0.07, 0.15, 3.15, { transparent: true, opacity: 0.6, roughness: 0.05 }); r.rotation.z = 0.12; g.add(r); }
-    g.add(box(0.5, 0.1, 0.8, IRON, 3.15, 0.15, 3.15), box(0.06, 0.9, 0.06, IRON, 3.0, 0.15, 3.5));
+    for (let i = 0; i < 2; i++) { const sh = box(0.7, 0.03, 0.5, 0x9fe8ff, 0, 0.68, 2.65, { transparent: true, opacity: 0.7, roughness: 0.05, metalness: 0.3 }); g.add(sh); sheets.push(sh); }
+    for (let k = 0; k < 4; k++) { const r = box(0.03, 0.8, 0.6, [0x9fe8ff, 0x8fd0ff, 0xa8f0d0, 0x9fe8ff][k], -3.2 + k * 0.07, 0.15, 1.6, { transparent: true, opacity: 0.6, roughness: 0.05 }); r.rotation.z = -0.12; g.add(r); }
+    bottleTree(g, 2.9, 2.75);
+    cactusPot(g, 2.2, 2.3, 0.7);
     return {
       group: g, top: 7.0, smoke,
       anim(t) {
-        sheets.forEach((s, i) => { s.position.x = 1.6 + (((t * 0.35) + i * 0.5) % 1) * 1.8; });
+        sheets.forEach((s, i) => { s.position.x = -2.85 + (((t * 0.35) + i * 0.5) % 1) * 1.4; });
         ports.forEach((p, i) => { p.material.emissiveIntensity = 1.1 + Math.sin(t * 2.3 + i * 2) * 0.35; });
       },
     };
@@ -192,8 +257,22 @@ Object.assign(BUILDERS, {
     const top = hall(g, { x: -0.2, z: -0.3, w: 5.4, d: 3.8, h: 2.1, color: 0xf1f2f4, piers: 0.9, pierColor: 0xe1e4e8 });
     g.add(box(5.6, 0.32, 4.0, color, -0.2, top - 1.0, -0.3));                 // the company blue band
     const roofY = top - 0.43;
-    for (let r = 0; r < 3; r++) panelRow(g, -1.1, -1.5 + r * 1.05, roofY, 0.95, 0.75, 3, 1.05);
-    for (const x of [1.75]) { g.add(box(0.9, 0.6, 1.4, 0xc9ced6, x, roofY, 0.5)); for (let k = 0; k < 3; k++) g.add(cyl(0.18, 0.18, 0.04, DARK, x, roofY + 0.6, 0.05 + k * 0.45, 12)); }
+    // a saw-tooth roof: each tooth's long slope is solar panels facing the sun, its short
+    // face a strip of clerestory glass lighting the clean room below
+    for (let i = 0; i < 4; i++) {
+      const z0 = -1.95 + i * 0.92, rise = 0.55, run = 0.86, len = Math.hypot(rise, run), ang = Math.atan2(rise, run);
+      const slope = new THREE.Group();
+      const back = box(4.9, 0.06, len, 0xe1e4e8, 0, 0, 0); slope.add(back);
+      for (let k = 0; k < 5; k++) { const pnl = solarPanel(0.92, len - 0.12); pnl.position.set(-1.96 + k * 0.98, 0.07, 0); slope.add(pnl); }
+      slope.rotation.x = -ang; slope.position.set(-0.2, roofY + rise / 2, z0 + run / 2); g.add(slope);
+      g.add(box(4.9, rise, 0.05, GLASS, -0.2, roofY, z0 + run + 0.02, { emissive: 0x9fd8ff, emissiveIntensity: 0.15, night: 1.2 }));
+    }
+    // the company's sun on the side wall: a gold disc with rays, slowly turning
+    const sun = new THREE.Group();
+    sun.add(cyl(0.55, 0.55, 0.08, 0xffc23d, 0, -0.04, 0, 24, { emissive: 0xffa21a, emissiveIntensity: 0.4 }));
+    sun.add(cyl(0.38, 0.38, 0.1, 0xffe27a, 0, -0.03, 0, 24, { emissive: 0xffc23d, emissiveIntensity: 0.4 }));
+    for (let k = 0; k < 12; k++) { const ray = box(0.1, 0.06, 0.32, 0xffc23d, Math.cos(k * Math.PI / 6) * 0.78, -0.03, Math.sin(k * Math.PI / 6) * 0.78, { emissive: 0xffa21a, emissiveIntensity: 0.4 }); ray.rotation.y = -k * Math.PI / 6 + Math.PI / 2; sun.add(ray); }
+    const sunHold = new THREE.Group(); sunHold.add(sun); sunHold.rotation.z = -Math.PI / 2; sunHold.position.set(2.62, 1.45, -1.3); g.add(sunHold);
     // glass entrance pavilion at the front right with a deep sun shade
     g.add(box(1.3, 1.55, 0.8, GLASS, 1.95, 0.3, 1.95));
     for (let i = 0; i < 4; i++) g.add(box(0.05, 1.55, 0.05, 0xf1f2f4, 1.35 + i * 0.4, 0.3, 2.36));
@@ -214,7 +293,7 @@ Object.assign(BUILDERS, {
     turret.position.set(ax, 0.4, az); g.add(turret);
     g.add(box(0.8, 0.12, 0.6, 0x8a6a4f, -1.7, 0.15, 2.95));
     for (let k = 0; k < 5; k++) { const p = solarPanel(0.7, 0.5); p.position.set(-1.7, 0.3 + k * 0.08, 2.95); g.add(p); }
-    return { group: g, top: top + 1.6, anim(t) { turret.rotation.y = Math.sin(t * 0.7) * 1.2 - 0.6; upper.rotation.z = -0.45 + Math.sin(t * 1.4) * 0.15; } };
+    return { group: g, top: top + 1.6, anim(t) { turret.rotation.y = Math.sin(t * 0.7) * 1.2 - 0.6; upper.rotation.z = -0.45 + Math.sin(t * 1.4) * 0.15; sun.rotation.y = t * 0.3; } };
   },
 
   // ---- Battery Plant: a white works with a green stripe, three giant battery cells
@@ -243,13 +322,26 @@ Object.assign(BUILDERS, {
       for (let k = 0; k < 5; k++) { const b = box(0.2, 0.14, 0.05, 0x4fdc6a, x + 0.39, 0.6 + k * 0.22, z + 0.39, { emissive: 0x2fd14a, emissiveIntensity: 1 }); b.rotation.y = Math.PI / 4; b.material = b.material.clone(); g.add(b); col.push(b); }
       bars.push(col);
     }
+    // the landmark: a giant battery standing on the roof, its charge window filling up
+    const ry = top - 0.43, bx = -0.9, bz = -0.5;
+    g.add(cyl(1.0, 1.05, 0.2, 0x3a3f48, bx, ry, bz, 28));
+    g.add(cyl(0.9, 0.9, 2.5, 0x22252b, bx, ry + 0.2, bz, 28, { roughness: 0.35, metalness: 0.3 }));
+    g.add(cyl(0.92, 0.92, 0.85, color, bx, ry + 1.75, bz, 28, { roughness: 0.3, metalness: 0.2 }));
+    g.add(cyl(0.93, 0.93, 0.06, 0xf2f2f0, bx, ry + 1.72, bz, 28));
+    g.add(cyl(0.36, 0.36, 0.22, 0xd9d9d9, bx, ry + 2.7, bz, 18, { metalness: 0.6, roughness: 0.3 }));
+    const big = [];
+    for (let k = 0; k < 6; k++) { const seg = box(0.34, 0.2, 0.06, 0x4fdc6a, bx + 0.64, ry + 0.4 + k * 0.24, bz + 0.64, { emissive: 0x2fd14a, emissiveIntensity: 1 }); seg.rotation.y = Math.PI / 4; seg.material = seg.material.clone(); g.add(seg); big.push(seg); }
+    const plus = new THREE.Group();
+    plus.add(box(0.12, 0.42, 0.04, WHITE, 0, -0.21, 0), box(0.42, 0.12, 0.04, WHITE, 0, -0.06, 0));
+    plus.position.set(bx - 0.45, ry + 2.15, bz + 0.8); plus.rotation.y = -0.5; g.add(plus);
+    bars.push(big);
     // a transformer with insulators, fenced
     g.add(box(0.9, 0.15, 0.8, PLINTH, -2.6, 0.15, -2.45), box(0.7, 0.75, 0.55, 0x6f8fa8, -2.6, 0.3, -2.45));
     for (const dx of [-0.2, 0, 0.2]) g.add(cyl(0.04, 0.04, 0.35, 0xe8e2d4, -2.6 + dx, 1.05, -2.45, 6));
     pipe(g, [[-2.6, 1.3, -2.45], [-2.6, 1.6, -2.45], [-2.6, 1.6, -2.2]], 0.05, DARK);
     return {
-      group: g, top: top + 1.6,
-      anim(t) { bars.forEach((col, i) => { const lvl = ((t * 0.25 + i * 0.33) % 1) * 6; col.forEach((b, k) => { b.material.emissiveIntensity = k < lvl ? 1.4 : 0.05; }); }); },
+      group: g, top: top + 3.2,
+      anim(t) { bars.forEach((col, i) => { const lvl = ((t * 0.25 + i * 0.33) % 1) * (col.length + 1); col.forEach((b, k) => { b.material.emissiveIntensity = k < lvl ? 1.4 : 0.05; }); }); },
     };
   },
 
@@ -257,18 +349,29 @@ Object.assign(BUILDERS, {
   // drone hovering inside, drones circling above, and a windsock
   drone(color) {
     const g = new THREE.Group();
-    const top = hall(g, { x: -0.55, z: -0.45, w: 4.5, d: 3.6, h: 2.2, color: STUCCO, piers: 1.1, pierColor: 0xdcc9a6 });
-    g.add(box(4.7, 0.25, 3.8, color, -0.55, top - 0.95, -0.45));
-    door(g, 'z', -1.8, 1.35, 1.6, 1.7, 0xd8dbe2);
-    winRow(g, 'z', 0.55, 1.05, 1.35, 2, 0.9, 0.6, 0.65);
-    signBoard(g, 'x', -0.6, 1.95, 1.7, 2.4, color, 5);
-    winRow(g, 'x', -0.6, 1.0, 1.7, 3, 0.9, 0.55, 0.6);
-    // two landing pads on the roof with an H and corner lights
-    const roofY = top - 0.43;
-    for (const [x, z] of [[-1.5, -1.2], [0.4, -1.2]]) {
-      g.add(cyl(0.72, 0.72, 0.08, 0x3a3f48, x, roofY, z, 24));
-      g.add(box(0.1, 0.02, 0.6, WHITE, x - 0.2, roofY + 0.08, z), box(0.1, 0.02, 0.6, WHITE, x + 0.2, roofY + 0.08, z), box(0.4, 0.02, 0.1, WHITE, x, roofY + 0.08, z));
-      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; g.add(box(0.07, 0.06, 0.07, 0x9cff8a, x + Math.cos(a) * 0.66, roofY + 0.06, z + Math.sin(a) * 0.66, { emissive: 0x6dff5a, night: 2.2 })); }
+    // a corrugated quonset hangar (like an old desert airfield's), its end a big door
+    const hx = -0.75, hz = -0.75, hl = 4.4, hr = 1.75;
+    const top = quonset(g, hx, hz, hl, hr, 0xb9bec6);
+    const ex = hx + hl / 2;
+    g.add(box(0.12, 1.75, 2.2, DARK, ex + 0.04, 0.3, hz));
+    g.add(box(0.08, 1.6, 2.0, shade(color, -0.1), ex + 0.08, 0.3, hz));
+    for (let k = 1; k < 6; k++) g.add(box(0.03, 0.03, 2.0, shade(color, -0.35), ex + 0.13, 0.3 + k * 0.27, hz));
+    for (const dz of [-1.2, 1.2]) g.add(box(0.14, 0.6, 0.14, HAZ, ex + 0.1, 0.3, hz + dz));
+    g.add(box(0.06, 0.25, 1.2, 0xfff2c8, ex + 0.1, 2.1, hz, { emissive: 0xffd27a, night: 2.2 }));
+    // a big painted roundel on the curved roof, and a row of skylights
+    const roundel = mesh(new THREE.CircleGeometry(0.55, 20), color, { side: THREE.DoubleSide }); roundel.rotation.x = -Math.PI / 2; roundel.position.set(hx - 0.6, top + 0.01, hz); g.add(roundel);
+    const ring = mesh(new THREE.RingGeometry(0.28, 0.36, 20), WHITE, { side: THREE.DoubleSide }); ring.rotation.x = -Math.PI / 2; ring.position.set(hx - 0.6, top + 0.02, hz); g.add(ring);
+    for (const dx of [0.6, 1.4]) g.add(box(0.5, 0.06, 0.9, GLASS, hx + dx, top - 0.03, hz));
+    // an adobe flight office at the front, with a landing pad on its roof
+    const ox = -2.05, oz = 2.0;
+    const otop = adobeHall(g, { x: ox, z: oz, w: 1.8, d: 1.4, h: 1.4, color: STUCCO, step: false });
+    deepWin(g, 'z', ox - 0.4, 0.75, oz + 0.7); deepWin(g, 'z', ox + 0.45, 0.75, oz + 0.7, 0.5, 0.55, TEAL, WARM);
+    signBoard(g, 'x', oz, 1.05, ox + 0.9, 1.2, color, 3);
+    const roofY = otop - 0.3;
+    for (const [x, z] of [[ox, oz]]) {
+      g.add(cyl(0.6, 0.6, 0.08, 0x3a3f48, x, roofY, z, 24));
+      g.add(box(0.08, 0.02, 0.5, WHITE, x - 0.16, roofY + 0.08, z), box(0.08, 0.02, 0.5, WHITE, x + 0.16, roofY + 0.08, z), box(0.32, 0.02, 0.08, WHITE, x, roofY + 0.08, z));
+      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; g.add(box(0.07, 0.06, 0.07, 0x9cff8a, x + Math.cos(a) * 0.55, roofY + 0.06, z + Math.sin(a) * 0.55, { emissive: 0x6dff5a, night: 2.2 })); }
     }
     // the test cage: a frame with see-through netting and a drone inside
     const cx = 2.3, cz = 2.3, cs = 1.5;
@@ -289,7 +392,7 @@ Object.assign(BUILDERS, {
       group: g, top: top + 2.6,
       anim(t) {
         caged.position.set(cx + Math.sin(t * 1.3) * 0.35, 0.9 + Math.sin(t * 2.1) * 0.25, cz + Math.cos(t * 1.1) * 0.35); caged.rotation.y = t;
-        flyers.forEach((d, i) => { const a = t * 0.55 + i * 2.1; d.position.set(-0.6 + Math.cos(a) * 2.2, top + 0.6 + i * 0.35 + Math.sin(t * 2 + i) * 0.15, -0.5 + Math.sin(a) * 1.8); d.rotation.y = -a; });
+        flyers.forEach((d, i) => { const a = t * 0.55 + i * 2.1; d.position.set(-0.6 + Math.cos(a) * 2.2, top + 0.9 + i * 0.35 + Math.sin(t * 2 + i) * 0.15, -0.5 + Math.sin(a) * 1.8); d.rotation.y = -a; });
         sock.rotation.y = Math.sin(t * 0.4) * 0.6 - 0.4; sock.rotation.z = Math.sin(t * 1.7) * 0.08;
       },
     };
@@ -326,6 +429,16 @@ Object.assign(BUILDERS, {
     g.add(box(1.6, 0.1, 1.4, 0xc06c45, -2.5, 0.15, 2.45));
     for (const [x, z, r] of [[-2.9, 2.2, 0.25], [-2.2, 2.7, 0.18], [-2.6, 2.9, 0.22], [-2.1, 2.1, 0.15]]) g.add(at(mesh(new THREE.DodecahedronGeometry(r, 0), 0xa85a3a, { flatShading: true }), x, 0.3, z));
     const ramp = box(0.9, 0.08, 0.7, IRON, -2.5, 0.3, 2.45); ramp.rotation.z = 0.25; g.add(ramp);
+    // a giant rover wheel set up as a sculpture out back, and tyre tracks over the yard
+    const wheel = new THREE.Group();
+    wheel.add(mesh(new THREE.TorusGeometry(0.95, 0.16, 8, 24), 0x2a2d33));
+    for (let k = 0; k < 24; k++) { const tr = box(0.1, 0.12, 0.42, 0x3a3f48, Math.cos(k / 24 * Math.PI * 2) * 1.08, Math.sin(k / 24 * Math.PI * 2) * 1.08 - 0.06, -0.21); tr.rotation.z = k / 24 * Math.PI * 2; wheel.add(tr); }
+    for (let k = 0; k < 6; k++) { const sp = box(0.08, 0.9, 0.08, 0xc9ced6, 0, -0.45, 0); sp.rotation.z = k * Math.PI / 3; wheel.add(sp); }
+    wheel.add(cyl(0.2, 0.2, 0.3, color, 0, -0.15, 0, 14).rotateX(Math.PI / 2));
+    wheel.position.set(2.55, 1.35, -2.4); wheel.rotation.y = 0.6; g.add(wheel);
+    g.add(box(0.9, 0.3, 0.5, 0xc9a77c, 2.55, 0.15, -2.4));
+    const trackM = mat(0x7a5a3a, { transparent: true, opacity: 0.45, depthWrite: false });
+    for (const dz of [-0.28, 0.28]) for (let k = 0; k < 9; k++) { const tr = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.12), trackM); tr.rotation.x = -Math.PI / 2; tr.position.set(-2.9 + k * 0.32, 0.17, 1.2 + dz + Math.sin(k * 0.6) * 0.15); g.add(tr); }
     return { group: g, top: wallTop + 2.2, anim(t) { rv.rotation.y = t * 0.35; } };
   },
 
@@ -394,6 +507,60 @@ Object.assign(BUILDERS, {
     return {
       group: g, top: 3.6,
       anim(t, dt) { const tilt = Math.sin(t * 0.08) * 0.55; trackers.forEach(k => { k.rotation.z = tilt; }); cups.rotation.y += dt * 5; },
+    };
+  },
+
+  // ---- Desert Data Center: a long, windowless rammed-earth hall in layered bands of
+  // ochre and rust, lit server slots down its walls, evaporative cooling towers with wet
+  // turquoise pads and big fans, a water tank to feed them, and shade sails out front
+  datacenterdesert(color) {
+    const g = new THREE.Group();
+    const x = -0.35, z = -0.55, w = 5.3, d = 3.5, h = 2.1;
+    g.add(box(w + 0.24, 0.3, d + 0.24, 0xc9a77c, x, 0, z));
+    const bands = [0xc49a6c, 0xb07a52, 0xd2aa7a, 0xa86e4a, 0xc89e70, 0xb8845a];
+    for (let k = 0; k < 6; k++) g.add(box(w, h / 6 + 0.01, d, bands[k], x, 0.3 + k * h / 6, z));
+    const top = 0.3 + h;
+    g.add(box(w + 0.1, 0.16, d + 0.1, 0x8a6a45, x, top, z));
+    // narrow server slots glowing blue down the front and side
+    const lights = [];
+    for (const [axis, f, len] of [['z', z + d / 2, w], ['x', x + w / 2, d]]) for (let i = 0; i < (axis === 'z' ? 9 : 6); i++) {
+      const a = (axis === 'z' ? x : z) - len / 2 + 0.45 + i * ((len - 0.9) / ((axis === 'z' ? 9 : 6) - 1));
+      g.add(onWall(axis, a, 0.6, f, 0.16, 1.35, 0.05, 0x1a2230));
+      const l = onWall(axis, a, 0.65, f + Math.sign(f) * 0.02, 0.06, 1.25, 0.04, 0x5fd3ff, { emissive: 0x2fb6ff, emissiveIntensity: 1 });
+      l.material = l.material.clone(); lights.push(l); g.add(l);
+    }
+    signBoard(g, 'z', x + 1.3, 1.25, z + d / 2, 1.8, 0x2fb6ff, 4);
+    sideDoor(g, 'z', x - 1.7, z + d / 2, 0x3a3f48);
+    // evaporative cooling towers along the roof: louvred wet pads and a fan on top
+    const fans = [];
+    for (let i = 0; i < 3; i++) {
+      const cx = x - 1.75 + i * 1.75, cz = z - 0.45;
+      g.add(box(1.25, 1.1, 1.25, 0xe6dcc8, cx, top + 0.16, cz));
+      for (const [axis, f] of [['z', cz + 0.625], ['x', cx + 0.625]]) for (let k = 0; k < 5; k++) g.add(onWall(axis, axis === 'z' ? cx : cz, top + 0.3 + k * 0.17, f, 1.05, 0.08, 0.05, 0x3fae9a));
+      g.add(cyl(0.55, 0.55, 0.3, 0x9aa0a8, cx, top + 1.26, cz, 18));
+      const fan = new THREE.Group();
+      for (let b = 0; b < 3; b++) { const bl = mesh(new THREE.BoxGeometry(0.85, 0.03, 0.18), 0x3a3f48); bl.rotation.y = b * Math.PI * 2 / 3; bl.rotation.x = 0.3; fan.add(bl); }
+      fan.position.set(cx, top + 1.58, cz); fans.push(fan); g.add(fan);
+      g.add(box(1.0, 0.06, 0.08, 0xc9ced6, cx, top + 1.56, cz));
+    }
+    // the water tank for the coolers, piped to the roof
+    const ty = tank(g, 2.75, -2.45, 0.6, 1.9, 0xd9c4a0);
+    pipe(g, [[2.75, ty - 0.6, -1.85], [2.75, top + 0.6, -1.85], [x + w / 2 - 0.3, top + 0.6, -1.85]], 0.08, 0x9aa0a8);
+    // shade sails over the front: taut triangles of fabric on leaning posts
+    for (const [sx, c] of [[2.0, 0xc8643c], [3.0, 0xeadbbd]]) {
+      const tri = new THREE.BufferGeometry();
+      tri.setAttribute('position', new THREE.Float32BufferAttribute([sx - 0.7, 1.9, 1.55, sx + 0.7, 1.7, 1.75, sx - 0.2, 1.75, 3.05], 3));
+      tri.computeVertexNormals();
+      g.add(mesh(tri, c, { side: THREE.DoubleSide }));
+      for (const [px, py, pz] of [[sx - 0.7, 1.9, 1.55], [sx + 0.7, 1.7, 1.75], [sx - 0.2, 1.75, 3.05]]) g.add(box(0.06, py - 0.15, 0.06, 0x8a6a45, px, 0.15, pz));
+    }
+    cactusPot(g, x - 2.4, z + d / 2 + 0.45, 0.7);
+    return {
+      group: g, top: top + 2.2,
+      anim(t, dt) {
+        fans.forEach((f, i) => { f.rotation.y += dt * (4 + i * 0.8); });
+        lights.forEach((l, i) => { l.material.emissiveIntensity = Math.sin(t * 5 + i * 2.3) > 0 ? 1.3 : 0.2; });
+      },
     };
   },
 

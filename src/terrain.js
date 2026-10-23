@@ -216,12 +216,16 @@ function mesaAt(name, x, z) {
     const c = Math.cos(rot), s = Math.sin(rot);
     const u = (dx * c + dz * s) / a, v = (-dx * s + dz * c) / b;
     // ragged edges: big bays and headlands, plus finer gullies down the cliffs
-    const d = Math.hypot(u, v) + (fbm(x / 7, z / 7, 2, 23) - 0.5) * 0.28 + (fbm(x / 2.2, z / 2.2, 2, 57) - 0.5) * 0.07;
+    const d = Math.hypot(u, v) + (fbm(x / 7, z / 7, 2, 23) - 0.5) * 0.28 + (fbm(x / 2.2, z / 2.2, 2, 57) - 0.5) * 0.13;
     // a flat top, steep cliffs, a narrow ledge part way down and a skirt of scree at the foot
     const cliff = smooth(1.02, 0.86, d), ledge = smooth(1.12, 1.0, d) * 0.42, scree = smooth(1.45, 1.05, d) * 0.12;
     let h = ht * Math.max(cliff, ledge, scree);
     // layers of harder rock stick out as soft steps on the way up
     if (h > 0.5 && h < ht * 0.97) { const L = 1.6, t = h / L, f = t - Math.floor(t); h = h * 0.55 + (Math.floor(t) + smooth(0.25, 0.75, f)) * L * 0.45; }
+    // broken rock: chunks bulge out of the cliffs and the top is uneven, with a hard lip
+    const mid = cliff * (1 - cliff) * 4;
+    h += mid * (fbm(x / 1.3, z / 1.3, 2, 71) - 0.5) * 1.8 * Math.min(1, ht / 8);
+    if (cliff > 0.98) h += (fbm(x / 3.5, z / 3.5, 2, 13) - 0.5) * 0.7 + smooth(0.75, 0.86, d) * 0.25;
     if (h > best) { best = h; top = ht; }
   }
   return { h: best, top };
@@ -390,7 +394,7 @@ export function buildLand(name, T, blocks) {
   terrain.receiveShadow = true;
   ground.add(terrain);
   if (patchBox.length) {
-    const pm = withClouds(std(0xffffff, { vertexColors: true, roughness: 0.9 }));
+    const pm = withClouds(std(0xffffff, { vertexColors: true, flatShading: true, roughness: 0.95 }));
     // overlapping patches get different heights (a few hundredths apart), so they never flicker
     const lift = [];
     patchBox.forEach((q, i) => {
@@ -476,8 +480,8 @@ export function buildLand(name, T, blocks) {
       if (blocked(x, z, pad)) continue;
       if (where && !where(x, z)) continue;
       const h = H(x, z);
-      // nothing stands on a mesa's cliffs (the flat top and the ground round it are fine)
-      if (name === 'desert' || name === 'mars') { const m = mesaAt(name, x, z); if (m.h > 0.4 && m.h < m.top * 0.9) continue; }
+      // nothing from the general scatter stands on a mesa (they get their own fallen rocks)
+      if (name === 'desert' || name === 'mars') { const m = mesaAt(name, x, z); if (m.h > 0.4) continue; }
       // low ground only matters where there's water: Colorado's hollows away from the lake get trees too
       if (h > maxH || h < minH && (name !== 'colorado' || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 14)) continue;
       const obj = make(r, h);
@@ -543,6 +547,27 @@ export function buildLand(name, T, blocks) {
     place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 1, blob: 0.6 });
     place(40, S.antenna, { pad: 1, span: 160, blob: 0.6 });
     place(24, S.solarArray, { pad: 2, span: 180, blob: 0 });
+  }
+  // boulders fallen from the cliffs round the foot of each mesa, and a few left on top
+  if (name === 'desert' || name === 'mars') {
+    const rc = name === 'desert' ? [0xb5603a, 0xc4693f, 0x9c4e30] : [0x5a2a1e, 0x7a3420, 0x2e1e1c];
+    const rm = rc.map(c => std(c, { flatShading: true, roughness: 1 }));
+    for (const [cx, cz, a, b, ht] of MESAS[name]) {
+      let n = 0;
+      for (let i = 0; i < 260 && n < 26; i++) {
+        const x = cx + (r() - 0.5) * (a + b) * 3, z = cz + (r() - 0.5) * (a + b) * 3;
+        const m = mesaAt(name, x, z), onTop = m.h > m.top * 0.97, foot = m.h > 0.05 && m.h < m.top * 0.2;
+        if (!(foot || (onTop && r() < 0.25)) || roadDist(x, z) < HW + SW + 1 || townDist(x, z) < 2) continue;
+        const h = H(x, z), s = foot ? 0.5 + r() * 1.3 : 0.4 + r() * 0.6;
+        const o = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), rm[Math.floor(r() * 3)]);
+        o.scale.set(s * (0.8 + r() * 0.5), s * (0.5 + r() * 0.4), s * (0.8 + r() * 0.5)); o.rotation.set(r() * 3, r() * 3, r() * 3);
+        o.position.set(x, h + s * 0.25, z);
+        const gr = new THREE.Group(); gr.add(o);
+        ((Math.abs(x) < NEAR && Math.abs(z) < NEAR) ? near : far).addObject(gr);
+        if (h < 4) blobs.push([x, h, z, s]);
+        n++;
+      }
+    }
   }
   near.build(scenery, { cast: true });
   far.build(scenery, { cast: false });

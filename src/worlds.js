@@ -27,7 +27,7 @@ export const SKINS = {
     rocket: C('Launch Pad', 'rockets', 'rockets', 0xd8d2c4, 'launchpad', 'Rockets are usually launched toward the east to pick up a free speed boost from Earth’s rotation.'),
     power: C('Solar Farm', 'electricity', 'MW', 0x2a4f8f, 'solarfarm', 'A solar farm’s output peaks around midday, so many are paired with big batteries to keep power flowing after sunset.'),
     hq: C('Desert HQ', 'managers', 'managers', 0xd9b38c, 'hqdesert', 'Thick adobe walls soak up the desert sun by day and release the heat at night, keeping the inside comfortable.'),
-    datacenter: C('Desert Data Center', 'compute', 'PFLOPS', 0xb8946a, 'datacenter', 'Data centers in dry places can use evaporative cooling, which works best when the air is hot and dry.'),
+    datacenter: C('Desert Data Center', 'compute', 'PFLOPS', 0xb8946a, 'datacenterdesert', 'Data centers in dry places can use evaporative cooling, which works best when the air is hot and dry.'),
   },
   moon: {
     mine: C('Regolith Digger', 'regolith', 'regolith', 0x8f8f96, 'regolith', 'Moon dust, called regolith, is sharp and clingy because there is no wind or water on the Moon to wear the grains smooth.'),

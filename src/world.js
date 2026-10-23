@@ -28,7 +28,7 @@ let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
 const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
-  desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0xd8c39c, pad: 0xe8dcc4 },
+  desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0xd8c39c, pad: 0xe0c49c },
   mars:     { ground: 0x7a2e1c, sky: 0x7a2e1c, hemiSky: 0xffe0bc, hemiGround: 0x6a2a1a, sun: 2.4, hemi: 1.4, road: 0x3b2a28, walk: 0xb98a74, pad: 0xd8c2b6 },
   moon:     { ground: 0x9c9ca2, sky: 0x9c9ca2, hemiSky: 0xdfe6ff, hemiGround: 0x3a3d48, sun: 2.6, hemi: 1.2, road: 0x4b4e57, walk: 0xb4b4ba, pad: 0xc9c9cf },
 };
@@ -529,9 +529,16 @@ export class World {
       if (!same || placed.some(p => Math.hypot(p.x - x, p.z - z) < 1.5)) continue;
       placed.push(hit.point.clone());
       const unit = new THREE.Group();
-      unit.add(box(0.85, 0.42, 0.65, 0xc9ccd2, 0, 0, 0));
-      unit.add(box(0.5, 0.05, 0.5, 0x3a3f48, 0, 0.42, 0));
-      if (rnd() < 0.5) unit.add(box(0.14, 0.5, 0.14, 0x8a8f99, 0.5, 0, 0.25));
+      if (this.themeName === 'desert') {
+        // a swamp cooler: a sun-faded box with louvred pads on its sides and a duct down
+        unit.add(box(0.75, 0.6, 0.65, 0xe6dcc8, 0, 0, 0), box(0.8, 0.06, 0.7, 0xc8643c, 0, 0.6, 0));
+        for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) unit.add(box(0.02, 0.06, 0.5, 0x9a8a70, sx * 0.385, 0.12 + k * 0.12, 0));
+        unit.add(box(0.3, 0.25, 0.3, 0xbfb6a4, 0, -0.05, 0.42));
+      } else {
+        unit.add(box(0.85, 0.42, 0.65, 0xc9ccd2, 0, 0, 0));
+        unit.add(box(0.5, 0.05, 0.5, 0x3a3f48, 0, 0.42, 0));
+        if (rnd() < 0.5) unit.add(box(0.14, 0.5, 0.14, 0x8a8f99, 0.5, 0, 0.25));
+      }
       const local = g.worldToLocal(hit.point.clone());
       unit.position.copy(local); unit.rotation.y = rnd() < 0.5 ? 0 : Math.PI / 2;
       g.add(unit);
@@ -591,7 +598,33 @@ export class World {
       if (!at) return;
       it.position.set(at[0], at[1], at[2]); ex.add(it);
     });
-    if (tier <= 1) {
+    if (tier <= 1 && this.themeName === 'desert') {
+      // an old desert yard: clay water jars, an old wagon wheel, a woodpile, a bleached
+      // steer skull on a post, and drifts of blown sand
+      for (const [cx, cz] of corners.slice(wings, wings + 2)) {
+        for (let k = 0; k < 3; k++) {
+          const jar = new THREE.Mesh(new THREE.SphereGeometry(0.3 - k * 0.04, 12, 8), mat([0xc8643c, 0xb5573a, 0xd9894f][k]));
+          jar.scale.y = 1.15; jar.position.set(cx + (k - 1) * 0.5, 0.45 - k * 0.04, cz + (k % 2) * 0.35); jar.castShadow = true; ex.add(jar);
+          ex.add(cyl(0.12 - k * 0.015, 0.16 - k * 0.015, 0.14, [0xc8643c, 0xb5573a, 0xd9894f][k], cx + (k - 1) * 0.5, 0.72 - k * 0.08, cz + (k % 2) * 0.35, 10));
+        }
+        const wheel = new THREE.Group();
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.05, 6, 18), mat(0x6b4a2b)); wheel.add(rim);
+        for (let k = 0; k < 6; k++) { const sp = box(0.04, 0.85, 0.04, 0x7a5a3a, 0, -0.425, 0); sp.rotation.z = (k / 6) * Math.PI; wheel.add(sp); }
+        wheel.add(cyl(0.09, 0.09, 0.1, 0x4a3320, 0, -0.05, 0, 8).rotateX(Math.PI / 2));
+        wheel.position.set(cx + 0.7, 0.62, cz - 0.85); wheel.rotation.set(0.25, 0.5, 0); ex.add(wheel);
+        for (let k = 0; k < 5; k++) ex.add(cyl(0.09, 0.09, 0.9, 0x8a6a45, cx - 0.5 + (k % 3) * 0.2, 0.25 + Math.floor(k / 3) * 0.17 - 0.45, cz - 0.9, 7).rotateX(Math.PI / 2));
+      }
+      const c0 = corners[wings];
+      if (c0) {
+        ex.add(box(0.08, 1.1, 0.08, 0x7a5a3a, c0[0] - 0.9, 0.15, c0[1] + 0.9));
+        const skull = new THREE.Group();
+        skull.add(box(0.22, 0.16, 0.3, 0xf2ead8, 0, 0, 0), box(0.6, 0.06, 0.06, 0xf2ead8, 0, 0.06, -0.08));
+        for (const sx of [-1, 1]) { const horn = box(0.05, 0.22, 0.05, 0xe8dcc0, sx * 0.31, 0.06, -0.08); horn.rotation.z = -sx * 0.5; skull.add(horn); }
+        skull.position.set(c0[0] - 0.9, 1.3, c0[1] + 0.98); ex.add(skull);
+      }
+      const sandM = this.sandM ||= new THREE.MeshBasicMaterial({ color: 0xead6ab, transparent: true, opacity: 0.6, depthWrite: false });
+      for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.6, 10), sandM); st.rotation.x = -Math.PI / 2; st.scale.set(1.8, 1, 0.8); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
+    } else if (tier <= 1) {
       // an old yard: rusty drums, a pile of tyres and oil stains
       for (const [cx, cz] of corners.slice(wings, wings + 2)) {
         for (let k = 0; k < 3; k++) ex.add(cyl(0.26, 0.26, 0.62, [0x8a4b2a, 0x6b5a3a, 0x7d3f26][k], cx + (k - 1) * 0.55, 0.15, cz + (k % 2) * 0.4, 10));
@@ -684,6 +717,28 @@ export class World {
     L.pad.material = this.padLooks.get(key);
   }
 
+  // a desert loading bay: a ramada of peeled log posts and a roof of thin sticks (latillas)
+  // under a striped shade cloth, in front of a deep adobe doorway
+  #ramada(side, color) {
+    const g = new THREE.Group();
+    const W = 2.1, H = 1.8, D = 1.7, LOG = 0x8a6a45;
+    g.add(box(W + 0.5, H + 0.35, 0.14, 0xd9b38c, 0, 0, -D / 2 + 0.02));                     // adobe surround
+    g.add(box(W + 0.2, 0.18, 0.18, 0x7a5230, 0, H + 0.02, -D / 2 + 0.12));                  // wooden lintel
+    g.add(box(W, H, 0.12, 0x1e2126, 0, 0, -D / 2 + 0.1));                                   // the open door
+    g.add(box(W - 0.1, 0.3, 0.08, 0x9a8a70, 0, H - 0.32, -D / 2 + 0.18));                   // rolled-up door
+    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(cyl(0.08, 0.1, H + 0.2, LOG, x, 0, D / 2, 7));   // log posts
+    for (const z of [-D / 2 + 0.15, D / 2]) g.add(cyl(0.07, 0.07, W + 0.6, LOG, 0, H + 0.24 - (W + 0.6) / 2, z, 7).rotateZ(Math.PI / 2));   // beams
+    for (let k = 0; k < 11; k++) g.add(cyl(0.03, 0.03, D + 0.3, 0xb89a6a, -W / 2 - 0.1 + k * (W + 0.2) / 10, H + 0.34 - (D + 0.3) / 2, 0.08, 5).rotateX(Math.PI / 2));   // latillas
+    const cloth = [0xc8643c, 0xeadbbd, 0x2fa39a];
+    for (let k = 0; k < 6; k++) g.add(box((W + 0.3) / 6, 0.03, D + 0.1, cloth[k % 3], -W / 2 - 0.15 + (k + 0.5) * (W + 0.3) / 6, H + 0.4, 0.06));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0xb89a72)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
+    g.add(box(0.2, 0.2, 0.2, 0xffd9a0, 0, H + 0.05, -D / 2 + 0.3, { emissive: 0xffc070, night: 2.5 }));   // a lantern
+    const dist = 2.75, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    g.rotation.y = rot;
+    g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
+    return g;
+  }
+
   // which sides of a lot trucks drive in and out of: every side with good road
   #baySides(id) {
     const [lx, lz] = this.P[id];
@@ -699,6 +754,7 @@ export class World {
   // into the building at the back. It's open at the sides so the building's own front
   // still shows.
   #bay(side, color) {
+    if (this.themeName === 'desert') return this.#ramada(side, color);
     const g = new THREE.Group();
     const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
     const W = 2.1, H = 1.75, D = 1.7;
