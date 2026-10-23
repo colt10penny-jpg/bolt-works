@@ -4,7 +4,7 @@
 // baked into a few big meshes so it stays fast on phones.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ROAD_W, LANE, STOP_R, EDGE, NET, hasRoad, distToRoad, exitFar } from './traffic.js';
+import { ROAD_W, LANE, STOP_R, EDGE, NET, BLOCK, hasRoad, distToRoad, exitFar, segKey } from './traffic.js';
 
 export const SHARED = { time: { value: 0 }, cloudTex: { value: null }, cloudAmt: { value: 0.18 }, night: { value: 0 } };
 
@@ -387,6 +387,7 @@ export function buildLand(name, T, blocks) {
   const blocked = (x, z, pad) => {
     if (roadDist(x, z) < HW + SW + pad) return true;
     if (name === 'colorado' && (H(x, z) < -0.3 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
+    if (name !== 'colorado' && Math.hypot(x - 40, z - 40) < 4 + pad * 2) return true;   // the landing spot for the rocket you arrive in (world.js LANDER_AT)
     return townDist(x, z) < 0.5 + pad * 0.3;
   };
   const SPAN = 270, NEAR = 60;
@@ -667,6 +668,21 @@ function sceneryKit() {
 // Built from the road network: stretches in good repair get asphalt, curbs, sidewalks,
 // paint and streetlights; Colorado's worn-out stretches are cracked, faded and
 // overgrown; stretches not built yet are just land. The roads out of town are good.
+// flat pieces of a circle, in world x/z: a pie slice (for tarmac) and a raised curved
+// band (for sidewalks and curbs). Angles are measured from +x toward +z.
+function pieSlice(cx, cz, r, a0, a1, y, uvScale = 8) {
+  const sh = new THREE.Shape(); sh.moveTo(cx, -cz); sh.absarc(cx, -cz, r, -a0, -a1, true); sh.lineTo(cx, -cz);
+  const g = new THREE.ShapeGeometry(sh, 16); g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
+  const p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / uvScale, p.getZ(i) / uvScale);
+  return g;
+}
+function arcBand(cx, cz, r0, r1, a0, a1, h) {
+  const sh = new THREE.Shape(); sh.absarc(cx, -cz, r1, -a0, -a1, true); sh.absarc(cx, -cz, r0, -a1, -a0, false);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 18 }); g.rotateX(-Math.PI / 2);
+  return g;
+}
+
 export function buildRoads(name, T, stateOf) {
   const tx = textures();
   const group = new THREE.Group();
@@ -694,6 +710,21 @@ export function buildRoads(name, T, stateOf) {
   for (const e of liveExits) good.push({ a: e.node, b: exitFar(e), exit: true });
   const span = ({ a, b }) => ({ along: a.z === b.z ? 'x' : 'z', line: a.z === b.z ? a.z : a.x, lo: Math.min(a.z === b.z ? a.x : a.z, a.z === b.z ? b.x : b.z), hi: Math.max(a.z === b.z ? a.x : a.z, a.z === b.z ? b.x : b.z) });
   const strip = (m, sp, lo, hi, y, w = ROAD_W) => road.add(m, sp.along === 'x' ? rect(lo, sp.line - w / 2, hi, sp.line + w / 2, y) : rect(sp.line - w / 2, lo, sp.line + w / 2, hi, y));
+  // bends on the edge of town (two roads meeting at a right angle, with nothing at all
+  // on the outside of the corner) get a curved outer edge instead of a square one. The
+  // curve is centred on the inside corner, so the road keeps its width all the way round.
+  const anySeg = (n, dx, dz) => NET.segs.has(segKey(n, { x: n.x + dx * BLOCK, z: n.z + dz * BLOCK })) || NET.exits.some(e => e.node.x === n.x && e.node.z === n.z && e.dir.x === dx && e.dir.z === dz);
+  const round = new Map();   // node key -> { sx, sz }: the outside corner
+  for (const sg of good) for (const n of [sg.a, sg.b]) {
+    const k = n.x + ',' + n.z;
+    if (round.has(k) || !NET.adj.has(k)) continue;
+    const ways = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([hx, hz]) => hasRoad(n.x, n.z, { x: hx, z: hz }));
+    if (ways.length !== 2 || ways[0][0] === -ways[1][0] && ways[0][1] === -ways[1][1]) continue;
+    const sx = -(ways[0][0] + ways[1][0]), sz = -(ways[0][1] + ways[1][1]);
+    if (anySeg(n, sx, 0) || anySeg(n, 0, sz)) continue;
+    round.set(k, { sx, sz });
+  }
+  const isRound = (x, z) => round.has(x + ',' + z);
   // worn out: faded, cracked, weeds coming through
   for (const sg of worn) {
     const sp = span(sg);
@@ -768,7 +799,9 @@ export function buildRoads(name, T, stateOf) {
   // in good repair
   for (const sg of good) {
     const sp = span(sg);
-    strip(asphaltM, sp, sp.lo - HW, sp.hi + HW, 0.075);
+    // a rounded corner draws its own tarmac, so the road stops at its edge
+    const loN = sp.along === 'x' ? isRound(sp.lo, sp.line) : isRound(sp.line, sp.lo), hiN = !sg.exit && (sp.along === 'x' ? isRound(sp.hi, sp.line) : isRound(sp.line, sp.hi));
+    strip(asphaltM, sp, sp.lo + (loN ? HW : -HW), sp.hi + (hiN ? -HW : HW), 0.075);
     const lo = sp.lo + HW, hi = sp.hi - (sg.exit ? 0 : HW);
     const a0 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.lo : lo, a1 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.hi - HW : hi;
     for (const side of [-1, 1]) {
@@ -792,10 +825,19 @@ export function buildRoads(name, T, stateOf) {
   for (const n of nodes.values()) {
     const { x, z } = n;
     if (!NET.adj.has(x + ',' + z)) continue;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
+    const rc = round.get(x + ',' + z);
+    if (rc) {
+      // the curved corner: tarmac, then the curb and sidewalk following the curve
+      const cx = x - rc.sx * HW, cz = z - rc.sz * HW, mid = Math.atan2(rc.sz, rc.sx);
+      road.add(asphaltM, pieSlice(cx, cz, ROAD_W, mid - Math.PI / 4, mid + Math.PI / 4, 0.075));
+      road.add(walkM, arcBand(cx, cz, ROAD_W, ROAD_W + SW, mid - Math.PI / 4, mid + Math.PI / 4, 0.14));
+      road.add(curbM, arcBand(cx, cz, ROAD_W - 0.01, ROAD_W + 0.12, mid - Math.PI / 4, mid + Math.PI / 4, 0.16));
+    }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (!rc || sx !== rc.sx || sz !== rc.sz) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
     const ways = DIRS.filter(([hx, hz]) => hasRoad(x, z, { x: hx, z: hz }));
     for (const [hx, hz] of DIRS) {
       if (!ways.some(([a, b]) => a === hx && b === hz)) {
+        if (rc) continue;   // the curve takes the place of the closed sides
         if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z)); }
         else { road.add(walkM, boxAt(ROAD_W, 0.14, SW, x, 0, z + hz * (HW + SW / 2))); road.add(curbM, boxAt(ROAD_W, 0.16, 0.12, x, 0, z + hz * (HW + 0.06))); }
         continue;
@@ -839,7 +881,14 @@ export function buildRoads(name, T, stateOf) {
   const o = HW + SW / 2;
   for (const n of nodes.values()) {
     if (!NET.adj.has(n.x + ',' + n.z)) continue;
-    lamp(n.x + o, n.z + o, -0.7, -0.7); lamp(n.x - o, n.z - o, 0.7, 0.7);
+    const rc = round.get(n.x + ',' + n.z);
+    for (const sd of [1, -1]) {
+      if (rc && rc.sx === sd && rc.sz === sd) {
+        // on a curved corner the lamp stands on the curve, leaning over the road
+        const cx = n.x - rc.sx * HW, cz = n.z - rc.sz * HW, rr = (ROAD_W + SW / 2) / Math.SQRT2;
+        lamp(cx + rc.sx * rr, cz + rc.sz * rr, -0.7 * sd, -0.7 * sd);
+      } else lamp(n.x + sd * o, n.z + sd * o, -0.7 * sd, -0.7 * sd);
+    }
   }
   for (const e of liveExits) for (let d = 14; d <= 110; d += 14) {
     if (e.dir.x) lamp(e.node.x + e.dir.x * d, e.node.z + o, 0, -1);

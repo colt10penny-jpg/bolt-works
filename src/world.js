@@ -21,6 +21,8 @@ import { STYLE, PROPS } from './upgrades.js';
 import { buildWing } from './wings.js';
 const LOT = 10;
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
+// where the rocket you arrived in stands, on open ground just below town
+const LANDER_AT = [40, 40];
 let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
 const THEME = {
@@ -1049,6 +1051,8 @@ export class World {
   }
 
   // ---------- rocket launch ----------
+  // The rocket lifts off and climbs out of view. The promise resolves once it has left
+  // the screen (the game fades to black then); endLaunch() puts the pad back as it was.
   launchRocket() {
     const id = this.lotsOf('rocket')[0], L = this.lots[id];
     return new Promise(resolve => {
@@ -1058,6 +1062,23 @@ export class World {
       this.focus(id, { zoom: false });
     });
   }
+  endLaunch() {
+    const g = this.launching;
+    if (!g) return;
+    g.L.rocket.position.y = g.start; g.L.rocket.visible = false; g.L.scaffold.visible = true;
+    this.launching = null; this.shake = 0;
+    for (const sm of this.smoke) { this.scene.remove(sm.m); sm.m.material.dispose(); }
+    this.smoke = [];
+  }
+  #exhaust(wp, spread, n = 2) {
+    for (let k = 0; k < n; k++) {
+      const hot = Math.random() < 0.45;
+      const m = this.#puff(hot ? 0xffb35a : 0xf2f2f2, hot, 1.4 + Math.random() * 1.2);
+      m.position.set(wp.x + (Math.random() - 0.5) * spread, Math.max(0.3, wp.y - 0.2), wp.z + (Math.random() - 0.5) * spread);
+      this.scene.add(m);
+      this.smoke.push({ m, age: 0, life: 2.2, spread: true });
+    }
+  }
   #updateLaunch(dt) {
     const g = this.launching;
     if (!g) return;
@@ -1065,25 +1086,71 @@ export class World {
     const R = g.L.rocket;
     const t = Math.max(0, g.t - 1.2); // a second of rumble before liftoff
     R.position.y = g.start + 0.5 * 9 * t * t;
-    this.shake = g.t < 4 ? 0.35 : Math.max(0, this.shake - dt);
-    // exhaust
-    if ((g.puff = (g.puff || 0) - dt) <= 0) {
-      g.puff = 0.05;
-      const wp = new THREE.Vector3(); R.getWorldPosition(wp);
-      for (let k = 0; k < 2; k++) {
-        const hot = Math.random() < 0.4;
-        const m = this.#puff(hot ? 0xffb35a : 0xf2f2f2, hot, 1.6 + Math.random() * 1.2);
-        m.position.set(wp.x + (Math.random() - 0.5) * 1.2, Math.max(0.3, wp.y - 0.2), wp.z + (Math.random() - 0.5) * 1.2);
-        this.scene.add(m);
-        this.smoke.push({ m, age: 0, life: 2.2, spread: true });
+    this.shake = g.t < 4 ? 0.35 * Math.max(0, 1 - Math.max(0, g.t - 2.5) / 1.5) : 0;
+    if ((g.puff = (g.puff || 0) - dt) <= 0) { g.puff = 0.05; const wp = new THREE.Vector3(); R.getWorldPosition(wp); this.#exhaust(wp, 1.2); }
+    // gone off the top of the screen (or taking too long): time to fade out
+    if (g.resolve) {
+      const wp = new THREE.Vector3(); R.getWorldPosition(wp); wp.y -= 1.5; wp.project(this.camera);
+      if (wp.y > 1.15 || g.t > 6) { const r = g.resolve; g.resolve = null; r(); }
+    }
+  }
+
+  // the rocket you arrived in, standing on open ground outside town in every world
+  // after the first. look = { model, color } of this world's rocket, or null for none.
+  setLander(look) {
+    if (this.lander) { this.scene.remove(this.lander); this.lander = null; }
+    this.landing = null;
+    if (!look) return;
+    const m = (BUILDERS[look.model] || BUILDERS.rocket)(look.color);
+    if (!m.rocket) return;
+    const R = m.rocket; R.parent?.remove(R);
+    const [x, z] = LANDER_AT, y = this.heightAt?.(x, z) ?? 0;
+    const g = new THREE.Group(); g.add(R); R.position.set(0, 0.15, 0);
+    // landing legs and a scorched patch of ground
+    const legM = 0x6b6f78;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const leg = box(0.12, 1.3, 0.12, legM, Math.cos(a) * 0.95, 0.0, Math.sin(a) * 0.95); leg.rotation.z = Math.cos(a) * 0.45; leg.rotation.x = -Math.sin(a) * 0.45; R.add(leg);
+      R.add(box(0.4, 0.06, 0.4, legM, Math.cos(a) * 1.2, -0.15, Math.sin(a) * 1.2));
+    }
+    const burn = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false }));
+    burn.rotation.x = -Math.PI / 2; burn.position.y = 0.04; g.add(burn);
+    g.position.set(x, y, z);
+    g.traverse(o => { if (o.isMesh && o !== burn) { o.castShadow = true; o.receiveShadow = true; } });
+    this.scene.add(g);
+    this.lander = g; this.landerRocket = R; this.landerBurn = burn;
+  }
+  // bring the lander down from the sky: a slowing descent on a column of flame, a cloud
+  // of dust as it touches down. Resolves when it has landed.
+  landRocket() {
+    return new Promise(resolve => {
+      if (!this.lander) { resolve(); return; }
+      this.landing = { t: 0, resolve, T: 3.4, H: 46 };
+      this.landerRocket.position.y = 0.15 + this.landing.H; this.landerBurn.visible = false;
+      this.target.set(LANDER_AT[0], 0, LANDER_AT[1]); this.panTo = null;
+      this.setZoom(1.1);
+    });
+  }
+  #updateLanding(dt) {
+    const g = this.landing;
+    if (!g) return;
+    g.t += dt;
+    const R = this.landerRocket, k = Math.min(1, g.t / g.T);
+    R.position.y = 0.15 + g.H * (1 - k) ** 2.4;   // fast at first, gently at the end
+    const wp = new THREE.Vector3(); R.getWorldPosition(wp);
+    if ((g.puff = (g.puff || 0) - dt) <= 0 && k < 1) { g.puff = 0.06; this.#exhaust(wp, 0.5 + k * 2, k > 0.75 ? 3 : 1); }
+    this.shake = k > 0.8 && k < 1 ? 0.12 : this.shake;
+    if (k >= 1 && !g.done) {
+      g.done = true; this.shake = 0; this.landerBurn.visible = true;
+      const dustC = this.themeName === 'mars' ? 0xc0704a : this.themeName === 'moon' ? 0xc4c4ca : 0xe2c9a0;
+      for (let i = 0; i < 14; i++) {
+        const m = this.#puff(dustC, false, 1.6 + Math.random() * 1.6);
+        const a = Math.random() * Math.PI * 2, r = 1 + Math.random() * 2.2;
+        m.position.set(wp.x + Math.cos(a) * r, wp.y + 0.4 + Math.random() * 0.5, wp.z + Math.sin(a) * r);
+        this.scene.add(m); this.smoke.push({ m, age: Math.random() * 0.2, life: 2 + Math.random(), spread: true });
       }
     }
-    if (g.t > 5.2) {
-      R.position.y = g.start;
-      R.visible = false; g.L.scaffold.visible = true;
-      this.launching = null; this.shake = 0;
-      g.resolve();
-    }
+    if (g.t > g.T + 1.2) { this.landing = null; g.resolve(); }
   }
 
   // ---------- input ----------
@@ -1280,6 +1347,7 @@ export class World {
     }
     this.stepTraffic(dt);
     this.#updateLaunch(dt);
+    this.#updateLanding(dt);
     // day/night, sun follows the view so shadows stay crisp where you're looking
     this.look.update(dt);
     SHARED.time.value = this.t;

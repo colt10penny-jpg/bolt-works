@@ -2,7 +2,7 @@ import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
   FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, lookTier,
-  nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES, vaultHours,
+  nextMilestone, milestoneCount, LEVEL_CAP, EP_BONUS, epForRun, themeFor, THEME_NAMES, vaultHours,
 } from './economy.js';
 import { Game } from './state.js';
 import { World } from './world.js';
@@ -123,7 +123,8 @@ let buyMode = 1;
 let factOpen = false;
 const sheet = $('sheet');
 let sheetKey = '';
-const buyCount = (d, lv) => buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode;
+// how many levels the buy button buys, never past the top level
+const buyCount = (d, lv) => Math.max(0, Math.min(LEVEL_CAP - lv, buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode));
 const go = (id, label) => lotOf(id) ? `<button class="link" data-goto="${lotOf(id)}">${label}</button>` : '';
 const one = u => /ss$/.test(u) ? u : /ies$/.test(u) ? u.replace(/ies$/, 'y') : u.replace(/s$/, '');
 
@@ -193,6 +194,7 @@ function buildingSheet(d, id) {
 }
 function buyRow(d, lv) {
   if (game.jobOf(d.id)) return jobRow(d.id);
+  if (lv >= LEVEL_CAP) return `<div class="sh-maxed">Max level reached: Lv ${LEVEL_CAP.toLocaleString('en-US')}</div>`;
   const n = buyCount(d, lv);
   const cost = upgradeCost(d, lv, n);
   const afford = game.canAfford(cost);
@@ -278,7 +280,7 @@ function hqSheet(d) {
   const vault = `<div class="hq-vault">
       <div class="hq-vault-top"><span>Collected while you were away</span><b>$${fmt(v)}</b></div>
       <span class="sh-bar"><i style="width:${cap > 0 ? Math.min(100, v / cap * 100).toFixed(1) : 0}%"></i></span>
-      <small>Holds up to ${fmtHours(hrs)} of your managers' pay${cap >= 1 ? ` ($${fmt(cap)})` : ''}. Upgrade to hold ${fmtHours(nextHrs)}.</small>
+      <small>Holds up to ${fmtHours(hrs)} of your managers' pay${cap >= 1 ? ` ($${fmt(cap)})` : ''}. ${nextHrs > hrs ? `Upgrade to hold ${fmtHours(nextHrs)}.` : ''}</small>
       ${v >= 1 ? `<div class="hq-vault-btns"><button class="btn green" data-act="vault">Collect $${fmt(v)}</button><button class="btn gold" data-act="vault2">${AD} Collect 2×</button></div>` : ''}
     </div>`;
   return head(d, ICON.hq, d.name, sub, lv) + vault + buyRow(d, lv) + `
@@ -639,9 +641,19 @@ function rebuildTown() {
   world.clearDeliveries();
   world.setTheme(game.theme());
   syncBuilt();
+  // every world after the first has the rocket you arrived in, parked outside town
+  syncLander();
 }
+function syncLander() { world.setLander(game.s.current !== 'colorado' ? { model: def('rocket').model, color: def('rocket').color } : null); }
+
+// fade the whole screen to black (true) or back from it (false)
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function fadeTo(black) { $('fade').classList.toggle('on', black); await sleep(850); }
 
 let launching = false;
+// Lift-off, the rocket climbs off the top of the screen, everything fades to black. In
+// a new world it fades back in on the sky above the landing spot and the rocket comes
+// down on its engine; otherwise it fades back to your town.
 async function doLaunch(mult) {
   if (launching) return;
   launching = true;
@@ -649,19 +661,23 @@ async function doLaunch(mult) {
   document.body.classList.add('launching');
   sfx.launch();
   await world.launchRocket();
-  const flash = $('flash');
-  flash.hidden = false;
-  await new Promise(r => setTimeout(r, 450));
+  await fadeTo(true);
+  world.endLaunch();
   const before = game.s.ep;
   const { gained, unlocked, from } = game.launch(mult);
   track('rocket_launched', { ep_gained: gained, launches: game.s.launches, doubled: mult === 2, world: from, unlocked: unlocked || '' });
   save();
-  setTimeout(() => { flash.hidden = true; document.body.classList.remove('launching'); }, 600);
-  launching = false;
   const nw = unlocked ? worldById(unlocked) : null;
   if (nw) {
     // the rocket takes you to the new world straight away; your old town stays saved
-    await doTravel(nw.id, true);
+    if (game.travel(nw.id)) { track('world_travel', { to: nw.id }); rebuildTown(); showTown(); save(); }
+    const landed = world.landRocket();
+    await sleep(250);
+    await fadeTo(false);
+    await landed;
+    world.focus(lotOf('mine'), { zoom: false });
+    document.body.classList.remove('launching');
+    launching = false;
     openModal(`
       <div class="big-icon red">${ICON.rocket}</div>
       <h2>Welcome to ${nw.name}!</h2>
@@ -675,6 +691,10 @@ async function doLaunch(mult) {
       () => tutorial.askName(nw.id), () => tutorial.askName(nw.id));
     return;
   }
+  await sleep(250);
+  await fadeTo(false);
+  document.body.classList.remove('launching');
+  launching = false;
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch successful!</h2>
@@ -896,7 +916,7 @@ function openSettings() {
       openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
-        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); seenAch = 0; track('reset'); showTown(); tutorial.start(); }
+        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); syncLander(); seenAch = 0; track('reset'); showTown(); tutorial.start(); }
       });
     }
   });
@@ -1153,6 +1173,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   world.setSeed([...game.s.playerId].reduce((h, c) => (h * 33 + c.charCodeAt(0)) >>> 0, 5381));
   world.setTheme(game.theme());
   syncBuilt();
+  syncLander();
   const brandNew = game.s.totalEarned === 0 && !game.s.playDays.length;
   // no daily gift on the very first day; it starts tomorrow
   if (brandNew) { game.s.daily = { lastDay: game.today(), streak: 0 }; track('first_open'); }

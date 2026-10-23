@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 
 export const ROAD_W = 3.6;
+const HALF_ROAD = 3.6 / 2;
 export const LANE = 0.9;                 // lane centre offset from the road centre
 export const STOP_R = ROAD_W / 2 + 1.1;  // stop line distance from an intersection centre (crosswalk in between)
 export const EDGE = 130;                 // roads out of town run this far; cars appear/vanish there
@@ -249,7 +250,43 @@ function buildPath(C, { driveStart = false, driveEnd = false } = {}) {
     }
   }
   stops.sort((a, b) => a.enter - b.enter);
-  return { W, s, len: s[n - 1], stops };
+  return roundBends(C, W, s, stops);
+}
+// At a bend (a corner with just two roads, nobody stopping) the car follows a curve round
+// the inside corner instead of making a sharp turn. Stop distances are moved to match.
+function roundBends(C, W, s, stops) {
+  const n = C.length, W2 = [], map = [];   // map: [old distance, new distance] at each original point
+  let len = 0;
+  const push = v => { if (W2.length) len += v.distanceTo(W2[W2.length - 1]); W2.push(v); };
+  for (let i = 0; i < n; i++) {
+    const c = C[i];
+    const bend = i > 0 && i < n - 1 && NET.adj.has(key(c.x, c.z)) && degree(c) === 2;
+    const hin = bend && head(C[i - 1], c), hout = bend && head(c, C[i + 1]);
+    if (!bend || (hin.x === hout.x && hin.z === hout.z) || (hin.x === -hout.x && hin.z === -hout.z)) { push(W[i]); map.push([s[i], len]); continue; }
+    // centre of the curve: the inside corner of the bend
+    const cx = c.x + (hout.x - hin.x) * HALF_ROAD, cz = c.z + (hout.z - hin.z) * HALF_ROAD;
+    const w = W[i], t0 = (cx - w.x) * hin.x + (cz - w.z) * hin.z, t1 = (cx - w.x) * hout.x + (cz - w.z) * hout.z;
+    const p0 = { x: w.x + hin.x * t0, z: w.z + hin.z * t0 }, p1 = { x: w.x + hout.x * t1, z: w.z + hout.z * t1 };
+    const r = Math.hypot(p0.x - cx, p0.z - cz);
+    let a0 = Math.atan2(p0.z - cz, p0.x - cx), a1 = Math.atan2(p1.z - cz, p1.x - cx);
+    while (a1 - a0 > Math.PI) a1 -= 2 * Math.PI; while (a0 - a1 > Math.PI) a1 += 2 * Math.PI;
+    for (let k = 0; k <= 8; k++) {
+      const a = a0 + (a1 - a0) * k / 8;
+      push(new THREE.Vector3(cx + Math.cos(a) * r, w.y, cz + Math.sin(a) * r));
+      if (k === 4) map.push([s[i], len]);
+    }
+  }
+  // old distance along the route -> new distance
+  const remap = d => {
+    if (d <= map[0][0]) return d - map[0][0] + map[0][1];
+    for (let j = 1; j < map.length; j++) if (d <= map[j][0]) { const [o0, n0] = map[j - 1], [o1, n1] = map[j]; return n0 + (n1 - n0) * (o1 > o0 ? (d - o0) / (o1 - o0) : 0); }
+    const [o, nn] = map[map.length - 1]; return nn + d - o;
+  };
+  if (W2.length === W.length) return { W, s, len: s[n - 1], stops };
+  const s2 = [0];
+  for (let i = 1; i < W2.length; i++) s2.push(s2[i - 1] + W2[i].distanceTo(W2[i - 1]));
+  for (const st of stops) { st.enter = remap(st.enter); st.exit = remap(st.exit); }
+  return { W: W2, s: s2, len: s2[s2.length - 1], stops };
 }
 
 export class Traffic {

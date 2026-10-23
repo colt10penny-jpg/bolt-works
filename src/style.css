@@ -241,7 +241,9 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .toggle { border: 2px solid var(--mint-2) !important; }
 .flash { position: absolute; inset: 0; background: #fff; z-index: 40; animation: flash .9s ease-out forwards; pointer-events: none; }
 @keyframes flash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
-body.launching #hud, body.launching .boost, body.launching .contract, body.launching .ep-chip, body.launching #labels { opacity: 0; transition: opacity .4s; }
+.fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 45; pointer-events: none; transition: opacity .8s ease; }
+.fade.on { opacity: 1; pointer-events: auto; }
+body.launching #hud, body.launching .boost, body.launching .contract, body.launching .ep-chip, body.launching #labels, body.launching #hint, body.launching #launch-btn, body.launching #guide { opacity: 0; transition: opacity .4s; }
 
 .lot-label .perk { font-size: 11px; color: #2563a8; line-height: 1; }
 .lot-label.support .bar i { background: #3f7fd0; }
@@ -358,6 +360,8 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .a-t { display: flex; flex-direction: column; line-height: 1.2; }
 .a-t b { font: 800 15px var(--display); }
 .a-t small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+/* a building at the very top level: no buy button */
+.sh-maxed { margin: 4px 0 8px; padding: 12px; border-radius: 14px; background: #fff6dc; text-align: center; font: 800 15px var(--display); color: var(--gold-ink); }
 /* headquarters: what managers collected while you were away */
 .hq-vault { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; margin-bottom: 8px; border-radius: 14px; background: #fff6dc; }
 .hq-vault-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 800; font-size: 13px; color: var(--ink-soft); }
