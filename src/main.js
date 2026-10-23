@@ -2,7 +2,7 @@ import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
   FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, lookTier,
-  nextMilestone, milestoneCount, LEVEL_CAP, TRADE_STEP, TRADE_MAX, themeFor, THEME_NAMES, vaultHours,
+  nextMilestone, milestoneCount, LEVEL_CAP, TRADE_STEP, TRADE_MAX, rocketNeed, ROCKET_GROWTH, themeFor, THEME_NAMES, vaultHours,
 } from './economy.js';
 import { Game } from './state.js';
 import { World } from './world.js';
@@ -143,7 +143,7 @@ function statusLine(d) {
   if (prev && !has(prev)) return `<div class="sh-status warn">Needs ${prev.unit} from a ${prev.name} ${go(prev.id, 'Show')}</div>`;
   if (prev && f.starved) return `<div class="sh-status warn">Short on ${prev.unit} · ${Math.round(f.util * 100)}% speed ${go(prev.id, `Fix: ${prev.name}`)}</div>`;
   if (next && has(next) && f.surplus > 0.15 && f.made > 0) return `<div class="sh-status info">${Math.round(f.surplus * 100)}% of ${d.unit} piling up ${go(next.id, next.name)}</div>`;
-  return prev ? `<div class="sh-status ok">Fully supplied · ${d.need} ${prev.unit} per ${one(d.unit)}</div>` : '';
+  return prev ? `<div class="sh-status ok">Fully supplied · ${d.need} ${prev.unit} per ${d.id === 'rocket' || lotType(lotOf(d.id)) === 'rocket' ? 'part' : one(d.unit)}</div>` : '';
 }
 // how far the nearest supplier is, and what that does to output
 function supplyLine(d) {
@@ -318,18 +318,18 @@ function renderSheet(force = false) {
   } else if (lv > 0) {
     const f = game.info(id);
     const earn = f.made * d.value * game.mult();
-    const sub = `${fmtRate(f.made)} ${d.unit}/s · $${fmt(earn)}/s${game.hasManager(id) ? ' · <span class="mgr-on">manager</span>' : ''}`;
+    const sub = `${fmtRate(f.made)} ${t === 'rocket' ? 'parts' : d.unit}/s · $${fmt(earn)}/s${game.hasManager(id) ? ' · <span class="mgr-on">manager</span>' : ''}`;
     const rocket = t === 'rocket' ? (() => {
       const next = game.nextWorld(), unlocks = next && !game.s.worlds[next.id];
       const can = game.canLaunch();
       // how rockets get built: parts arrive by truck, the bay puts them together, then you launch
       const prev = def(FACTORIES[idx('rocket') - 1].id), made = game.typeInfo('rocket')?.made || 0;
-      const ready = Math.floor(game.run.rocketsBuilt), frac = game.run.rocketsBuilt - ready;
-      const eta = made > 0 ? fmtTime((1 - frac) / made) : null;
-      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}; this bay puts every ${d.need} together into one ${one(d.unit)}. When one is ready, launch it.</p>`;
-      const prog = ready >= 1 ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `Next ${one(d.unit)}: ${Math.floor(frac * 100)}% · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
-      return how + prog + `<div class="sh-row"><span>${ready} ${ready === 1 ? one(d.unit) : d.unit} ready</span>
-        <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.hasRocket() ? `Building first ${one(d.unit)}` : unlocks ? `Launch · unlock ${next.short}` : can ? 'Send cargo' : 'Trade routes full'}</button></div>`;
+      const ready = game.hasRocket(), frac = Math.min(1, game.run.rocketsBuilt || 0), need = rocketNeed(game.run.rocketsSent);
+      const eta = made > 0 ? fmtTime((1 - frac) * need / made) : null;
+      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}, and this bay turns them into rocket parts. This ${one(d.unit)} needs <b>${fmt(need)} parts</b>; every ${one(d.unit)} ${game.townName()} sends needs ${ROCKET_GROWTH}× more than the last. The bay holds one at a time.</p>`;
+      const prog = ready ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `${fmt(frac * need)} of ${fmt(need)} parts · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
+      return how + prog + `<div class="sh-row"><span>${ready ? `${one(d.unit)[0].toUpperCase() + one(d.unit).slice(1)} ready!` : ''}</span>
+        <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!ready ? `Building ${one(d.unit)}` : unlocks ? `Launch · unlock ${next.short}` : can ? 'Send cargo' : 'Trade routes full'}</button></div>`;
     })() : '';
     html = head(d, ICON.factory, d.name, sub, lv) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
   }
@@ -1169,7 +1169,7 @@ function loop(now) {
     document.body.classList.toggle('has-ep', trade > 0);
     if (trade > 0) { $('ep').hidden = false; $('ep').textContent = `Trade +${Math.round(trade * 100)}% income`; }
     else $('ep').hidden = true;
-    world.setRocketReady(game.canLaunch(), game.run.rocketsBuilt % 1);
+    world.setRocketReady(game.canLaunch(), Math.min(1, game.run.rocketsBuilt || 0));
     const mb = $('map-btn'); const wl = game.unlockedWorlds().length;
     mb.hidden = wl < 2; mb.setAttribute('aria-label', `Your worlds (now in ${game.world.short})`);
     const showLaunch = game.canLaunch() && !world.selected && !launching;
