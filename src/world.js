@@ -1081,6 +1081,7 @@ export class World {
     const g = this.launching;
     if (!g) return;
     g.L.rocket.position.y = g.start; g.L.rocket.visible = false; g.L.scaffold.visible = true;
+    if (g.L.rocket.userData.flame) g.L.rocket.userData.flame.visible = false;
     this.launching = null; this.shake = 0;
     for (const sm of this.smoke) { this.scene.remove(sm.m); sm.m.material.dispose(); }
     this.smoke = [];
@@ -1101,6 +1102,8 @@ export class World {
     const R = g.L.rocket;
     const t = Math.max(0, g.t - 1.2); // a second of rumble before liftoff
     R.position.y = g.start + 0.5 * 9 * t * t;
+    const fl = R.userData.flame;
+    if (fl) { fl.visible = g.t > 0.9; const f = Math.min(1, (g.t - 0.9) * 2); fl.scale.set(0.8 + f * 0.25 + Math.random() * 0.08, f * (0.85 + Math.random() * 0.35), 0.8 + f * 0.25 + Math.random() * 0.08); }
     this.shake = g.t < 4 ? 0.35 * Math.max(0, 1 - Math.max(0, g.t - 2.5) / 1.5) : 0;
     if ((g.puff = (g.puff || 0) - dt) <= 0) { g.puff = 0.05; const wp = new THREE.Vector3(); R.getWorldPosition(wp); this.#exhaust(wp, 1.2); }
     // gone off the top of the screen (or taking too long): time to fade out
@@ -1152,6 +1155,8 @@ export class World {
     g.t += dt;
     const R = this.landerRocket, k = Math.min(1, g.t / g.T);
     R.position.y = 0.15 + g.H * (1 - k) ** 2.4;   // fast at first, gently at the end
+    const fl = R.userData.flame;
+    if (fl) { fl.visible = k < 1; const f = 0.55 + k * 0.5; fl.scale.set(0.9 + Math.random() * 0.1, f * (0.8 + Math.random() * 0.3), 0.9 + Math.random() * 0.1); }
     const wp = new THREE.Vector3(); R.getWorldPosition(wp);
     if ((g.puff = (g.puff || 0) - dt) <= 0 && k < 1) { g.puff = 0.06; this.#exhaust(wp, 0.5 + k * 2, k > 0.75 ? 3 : 1); }
     this.shake = k > 0.8 && k < 1 ? 0.12 : this.shake;

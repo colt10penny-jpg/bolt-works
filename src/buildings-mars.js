@@ -4,6 +4,7 @@
 // strips, tall white wind turbines and frosty ice. These are the models named in
 // worlds.js (SKINS.mars).
 import * as THREE from 'three';
+import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl } from './models.js';
 import { DARK, IRON, HAZ, GLASS, shade, mesh, at, rod, onWall, signBoard, railing, pipe, tank, lattice, spokeWheel } from './buildings.js';
 
@@ -248,14 +249,7 @@ Object.assign(BUILDERS, {
     const ringL = mesh(new THREE.TorusGeometry(1.85, 0.06, 4, 32), CYAN, { emissive: CYAN, night: 2.2 }); ringL.rotation.x = Math.PI / 2; ringL.position.set(0.4, 0.55, 0.2); g.add(ringL);
     g.add(box(1.4, 0.02, 0.26, 0xf4efe0, 0.4, 0.55, 0.2), box(0.26, 0.02, 1.4, 0xf4efe0, 0.4, 0.55, 0.2));
     // the ship: white with a teal band and black heat tiles on its belly side
-    const rocket = new THREE.Group();
-    rocket.add(cyl(0.7, 0.7, 5.2, WH, 0, 0.4, 0, 22));
-    rocket.add(cyl(0.72, 0.72, 0.4, color, 0, 3.6, 0, 22));
-    const tiles = mesh(new THREE.CylinderGeometry(0.72, 0.72, 4.6, 22, 1, true, Math.PI * 0.8, Math.PI * 0.4), 0x22252a, { side: THREE.DoubleSide }); tiles.position.y = 2.7; rocket.add(tiles);
-    const nose = mesh(new THREE.SphereGeometry(0.7, 22, 10, 0, Math.PI * 2, 0, Math.PI / 2), WH); nose.scale.y = 2.0; nose.position.y = 5.6; rocket.add(nose);
-    for (const sd of [-1, 1]) { rocket.add(box(0.07, 1.3, 0.9, WH, sd * 0.75, 0.5, 0)); rocket.add(box(0.07, 0.7, 0.5, WH, sd * 0.72, 5.4, 0)); }
-    for (let k = 0; k < 3; k++) rocket.add(cyl(0.2, 0.28, 0.3, DARK, Math.cos(k * 2.1) * 0.35, 0.15, Math.sin(k * 2.1) * 0.35, 10));
-    portholes(rocket, 'z', 0, 4.6, 0.7, 2, 0.4, 0.1);
+    const rocket = buildRocket('colony', color);
     rocket.position.set(0.4, 0.5, 0.2); g.add(rocket);
     const scaffold = new THREE.Group();
     for (let i = 0; i < 5; i++) scaffold.add(box(1.8, 0.1, 1.8, 0xb9b4a8, 0.4, 1.0 + i * 1.25, 0.2));

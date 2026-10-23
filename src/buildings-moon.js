@@ -3,6 +3,7 @@
 // wings, radiators and moving machinery. Each replaces the plainer builder of the same
 // name in models.js.
 import * as THREE from 'three';
+import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl } from './models.js';
 import { DARK, IRON, HAZ, GLASS, PLINTH, shade, mesh, at, rod, onWall, signBoard, railing, pipe, tank, lattice } from './buildings.js';
 
@@ -319,12 +320,7 @@ Object.assign(BUILDERS, {
     for (const y of [6.8, 8.2]) { const arm = box(1.9, 0.22, 0.32, 0x5b5f66, tx + 1.25, y, tz + 0.95); arm.rotation.y = -0.65; g.add(arm); }
     g.add(box(0.14, 0.14, 0.14, 0xff3b2f, tx, 9.6, tz, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
     // the ship: stainless body, dark heat-shield side, nose fins
-    const rocket = new THREE.Group();
-    rocket.add(cyl(0.85, 0.85, 6.0, color, 0, 0.4, 0, 22, { metalness: 0.8, roughness: 0.25 }));
-    const shield = mesh(new THREE.CylinderGeometry(0.87, 0.87, 6.0, 22, 1, true, Math.PI * 0.75, Math.PI * 0.5), 0x2a2d33, { side: THREE.DoubleSide }); shield.position.y = 3.4; rocket.add(shield);
-    const nose = mesh(new THREE.SphereGeometry(0.85, 22, 10, 0, Math.PI * 2, 0, Math.PI / 2), color, { metalness: 0.8, roughness: 0.25 }); nose.scale.y = 1.9; nose.position.y = 6.4; rocket.add(nose);
-    for (const s of [-1, 1]) { rocket.add(box(0.08, 1.0, 0.7, color, s * 0.9, 6.3, 0, { metalness: 0.8, roughness: 0.25 })); rocket.add(box(0.1, 1.5, 1.0, color, s * 0.95, 0.6, 0, { metalness: 0.8, roughness: 0.25 })); }
-    for (let k = 0; k < 3; k++) rocket.add(cyl(0.22, 0.3, 0.3, DARK, Math.cos(k * 2.1) * 0.4, 0.15, Math.sin(k * 2.1) * 0.4, 10));
+    const rocket = buildRocket('starship', color);
     rocket.position.set(0.4, 0.5, 0.2); g.add(rocket);
     const scaffold = new THREE.Group();
     for (let i = 0; i < 6; i++) scaffold.add(box(2.0, 0.1, 2.0, 0xb9b4a8, 0.4, 1.0 + i * 1.25, 0.2));

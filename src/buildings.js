@@ -7,6 +7,7 @@
 // Every builder returns { group, top, anim?, smoke?, steam?, rocket?, scaffold? } like the
 // ones in models.js, and replaces the older, plainer version there.
 import * as THREE from 'three';
+import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl, mat } from './models.js';
 
 const TRIM = 0xf1ece0, DARK = 0x2b2f36, STEEL = 0x8a8f99, IRON = 0x5b5f66, HAZ = 0xffc23d, GLASS = 0x9fd6ff, WARM = 0xffb347;
@@ -591,12 +592,7 @@ Object.assign(BUILDERS, {
     g.add(box(2.4, 0.16, 0.16, HAZ, tx - 0.8, 7.8, tz - 0.3), box(0.12, 0.6, 0.12, HAZ, tx, 7.8, tz - 0.3));
     g.add(box(0.12, 0.12, 0.12, 0xff3b2f, tx, 8.45, tz - 0.3, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
     // the rocket
-    const rocket = new THREE.Group();
-    rocket.add(cyl(0.6, 0.6, 4.2, 0xf7f7f7, 0, 0.6, 0, 18));
-    rocket.add(cyl(0.62, 0.62, 0.35, 0x22252a, 0, 0.6, 0, 18), cyl(0.62, 0.62, 0.4, 0x2f7fd1, 0, 3.4, 0, 18));
-    const nose = mesh(new THREE.ConeGeometry(0.6, 1.5, 18), 0xe8553a); nose.position.y = 5.55; rocket.add(nose);
-    for (let i = 0; i < 4; i++) { const fin = box(0.08, 1.2, 0.75, 0xe8553a, 0, 0.35, 0); const a = (i / 4) * Math.PI * 2 + Math.PI / 4; fin.position.x = Math.cos(a) * 0.62; fin.position.z = Math.sin(a) * 0.62; fin.rotation.y = -a; rocket.add(fin); }
-    for (let i = 0; i < 6; i++) { const w = box(0.04, 0.16, 0.12, 0x22252a, 0.6 * Math.cos(i), 2.6, 0.6 * Math.sin(i)); rocket.add(w); }
+    const rocket = buildRocket('classic', 0x2f7fd1);
     rocket.position.set(rx, 0.45, rz);
     g.add(rocket);
     const scaffold = new THREE.Group();

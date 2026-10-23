@@ -5,6 +5,7 @@
 // The middle of each side (where loading bays go when a road runs past) is kept clear
 // of anything tall, so trucks and bays don't run into the buildings.
 import * as THREE from 'three';
+import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl, mat } from './models.js';
 import {
   TRIM, DARK, IRON, HAZ, GLASS, WARM, PLINTH, RED, WHITE, shade, mesh, at, rod, onWall, win, winRow, door, sideDoor,
@@ -346,10 +347,7 @@ Object.assign(BUILDERS, {
     for (const y of [2.6, 4.4, 6.0]) { const arm = box(1.35, 0.14, 0.3, 0x8a8f99, tx + 0.95, y, tz + 0.55); arm.rotation.y = -0.6; g.add(arm); g.add(box(0.2, 0.2, 0.2, ORANGE, tx + 0.45, y, tz + 0.4)); }
     g.add(box(0.12, 0.12, 0.12, 0xff3b2f, tx, 8.1, tz, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
     // the rocket in the middle of the pad
-    const rocket = new THREE.Group();
-    rocket.add(cyl(0.6, 0.6, 4.6, 0xf4f1ea, 0, 0.6, 0, 18), cyl(0.62, 0.62, 0.35, 0x22252a, 0, 0.6, 0, 18), cyl(0.62, 0.62, 0.4, ORANGE, 0, 4.2, 0, 18));
-    const nose = mesh(new THREE.ConeGeometry(0.6, 1.5, 18), 0x2f5fb0); nose.position.y = 5.95; rocket.add(nose);
-    for (let i = 0; i < 4; i++) { const fin = box(0.08, 1.2, 0.75, 0x2f5fb0, 0, 0.35, 0); const a = (i / 4) * Math.PI * 2 + Math.PI / 4; fin.position.x = Math.cos(a) * 0.62; fin.position.z = Math.sin(a) * 0.62; fin.rotation.y = -a; rocket.add(fin); }
+    const rocket = buildRocket('retro', ORANGE);
     rocket.position.set(0.6, 0.55, 0.2); g.add(rocket);
     const scaffold = new THREE.Group();
     for (let i = 0; i < 5; i++) scaffold.add(box(1.6, 0.1, 1.6, 0xb9b4a8, 0.6, 1.0 + i * 1.25, 0.2));
