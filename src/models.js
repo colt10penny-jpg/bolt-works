@@ -422,6 +422,57 @@ export function truck(color, flat = false) {
   return mergeVehicle(g);
 }
 
+// ---- Mars vehicles: pressurised rovers and cargo crawlers on big mesh wheels ----
+// a big open-mesh wheel with a dark tread band and a bright hub
+function marsWheel(g, x, z, r = 0.28, w = 0.2) {
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 16), mat(0x9aa0a8, { roughness: 0.5, metalness: 0.5 }));
+  t.rotation.x = Math.PI / 2; t.position.set(x, r, z); g.add(t);
+  const tread = new THREE.Mesh(new THREE.TorusGeometry(r, 0.035, 5, 18), mat(0x2a2d33, { roughness: 0.9 }));
+  tread.position.set(x, r, z + Math.sign(z) * (w / 2 - 0.02)); g.add(tread);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.38, r * 0.38, w + 0.04, 10), mat(0x2fb5a0, { roughness: 0.4 }));
+  hub.rotation.x = Math.PI / 2; hub.position.set(x, r, z); g.add(hub);
+}
+// a pressurised rover, pointing +x: a white rounded cabin with a big bubble windscreen,
+// side portholes, a coloured stripe, an antenna and a small dish, on six mesh wheels
+export function marsRover(color) {
+  const g = new THREE.Group();
+  const W = 0.92, BODY = 0xeef1f4;
+  g.add(flatBox(2.0, 0.12, 0.7, 0x5b5f66, 0, 0.26, 0));                                    // chassis
+  for (const x of [-0.75, 0, 0.75]) for (const z of [-0.5, 0.5]) { marsWheel(g, x, z, 0.24, 0.18); g.add(flatBox(0.08, 0.06, 0.32, 0x5b5f66, x, 0.32, z * 0.6)); }
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(1.8, 0.62, W, 3, 0.2), mat(BODY, { roughness: 0.4 }));
+  cab.position.set(-0.05, 0.68, 0); cab.castShadow = true; g.add(cab);
+  g.add(flatBox(1.82, 0.1, W + 0.02, color, -0.05, 0.6, 0));                                 // stripe
+  const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 10, 0, Math.PI), glassMat());
+  bubble.rotation.y = -Math.PI / 2; bubble.scale.set(1, 0.85, 1.1); bubble.position.set(0.8, 0.76, 0); g.add(bubble);
+  for (const sd of [-1, 1]) for (const x of [-0.55, -0.15]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.03, 12), glassMat()); p.rotation.x = Math.PI / 2; p.position.set(x, 0.78, sd * (W / 2 + 0.005)); g.add(p);
+  }
+  g.add(flatBox(0.36, 0.08, 0.5, 0x223f78, -0.55, 1.0, 0, { roughness: 0.3, metalness: 0.4 }));   // solar panel on the roof
+  g.add(cyl(0.015, 0.015, 0.45, 0xd8dbe2, 0.25, 0.99, 0.25, 4));
+  const dish = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2.4), mat(0xf2f2f0, { side: THREE.DoubleSide })); dish.position.set(0.25, 1.44, 0.25); dish.rotation.z = 0.6; g.add(dish);
+  lights(g, 1.0, -1.0, 0.5, [-0.28, 0.28], 0.12);
+  g.add(flatBox(0.12, 0.05, 0.12, 0xffa31a, 0.2, 1.0, -0.25, { emissive: 0xff8a00, night: 1.5 }));
+  return mergeVehicle(g);
+}
+// a cargo crawler, pointing +x: a small pod cab up front and a long flat deck on eight
+// mesh wheels (goods ride on the deck; see the cargo in world.js)
+export function marsCrawler(color) {
+  const g = new THREE.Group();
+  const W = 0.96;
+  g.add(flatBox(2.4, 0.14, 0.78, 0x5b5f66, -0.05, 0.28, 0));
+  for (const x of [-1.0, -0.4, 0.2, 0.8]) for (const z of [-0.46, 0.46]) marsWheel(g, x, z, 0.22, 0.16);
+  g.add(box(1.6, 0.1, W, 0x3a3f48, -0.42, 0.38, 0));                                        // the deck
+  for (const sd of [-1, 1]) g.add(flatBox(1.6, 0.12, 0.05, color, -0.42, 0.48, sd * (W / 2 - 0.02)));   // coloured side rails
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.7, 0.62, W, 3, 0.18), mat(0xeef1f4, { roughness: 0.4 }));
+  cab.position.set(0.8, 0.66, 0); cab.castShadow = true; g.add(cab);
+  const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 8, 0, Math.PI), glassMat());
+  bubble.rotation.y = -Math.PI / 2; bubble.scale.set(1, 0.9, 1.3); bubble.position.set(1.13, 0.74, 0); g.add(bubble);
+  g.add(flatBox(0.72, 0.08, W + 0.02, color, 0.8, 0.5, 0));
+  g.add(flatBox(0.12, 0.05, 0.12, 0xffa31a, 0.8, 1.0, 0, { emissive: 0xff8a00, night: 1.5 }));
+  lights(g, 1.17, -1.25, 0.46, [-0.32, 0.32], 0.12);
+  return mergeVehicle(g);
+}
+
 // a passenger car, pointing +x: sedans, hatchbacks, SUVs and pickups
 const BODY = ['sedan', 'sedan', 'hatch', 'suv', 'pickup'];
 let carN = 0;

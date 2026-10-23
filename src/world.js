@@ -2,7 +2,7 @@
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
 import { FACTORIES } from './economy.js';
-import { BUILDERS, box, cyl, mat, truck, car, crate, powerPole, tree, pine, cactus, rock } from './models.js';
+import { BUILDERS, box, cyl, mat, truck, car, marsRover, marsCrawler, crate, powerPole, tree, pine, cactus, rock } from './models.js';
 const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -210,6 +210,19 @@ export class World {
     for (const c of this.traffic.cars) if (c.kind === 'ambient') this.idleCars.push(c.mesh);
     this.traffic.clear('ambient');
     this.clearDeliveries?.();
+    // Mars has its own vehicles (rovers and cargo crawlers): swap the whole fleet when
+    // going to or from it
+    // a meteor shower doesn't follow you to another world
+    this.shower = null; this.nextShower = null;
+    for (const m of this.meteorList || []) this.scene.remove(m.obj);
+    this.meteorList = [];
+    const fleet = name === 'mars' ? 'mars' : 'earth';
+    if (this.fleet !== fleet) {
+      this.traffic.clear('manager');
+      this.idleCars = []; this.truckPool = []; this.carPool = [];
+      this.fleet = fleet;
+      this.#makeFleet();
+    }
     const T = THEME[name] || THEME.colorado;
     this.T = T;
     const info = this.roadInfo();
@@ -350,7 +363,7 @@ export class World {
     this.poolTex ||= soft(128, r => r >= 1 ? 0 : Math.exp(-r * r * 3.2) * (1 - r * r));
     this.haloTex ||= soft(64, r => r >= 1 ? 0 : Math.exp(-r * r * 5) * (1 - r));
     const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 9 : 17, moon ? 9 : 17); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
-    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? (this.themeName === 'mars' ? 0x3fe0b0 : 0x4f9dff) : 0xffc98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? (this.themeName === 'mars' ? 0xffb070 : 0x4f9dff) : 0xffc98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.pools.renderOrder = 2;
     this.scene.add(this.pools);
     quads.forEach(q => q.dispose());
@@ -390,7 +403,7 @@ export class World {
     }
     if (!quads.length || !this.poolTex) return;
     const moon = this.themeName === 'moon';
-    this.bldPools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x8fb8ff : this.themeName === 'mars' ? 0x9fd0ff : 0xffb877, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.bldPools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x8fb8ff : 0xffb877, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.bldPools.renderOrder = 2;
     this.scene.add(this.bldPools);
     quads.forEach(q => q.dispose());
@@ -693,6 +706,90 @@ export class World {
   #wing(cx, cz, color, tier, i, kind = 'brick') {
     return buildWing({ kind, theme: this.themeName, cx, cz, color, tier, i });
   }
+  // ---------- meteor showers (Moon and Mars) ----------
+  // Every few minutes, at random, a shower of shooting stars streaks down onto a small
+  // patch of open ground away from town: glowing heads with fiery tails, a flash and a
+  // puff of dust where each one lands, and little craters that glow and cool.
+  #meteors(dt) {
+    const on = this.themeName === 'moon' || this.themeName === 'mars';
+    this.meteorList ||= [];
+    if (on && this.ready) {
+      this.nextShower ??= 40 + Math.random() * 80;
+      this.nextShower -= dt;
+      if (this.nextShower <= 0) { this.startShower(); this.nextShower = 150 + Math.random() * 210; }
+    }
+    // the shower in progress: drop its meteors one after another
+    const sh = this.shower;
+    if (sh) {
+      sh.t += dt;
+      while (sh.left > 0 && sh.t >= sh.next) { sh.left--; sh.next += 0.15 + Math.random() * 0.55; this.#meteor(sh); }
+      if (sh.left <= 0) this.shower = null;
+    }
+    for (let i = this.meteorList.length - 1; i >= 0; i--) {
+      const m = this.meteorList[i];
+      m.age += dt;
+      if (m.kind === 'rock') {
+        const k = Math.min(1, m.age / m.life);
+        m.obj.position.lerpVectors(m.from, m.to, k);
+        if (k >= 1) { this.#impact(m.to, m.big); this.scene.remove(m.obj); this.meteorList.splice(i, 1); }
+      } else {
+        const k = m.age / m.life;
+        if (m.kind === 'flash') { m.obj.material.opacity = Math.max(0, 1 - k) * 0.9; const sc = 1 + k * 3; m.obj.scale.set(sc, sc, sc); }
+        else if (m.kind === 'crater') m.obj.material.emissiveIntensity = Math.max(0, 1.6 * (1 - k));
+        if (k >= 1) { this.scene.remove(m.obj); m.obj.geometry.dispose(); m.obj.material.dispose?.(); this.meteorList.splice(i, 1); }
+      }
+    }
+  }
+  // start a shower now, on a patch of open ground (exported for testing)
+  startShower() {
+    if (this.shower) return;
+    let x = 0, z = 0;
+    for (let k = 0; k < 40; k++) {
+      const a = Math.random() * Math.PI * 2, r = 44 + Math.random() * 20;
+      x = Math.cos(a) * r; z = Math.sin(a) * r + 6;
+      if (!NET.roads?.some(rd => x > rd.x0 - 4 && x < rd.x1 + 4 && z > rd.z0 - 4 && z < rd.z1 + 4)) break;
+    }
+    this.shower = { x, z, t: 0, next: 0, left: 9 + Math.floor(Math.random() * 8) };
+  }
+  #meteor(sh) {
+    const big = Math.random() < 0.25;
+    const tx = sh.x + (Math.random() - 0.5) * 12, tz = sh.z + (Math.random() - 0.5) * 12;
+    const ty = (this.heightAt?.(tx, tz) ?? 0) + 0.1;
+    const to = new THREE.Vector3(tx, ty, tz);
+    const dir = new THREE.Vector3(0.75, -0.75, -0.75).normalize();   // across the screen, not toward the camera
+    const from = to.clone().addScaledVector(dir, -44);
+    const g = new THREE.Group();
+    const hot = this.themeName === 'mars' ? 0xffb070 : 0xcfe6ff;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.5 : 0.35, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    g.add(head);
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(big ? 1.3 : 0.9, 12, 10), new THREE.MeshBasicMaterial({ color: hot, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false })));
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(big ? 0.75 : 0.5, big ? 14 : 10, 10, 1, true), new THREE.MeshBasicMaterial({ color: hot, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }));
+    tail.position.y = big ? 7 : 5;           // the cone points back up the way it came
+    const tg = new THREE.Group(); tg.add(tail);
+    tg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate());
+    g.add(tg);
+    g.position.copy(from);
+    this.scene.add(g);
+    this.meteorList.push({ kind: 'rock', obj: g, from, to, age: 0, life: 1.0 + Math.random() * 0.5, big });
+  }
+  #impact(p, big) {
+    const hot = this.themeName === 'mars' ? 0xffa060 : 0xd8ecff;
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(big ? 1.4 : 0.9, 14, 10), new THREE.MeshBasicMaterial({ color: hot, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    flash.position.copy(p); this.scene.add(flash);
+    this.meteorList.push({ kind: 'flash', obj: flash, age: 0, life: 0.5 });
+    const crater = new THREE.Mesh(new THREE.CircleGeometry(big ? 1.2 : 0.75, 14), new THREE.MeshStandardMaterial({ color: 0x2a1a14, emissive: 0xff6a20, emissiveIntensity: 1.6, roughness: 1 }));
+    crater.rotation.x = -Math.PI / 2; crater.position.set(p.x, p.y + 0.03, p.z); this.scene.add(crater);
+    this.meteorList.push({ kind: 'crater', obj: crater, age: 0, life: 14 });
+    const dustC = this.themeName === 'mars' ? 0xb8603a : 0xb9b9c0;
+    for (let i = 0; i < (big ? 8 : 5); i++) {
+      const m = this.#puff(dustC, false, 1.0 + Math.random() * (big ? 1.6 : 1.0));
+      const a = Math.random() * Math.PI * 2, r = Math.random() * 1.2;
+      m.position.set(p.x + Math.cos(a) * r, p.y + 0.4 + Math.random() * 0.6, p.z + Math.sin(a) * r);
+      this.scene.add(m);
+      this.smoke.push({ m, age: Math.random() * 0.2, life: 1.4 + Math.random(), spread: true });
+    }
+  }
+
   #dust(L) {
     for (let i = 0; i < 14; i++) {
       const m = this.#puff(0xcfc3ad, false, 1.6 + Math.random() * 1.6);
@@ -836,12 +933,19 @@ export class World {
 
   // ---------- traffic ----------
   #traffic() {
+    this.fleet = 'earth';
+    this.#makeFleet();
+  }
+  // the town's vehicles, waiting to drive in: cars and trucks on Earth (and the Moon),
+  // pressurised rovers and cargo crawlers on Mars
+  #makeFleet() {
     const colors = [0xe85a3c, 0x2f7fd1, 0x1f8a5b, 0xffc23d, 0x7f6bbf, 0xf3f0e8, 0x3a3f48];
+    const mars = this.fleet === 'mars';
     for (let i = 0; i < 15; i++) {
-      const m = i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
+      const m = mars ? (i % 3 === 0 ? marsCrawler(colors[i % colors.length]) : marsRover(colors[(i * 3) % colors.length]))
+        : i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
       m.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      if (!this.#ambientRoom() || !this.traffic.spawnAmbient(m, true)) this.idleCars.push(m);
-      else this.#onAmbientEnd(this.traffic.cars[this.traffic.cars.length - 1]);
+      this.idleCars.push(m);
     }
   }
   #onAmbientEnd(c) { c.onArrive = () => this.idleCars.push(c.mesh); }
@@ -878,7 +982,7 @@ export class World {
   #spawnDelivery(fromId, toId) {
     let mesh = this.truckPool.pop();
     if (!mesh) {
-      mesh = truck(0x2f6fb5, true);
+      mesh = this.themeName === 'mars' ? marsCrawler(0x2fb5a0) : truck(0x2f6fb5, true);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
       const cargo = new THREE.Group();
       for (const [x, z, h] of [[-0.75, -0.2, 0.42], [-0.75, 0.2, 0.42], [-0.3, -0.2, 0.42], [-0.3, 0.2, 0.36], [-0.75, 0, 0.3]]) cargo.add(box(0.42, h, 0.38, 0xffffff, x, z === 0 && h === 0.3 ? 0.82 : 0.4, z));
@@ -902,7 +1006,7 @@ export class World {
   sendManager(fromId, toId) {
     let mesh = this.carPool.pop();
     if (!mesh) {
-      mesh = car(0x1f8a5b);
+      mesh = this.themeName === 'mars' ? marsRover(0x2fb5a0) : car(0x1f8a5b);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
     }
     const go = () => this.#drive(fromId, toId, mesh, 'manager', 6.5, { to: toId }, c => {
@@ -1110,6 +1214,7 @@ export class World {
 
   frame(dt, labelFor) {
     this.t += dt;
+    this.#meteors(dt);
     this.viewShift = (this.viewShift || 0) + ((this.viewShiftTarget || 0) - (this.viewShift || 0)) * Math.min(1, dt * 6);
     if (this.panTo) {
       this.target.lerp(this.panTo, Math.min(1, dt * 6));

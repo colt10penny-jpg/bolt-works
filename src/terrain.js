@@ -195,6 +195,8 @@ function townDist(x, z) {
 }
 const roadDist = (x, z) => distToRoad(x, z);
 const LAKE = { x: 66, z: 64, r: 15 };
+// farm fields near the lake (Colorado): [x, z, width, depth, colour]
+const FIELDS = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
 
 // the shape of the land, before flattening it for town and roads
 function rawHeight(name, x, z) {
@@ -206,7 +208,15 @@ function rawHeight(name, x, z) {
     h += back * (ridge * ridge * 46 + 6) + side * ridge * 10;
     // an irregular lake shore
     const dl = Math.hypot(x - LAKE.x, z - LAKE.z) + (fbm(x / 9, z / 9, 3, 41) - 0.5) * 9;
-    if (dl < LAKE.r + 6) h = Math.min(h, -2.2 + smooth(LAKE.r - 3, LAKE.r + 6, dl) * 2.6);
+    // a bowl for the lake with a gentle sandy shelf, then firm banks all round, so the
+    // water's edge follows the shore and nothing pokes up through it
+    if (dl < LAKE.r + 7) h = Math.min(h, -1.8 + smooth(LAKE.r - 4, LAKE.r + 7, dl) * 2.3);
+    else if (dl < LAKE.r + 18) h = Math.max(h, 0.5) + (h - Math.max(h, 0.5)) * smooth(LAKE.r + 12, LAKE.r + 18, dl);
+    // level ground under the farm fields, so the crops lie flat with no grass poking through
+    for (const [fx, fz, w, d] of FIELDS) {
+      const e = Math.max(Math.abs(x - fx) - w / 2, Math.abs(z - fz) - d / 2);
+      if (e < 6) h = h + (0.3 - h) * (1 - smooth(0, 6, e));
+    }
     return h;
   }
   if (name === 'desert') {
@@ -306,7 +316,12 @@ export function buildLand(name, T, blocks) {
     c.setHex(g[0]).lerp(c2.setHex(g[1]), smooth(0.35, 0.7, n)).lerp(c2.setHex(g[2]), smooth(0.6, 0.85, n2) * 0.6).lerp(c2.setHex(g[3]), smooth(0.62, 0.8, fbm(x / 40, z / 40, 2, 12)) * 0.7);
     if (h > 6) c.lerp(c2.setHex(P.rock), smooth(6, 12, h + n2 * 4));
     if (h > 20) c.lerp(c2.setHex(P.snow), smooth(20, 28, h + n * 8));
-    if (name === 'colorado' && h < -0.4) c.lerp(c2.setHex(0xc9b48a), 0.8);   // lake shore sand
+    if (name === 'colorado') {
+      // a sandy beach ringing the lake, wet and darker right at the water
+      const dl = Math.hypot(x - LAKE.x, z - LAKE.z) + (fbm(x / 9, z / 9, 3, 41) - 0.5) * 9;
+      c.lerp(c2.setHex(0xd8c597), smooth(LAKE.r + 9, LAKE.r + 5, dl + (n2 - 0.5) * 2) * 0.9);
+      if (h < -0.35) c.lerp(c2.setHex(0x9c8a64), 0.7);
+    }
     if (name === 'mars') {
       // dark basalt showing through the dust in streaks, and frost in the crater floors
       c.lerp(c2.setHex(P.rock), smooth(0.5, 0.68, fbm(x / 22 + z / 60, z / 22, 3, 33)) * 0.8);          // dark lava fields
@@ -326,7 +341,7 @@ export function buildLand(name, T, blocks) {
 
   // lake (Colorado)
   if (name === 'colorado') {
-    const wg = new THREE.CircleGeometry(LAKE.r + 10, 48);
+    const wg = new THREE.CircleGeometry(LAKE.r + 13, 64);
     wg.rotateX(-Math.PI / 2); wg.translate(LAKE.x, -0.45, LAKE.z);
     const ripples = tx.ripples.clone(); ripples.repeat.set(3, 3); ripples.needsUpdate = true;
     const water = new THREE.MeshStandardMaterial({ color: 0x3a8cc4, roughness: 0.08, metalness: 0.15, transparent: true, opacity: 0.88, bumpMap: ripples, bumpScale: 0.6 });
@@ -334,6 +349,34 @@ export function buildLand(name, T, blocks) {
     const wm = new THREE.Mesh(wg, water); wm.receiveShadow = true;
     ground.add(wm);
     ground.userData.water = ripples;
+    // reeds and stones round the water's edge, and a little wooden dock
+    const reedM = std(0x6f9a3c, { flatShading: true }), reedTop = std(0x7a5230, { flatShading: true }), stoneM = std(0x9a978f, { flatShading: true });
+    const rr = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(555);
+    const shore = new Batch();
+    for (let a = 0; a < Math.PI * 2; a += 0.05) {
+      // find the shoreline along this direction: where the ground comes up to the water
+      let d = LAKE.r - 3; while (d < LAKE.r + 12 && H(LAKE.x + Math.cos(a) * d, LAKE.z + Math.sin(a) * d) < -0.45) d += 0.25;
+      const x = LAKE.x + Math.cos(a) * (d - 0.4), z = LAKE.z + Math.sin(a) * (d - 0.4);
+      if (rr() < 0.55) for (let k = 0; k < 4; k++) {
+        const hh = 0.5 + rr() * 0.6, g = new THREE.CylinderGeometry(0.02, 0.03, hh, 4);
+        g.translate(x + (rr() - 0.5) * 0.7, -0.45 + hh / 2, z + (rr() - 0.5) * 0.7); shore.add(reedM, g);
+        if (rr() < 0.4) { const t = new THREE.CylinderGeometry(0.05, 0.05, 0.16, 5); t.translate(x + (rr() - 0.5) * 0.7, -0.45 + hh, z + (rr() - 0.5) * 0.7); shore.add(reedTop, t); }
+      }
+      if (rr() < 0.18) { const st = new THREE.DodecahedronGeometry(0.25 + rr() * 0.35, 0); st.scale(1, 0.5, 1); st.translate(x + Math.cos(a) * 0.6, -0.4, z + Math.sin(a) * 0.6); shore.add(stoneM, st); }
+    }
+    // the dock, on the side facing town
+    const da = Math.atan2(-LAKE.z, -LAKE.x);
+    let dd = LAKE.r - 3; while (dd < LAKE.r + 12 && H(LAKE.x + Math.cos(da) * dd, LAKE.z + Math.sin(da) * dd) < -0.45) dd += 0.25;
+    const plankM = std(0x8a6038, { roughness: 0.9 }), postM = std(0x5a3d24, { roughness: 0.9 });
+    const dock = new THREE.Group();
+    dock.add(new THREE.Mesh(new THREE.BoxGeometry(5, 0.12, 1.3), plankM));
+    for (let k = 0; k < 9; k++) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 1.32), postM); pl.position.x = -2.2 + k * 0.55; dock.add(pl); }
+    for (const px of [-2.3, -0.8, 0.8, 2.3]) for (const pz of [-0.6, 0.6]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.4, 6), postM); post.position.set(px, -0.6, pz); dock.add(post); }
+    dock.position.set(LAKE.x + Math.cos(da) * (dd - 2.2), -0.25, LAKE.z + Math.sin(da) * (dd - 2.2));
+    dock.rotation.y = -da;
+    dock.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    ground.add(dock);
+    const sm = new THREE.Group(); shore.build(sm, { cast: true }); ground.add(...sm.children);
   }
 
   const HW = ROAD_W / 2, SW = 0.7;
@@ -343,7 +386,7 @@ export function buildLand(name, T, blocks) {
   const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(name === 'colorado' ? 7 : name === 'desert' ? 11 : 13);
   const blocked = (x, z, pad) => {
     if (roadDist(x, z) < HW + SW + pad) return true;
-    if (name === 'colorado' && H(x, z) < -0.3) return true;
+    if (name === 'colorado' && (H(x, z) < -0.3 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
     return townDist(x, z) < 0.5 + pad * 0.3;
   };
   const SPAN = 270, NEAR = 60;
@@ -380,7 +423,7 @@ export function buildLand(name, T, blocks) {
     place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180 });
     place(40, S.boulder, { minH: 4, blob: 0 });
     // farm fields near the lake side
-    const fields = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
+    const fields = FIELDS;
     // a dense evergreen forest closing in round the town: thin at the town's edge, thick
     // further out (not on the fields or in the lake)
     const inField = (x, z) => fields.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
@@ -639,7 +682,7 @@ export function buildRoads(name, T, stateOf) {
   const curbM = std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
   const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', moon = name === 'moon' || mars;   // Mars roads are lit like the Moon's, not painted
-  const edgeM = mars ? new THREE.MeshStandardMaterial({ color: 0x9fffe0, emissive: 0x3fe0b0, emissiveIntensity: 0.4, roughness: 0.4 })
+  const edgeM = mars ? new THREE.MeshStandardMaterial({ color: 0xffd7b0, emissive: 0xffa060, emissiveIntensity: 0.3, roughness: 0.4 })
     : new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
   edgeM.userData.night = 2.2;
   let seed = 4242;

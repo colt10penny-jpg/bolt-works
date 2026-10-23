@@ -26,36 +26,38 @@ const GradeShader = {
 };
 
 // key moments of the day: [time, sun colour, sun strength, sky light, ground light, sky strength, window glow, haze colour]
+// Night takes up only a small part of the cycle (about a sixth), so most of the time
+// the town is in daylight.
 const DAY = {
   earth: [
     [0.00, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night: moonlit blue, but everything still easy to see
-    [0.06, 0xffa86b, 1.7, 0xffd2b0, 0x7a6a5a, 1.25, 0.55, 0xf2b98f],    // sunrise
-    [0.14, 0xfff1dc, 2.6, 0xfff6e5, 0x5d7a46, 1.25, 0.0, 0xcfe3f0],    // morning
-    [0.55, 0xffffff, 2.8, 0xfff6e5, 0x5d7a46, 1.3, 0.0, 0xd6e7f2],     // afternoon
-    [0.66, 0xffb46b, 1.8, 0xffd9b8, 0x6b5a4a, 1.05, 0.25, 0xf3c08e],   // golden hour
-    [0.72, 0xff8f6a, 1.6, 0xc9a6c0, 0x6a5a60, 1.3, 0.8, 0xc78a92],     // sunset
-    [0.80, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night: moonlit blue, but everything still easy to see
-    [1.00, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night: moonlit blue, but everything still easy to see
+    [0.03, 0xffa86b, 1.7, 0xffd2b0, 0x7a6a5a, 1.25, 0.55, 0xf2b98f],    // sunrise
+    [0.09, 0xfff1dc, 2.6, 0xfff6e5, 0x5d7a46, 1.25, 0.0, 0xcfe3f0],    // morning
+    [0.64, 0xffffff, 2.8, 0xfff6e5, 0x5d7a46, 1.3, 0.0, 0xd6e7f2],     // afternoon
+    [0.74, 0xffb46b, 1.8, 0xffd9b8, 0x6b5a4a, 1.05, 0.25, 0xf3c08e],   // golden hour
+    [0.80, 0xff8f6a, 1.6, 0xc9a6c0, 0x6a5a60, 1.3, 0.8, 0xc78a92],     // sunset
+    [0.86, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],   // night
+    [1.00, 0x9fb4ff, 1.55, 0x93a8e6, 0x7a6e66, 1.5, 1.0, 0x4a5c88],
   ],
   // the Moon has no air: always hard white sunlight, and "night" is earthlight
   moon: [
     [0.00, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
-    [0.08, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
-    [0.70, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
-    [0.80, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
+    [0.05, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
+    [0.78, 0xffffff, 3.0, 0xdfe6ff, 0x3a3d48, 0.9, 0.0, 0x2a2f40],
+    [0.86, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
     [1.00, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
   ],
-  // Mars: a hazy butterscotch sky by day, and the famous blue sunset; nights are a deep
-  // violet with a little light from its two small moons
+  // Mars: a hazy butterscotch sky by day, a gentle blue tinge at sunrise and sunset, and
+  // dusky plum nights
   mars: [
-    [0.00, 0xb8a6ff, 1.5, 0x8a78c8, 0x5a2a28, 1.45, 1.0, 0x2e1c3a],
-    [0.06, 0x9cc4ff, 1.6, 0xa6c8ff, 0x6a3428, 1.2, 0.6, 0x5f86b8],     // blue sunrise
-    [0.14, 0xffe2c0, 2.5, 0xffd9b0, 0x8a3a24, 1.25, 0.0, 0xe8b07a],    // butterscotch morning
-    [0.55, 0xfff0dc, 2.7, 0xffe0bc, 0x8a3a24, 1.3, 0.0, 0xe9b583],
-    [0.66, 0xffc890, 1.9, 0xf2c4a0, 0x7a3424, 1.1, 0.2, 0xd99a6a],
-    [0.72, 0x8fbcff, 1.6, 0x9ec0f0, 0x5a3040, 1.3, 0.75, 0x4f78b0],    // blue sunset
-    [0.80, 0xb8a6ff, 1.5, 0x8a78c8, 0x5a2a28, 1.45, 1.0, 0x2e1c3a],
-    [1.00, 0xb8a6ff, 1.5, 0x8a78c8, 0x5a2a28, 1.45, 1.0, 0x2e1c3a],
+    [0.00, 0xc8b8d8, 1.55, 0x9a8aa8, 0x5a2e28, 1.45, 1.0, 0x3a2830],
+    [0.03, 0xd8d4e8, 1.65, 0xd0c8d8, 0x6a3428, 1.25, 0.55, 0xb09090],   // dawn, faintly blue
+    [0.09, 0xffe2c0, 2.5, 0xffd9b0, 0x8a3a24, 1.25, 0.0, 0xe8b07a],    // butterscotch morning
+    [0.64, 0xfff0dc, 2.7, 0xffe0bc, 0x8a3a24, 1.3, 0.0, 0xe9b583],
+    [0.74, 0xffc890, 1.9, 0xf2c4a0, 0x7a3424, 1.1, 0.2, 0xd99a6a],
+    [0.80, 0xd4cce0, 1.65, 0xc8c0d4, 0x5e3230, 1.3, 0.7, 0x9c8494],     // dusk, faintly blue
+    [0.86, 0xc8b8d8, 1.55, 0x9a8aa8, 0x5a2e28, 1.45, 1.0, 0x3a2830],
+    [1.00, 0xc8b8d8, 1.55, 0x9a8aa8, 0x5a2e28, 1.45, 1.0, 0x3a2830],
   ],
 };
 // "Miniature": a tilt-shift lens. Sharp across the middle, softly blurred toward the top
@@ -220,7 +222,9 @@ export class Look {
     if (this.grade) {
       this.grade.uniforms.vignette.value = 0.28;
       // night: a cool moonlit cast and a little less colour, without making anything darker
-      this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17, 1 - n * 0.07, 1 + n * 0.12);
+      // (Mars keeps its warmth at night: only a light cool cast)
+      const cool = this.kind === 'mars' ? 0.35 : 1;
+      this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17 * cool, 1 - n * 0.07 * cool, 1 + n * 0.12 * cool);
       this.grade.uniforms.sat.value = 1.22 - n * 0.2;   // rich colour in every look
     }
   }
