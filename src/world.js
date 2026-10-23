@@ -5,6 +5,7 @@ import { FACTORIES } from './economy.js';
 import { BUILDERS, box, cyl, mat, truck, car, marsRover, marsCrawler, crate, powerPole, tree, pine, cactus, rock } from './models.js';
 const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
+import { NightFog } from './nightfog.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLOW } from './models.js';
 import './buildings.js';   // the detailed Colorado buildings replace the plain ones
@@ -349,6 +350,7 @@ export class World {
   // halo round the lamp itself, and a smooth pool of light on the ground
   #lampGlow(pts, moon = false) {
     for (const k of ['glow', 'pools', 'cones']) if (this[k]) { this.scene.remove(this[k]); this[k].geometry.dispose(); this[k] = null; }
+    this.streetLamps = pts; this.bldDirty = true;   // the night fog is rebuilt with the new lamps
     if (!pts.length) return;
     const soft = (size, fn) => {
       const c = document.createElement('canvas'); c.width = c.height = size;
@@ -370,32 +372,45 @@ export class World {
     this.scene.add(this.pools);
     quads.forEach(q => q.dispose());
     if (moon) return;
-    // light cones: bright under the lamp, fading out toward the ground and the edges
-    const cones = pts.map(p => {
-      const g = new THREE.CylinderGeometry(0.22, 1.9, p.y - 0.2, 20, 6, true);
-      const pos = g.attributes.position, col = new Float32Array(pos.count * 4);
-      for (let i = 0; i < pos.count; i++) {
-        const t = Math.min(1, Math.max(0, (pos.getY(i) + (p.y - 0.2) / 2) / (p.y - 0.2)));   // 0 at the ground, 1 at the lamp (clamped: a NaN here would blank the screen)
-        col[i * 4] = 1; col[i * 4 + 1] = 0.86; col[i * 4 + 2] = 0.62; col[i * 4 + 3] = Math.pow(t, 1.6);
-      }
-      g.setAttribute('color', new THREE.BufferAttribute(col, 4));
-      g.translate(p.x, 0.2 + (p.y - 0.2) / 2, p.z);
-      return g;
-    });
-    this.cones = new THREE.Mesh(mergeGeometries(cones), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0, fog: false }));
-    this.cones.renderOrder = 3;
-    this.scene.add(this.cones);
-    cones.forEach(g => g.dispose());
+    // (the beams of light under each lamp are part of the night fog: nightfog.js)
     const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().setY(p.y - 0.05)));
     this.glow = new THREE.Points(geo, new THREE.PointsMaterial({ map: this.haloTex, color: 0xffe2b8, size: 14, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.glow.renderOrder = 4;
     this.scene.add(this.glow);
   }
 
+  // the night mist and the shafts of light from streetlights and building lamps
+  #nightFog() {
+    this.nightFog ||= new NightFog(this.scene);
+    const lamps = [], v = new THREE.Vector3();
+    for (const L of Object.values(this.lots)) {
+      for (const root of [L.model, L.extras]) {
+        if (!root) continue;
+        root.updateMatrixWorld(true);
+        root.traverse(o => {
+          const m = o.material;
+          if (!o.isMesh || !m?.userData?.night || !m.emissive) return;
+          const e = m.emissive;
+          if (!(e.r > 0.9 && e.g > 0.55 && e.b < 0.8)) return;   // warm lamps only, not the coloured light strips
+          // (some lamps keep their place in the geometry, not on the mesh)
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+          o.geometry.boundingBox.getCenter(v).applyMatrix4(o.matrixWorld);
+          if (v.y < 0.7) return;
+          // which way the lamp faces: out from the middle of the building
+          const dx = v.x - L.group.position.x, dz = v.z - L.group.position.z;
+          const out = Math.abs(dx) < 0.4 && Math.abs(dz) < 0.4 ? { x: 0, z: 0 } : Math.abs(dx) > Math.abs(dz) ? { x: Math.sign(dx), z: 0 } : { x: 0, z: Math.sign(dz) };
+          if (!lamps.some(l => l.p.distanceToSquared(v) < 0.5)) lamps.push({ p: v.clone(), out });
+        });
+      }
+    }
+    this.nightFog.build(this.themeName, this.streetLamps || [], lamps.slice(0, 200));
+  }
+
   // after dark, light spilling from each building's windows and yard lights warms the
   // ground all round it, so the town glows as a whole rather than in spots
   #buildingGlow() {
     this.bldDirty = false;
+    this.#nightFog();
     if (this.bldPools) { this.scene.remove(this.bldPools); this.bldPools.geometry.dispose(); this.bldPools = null; }
     const quads = [];
     for (const L of Object.values(this.lots)) {
@@ -1357,6 +1372,7 @@ export class World {
     if (this.glow) { this.glow.material.opacity = n * 0.5; this.glow.material.size = 15 * this.zoom; }
     if (this.pools) this.pools.material.opacity = n * 0.16;
     if (this.cones) this.cones.material.opacity = n * 0.07;
+    this.nightFog?.update(this.t, n);
     if (this.bldDirty) this.#buildingGlow();
     if (this.bldPools) this.bldPools.material.opacity = n * 0.1;
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
