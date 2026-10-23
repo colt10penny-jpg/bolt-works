@@ -104,7 +104,7 @@ export const PROPS = {
   // a tall floodlight tower for working through the night
   floodtower: () => {
     const g = G(box(0.14, 4.2, 0.14, steel, 0, 0, 0), box(0.9, 0.08, 0.3, dark, 0, 4.2, 0));
-    for (const x of [-0.3, 0.3]) g.add(box(0.3, 0.24, 0.2, 0xfff1cf, x, 4.28, 0.1, { emissive: 0xffe2a8, night: 3 }));
+    for (const x of [-0.27, 0.27]) g.add(box(0.24, 0.16, 0.16, 0xfff1cf, x, 4.3, 0.1, { emissive: 0xffd9a0, night: 1.1 }));   // gentle: at full strength they glared
     return { g, ground: true };
   },
   crates: () => {

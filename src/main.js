@@ -987,6 +987,9 @@ const nextSet = () => {
 };
 const nextInLine = () => LINEAGE.find(t => !game.built(t)) || null;
 const emptyLot = () => plotIds(game.s.current).find(p => game.developed(p) && !slotAt(p));
+// the spot where a + is showing right now (if any), and the hint that goes with it
+const plusLot = () => plotIds(game.s.current).find(p => !slotAt(p) && labelFor(p).cls === 'bub plus');
+const plusHint = () => { const p = plusLot(); return p ? (game.developed(p) ? `Tap the + to build your ${def(lotType(p)).name}` : `Tap the + to clear the spot for your ${def(lotType(p)).name}`) : ''; };
 function hintText() {
   // a brand-new town on a new world: nothing here yet
   if (!game.built('mine')) {
@@ -999,8 +1002,7 @@ function hintText() {
     if (!t.opened) return `Tap the ${def('mine').name} building to see upgrades`;
     if (!t.upgraded) return `Upgrade the ${def('mine').name} to make more ${def('mine').unit}`;
     if (!game.built('furnace')) {
-      if (!emptyLot()) return `Tap the + to clear the spot for your ${def('furnace').name}`;
-      return game.canAfford(def('furnace').unlock) ? `Build a ${def('furnace').name} on your cleared lot` : `Save $${fmtCost(def('furnace').unlock)} for a ${def('furnace').name}`;
+      return plusHint() || `Save $${fmtCost(game.developed('q1') ? def('furnace').unlock : game.developQuote('q1').total)} for a ${def('furnace').name}`;
     }
     if (game.info('furnace').starved && game.level('furnace') > 1) return `The ${def('furnace').name} is short on ${def('mine').unit}. Upgrade the ${def('mine').name}!`;
     if (!game.built('press')) return game.canAfford(def('press').unlock) ? `Build a ${def('press').name} next` : `Trucks carry ${def('mine').unit} to the ${def('furnace').name}. Keep the ${def('mine').name} ahead!`;
@@ -1010,7 +1012,6 @@ function hintText() {
   }
   const full = FACTORIES.find(f => game.built(f.id) && !game.hasManager(f.id) && game.binFull(f.id) && game.earnRate(f.id) > 0);
   if (full) return `Your ${def(full.id).name} is full. Tap its coin to collect!`;
-  if (!emptyLot() && FACTORIES.some(f => !game.built(f.id)) && game.built('press') && game.canAfford(game.landPrice() * 2)) return 'Tap the + to clear the spot for your next building';
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
   if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;
@@ -1019,8 +1020,7 @@ function hintText() {
     return game.typeInfo('rocket')?.made > 0 ? `Your ${r.name} is putting a rocket together from ${p.unit}: ${Math.floor(game.run.rocketsBuilt * 100)}%` : `Your ${r.name} needs ${p.unit} from a ${p.name} to build a rocket`;
   }
   const nl = nextInLine(), nextF = nl ? { id: nl } : null;
-  if (nextF && !emptyLot() && plotIds(game.s.current).some(p => !game.developed(p)) && game.canAfford(game.landPrice() * 2 + def(nextF.id).unlock * 0.5)) return `Tap the + to clear the spot for your ${def(nextF.id).name}`;
-  if (nextF && emptyLot() && game.canAfford(def(nextF.id).unlock)) return `Tap the + to build your ${def(nextF.id).name}`;
+  if (plusHint()) return plusHint();
   if (nl === 'power' && game.canAfford(def('power').unlock)) return `New: a ${def('power').name} and ${def('datacenter').name} speed up every factory`;
   if (game.built('power') && !game.built('datacenter') && game.canAfford(def('datacenter').unlock)) return `Build the ${def('datacenter').name} to turn power into speed`;
   return '';
