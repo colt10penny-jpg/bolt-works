@@ -203,8 +203,11 @@ export const BIN_SECONDS = 180;   // a factory's storage holds 3 minutes of what
 
 // Building takes time: a few seconds for the first buildings, longer the further along
 // the chain a building is. Every world builds at the same speed. Upgrades are instant.
-export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 75, engine: 120, power: 150, datacenter: 210, turbine: 300, rocket: 420 };
-export const buildSecs = type => BUILD_SECS[type] || 30;
+// seconds to put up each building in the first world: a minute for the Steel Furnace,
+// up to two hours for the Rocket Bay. Later worlds take longer by their price (1.2x...).
+// (An ad finishes any building straight away.)
+export const BUILD_SECS = { mine: 10, furnace: 60, hq: 240, press: 300, gear: 600, engine: 1200, power: 1500, datacenter: 2400, turbine: 3600, rocket: 7200 };
+export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.price || 1));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base', mars: 'Jezero Colony' };
