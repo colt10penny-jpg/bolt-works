@@ -13,6 +13,7 @@ import { sfx } from './sound.js';
 import { initAnalytics, track, flush } from './analytics.js';
 import { GAME } from './config.js';
 import { skin } from './worlds.js';
+import { PACK_ART } from './shopArt.js';
 import { ACHIEVEMENTS, checkAchievements } from './achievements.js';
 import { createTutorial } from './tutorial.js';
 
@@ -389,7 +390,7 @@ sheet.addEventListener('click', async e => {
   }
   if (act === 'cash-ad') {
     const amount = cashAdAmount(+b.dataset.short || 0);
-    if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`); }
+    if (await watch('cash', `$${fmt(amount)} cash`)) { game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)} added to ${game.townName()} in ${game.world.short}`); }
   }
   if (act === 'launch') openLaunch();
   if (act === 'finish' && id && game.jobOf(id)) {
@@ -853,13 +854,6 @@ function openMenu() {
 // Placeholder in-app purchases: priced like the real ones will be, but free while
 // testing, so you can move through the game quickly. Each pack is worth a stretch of
 // your current income (with a floor, so they still matter early on).
-// a little picture for each pack: coins in a hand, a money bag, a vault door, a bank
-const PACK_ART = {
-  cash_s: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path d="M6 34 Q6 29 11 29 L22 29 Q26 29 26 32.5 Q26 35 22 35 L16 35 L28 35 L38 30 Q42 28.5 43 31.5 Q43.5 33.5 41 35 L30 41.5 Q27 43 23 43 L10 43 Q6 43 6 39 Z" fill="#f2b98c" stroke="#b9774a" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 31 h5 v14 h-5 z" fill="#4a86c8"/><ellipse cx="20" cy="25.6" rx="6" ry="3.3000000000000003" fill="#c98a12"/><ellipse cx="20" cy="24" rx="6" ry="3.3000000000000003" fill="#ffd34d" stroke="#c98a12" stroke-width="1"/><ellipse cx="20" cy="24" rx="3.5999999999999996" ry="1.92" fill="none" stroke="#e8a91c" stroke-width="1"/><ellipse cx="28" cy="21.6" rx="6" ry="3.3000000000000003" fill="#c98a12"/><ellipse cx="28" cy="20" rx="6" ry="3.3000000000000003" fill="#ffd34d" stroke="#c98a12" stroke-width="1"/><ellipse cx="28" cy="20" rx="3.5999999999999996" ry="1.92" fill="none" stroke="#e8a91c" stroke-width="1"/><ellipse cx="23" cy="16.6" rx="6" ry="3.3000000000000003" fill="#c98a12"/><ellipse cx="23" cy="15" rx="6" ry="3.3000000000000003" fill="#ffd34d" stroke="#c98a12" stroke-width="1"/><ellipse cx="23" cy="15" rx="3.5999999999999996" ry="1.92" fill="none" stroke="#e8a91c" stroke-width="1"/></svg>',
-  cash_m: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path d="M17 10 L20 15 h8 L31 10 Q24 6 17 10 Z" fill="#b98a4e" stroke="#7a5426" stroke-width="1.4" stroke-linejoin="round"/><path d="M20 15 Q8 22 9 33 Q10 43 24 43 Q38 43 39 33 Q40 22 28 15 Z" fill="#d6a868" stroke="#7a5426" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.5 15.5 h11" stroke="#c8423a" stroke-width="3" stroke-linecap="round"/><text x="24" y="36" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="15" fill="#7a5426">$</text><ellipse cx="37" cy="42.6" rx="4.5" ry="2.475" fill="#c98a12"/><ellipse cx="37" cy="41" rx="4.5" ry="2.475" fill="#ffd34d" stroke="#c98a12" stroke-width="1"/><ellipse cx="37" cy="41" rx="2.6999999999999997" ry="1.44" fill="none" stroke="#e8a91c" stroke-width="1"/></svg>',
-  cash_l: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><rect x="5" y="6" width="38" height="36" rx="5" fill="#6f7d8c" stroke="#3e4954" stroke-width="1.6"/><circle cx="24" cy="24" r="13" fill="#9aa8b6" stroke="#3e4954" stroke-width="1.6"/><circle cx="24" cy="24" r="9" fill="none" stroke="#3e4954" stroke-width="1.2" stroke-dasharray="2 2"/><path d="M24 15 v18 M15 24 h18 M17.6 17.6 l12.8 12.8 M30.4 17.6 l-12.8 12.8" stroke="#3e4954" stroke-width="2.2" stroke-linecap="round"/><circle cx="24" cy="24" r="3.2" fill="#ffd34d" stroke="#3e4954" stroke-width="1.2"/><rect x="8" y="42" width="6" height="3" fill="#3e4954"/><rect x="34" y="42" width="6" height="3" fill="#3e4954"/></svg>',
-  cash_xl: '<svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path d="M4 16 L24 5 L44 16 Z" fill="#e9e1cf" stroke="#6b5f4a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="24" cy="12" r="2.6" fill="#ffd34d" stroke="#c98a12" stroke-width="1"/><rect x="6" y="16" width="36" height="4" fill="#d8ccb2" stroke="#6b5f4a" stroke-width="1.2"/><g fill="#f4efe2" stroke="#6b5f4a" stroke-width="1.1"><rect x="9" y="20" width="4" height="16"/><rect x="17" y="20" width="4" height="16"/><rect x="27" y="20" width="4" height="16"/><rect x="35" y="20" width="4" height="16"/></g><rect x="5" y="36" width="38" height="4" fill="#d8ccb2" stroke="#6b5f4a" stroke-width="1.2"/><rect x="3" y="40" width="42" height="4" rx="1" fill="#c4b696" stroke="#6b5f4a" stroke-width="1.2"/></svg>',
-};
 const PACKS = [
   { id: 'cash_s', name: 'Handful of cash', price: '$0.99', minutes: 15, floor: 1e3, icon: '$' },
   { id: 'cash_m', name: 'Bag of cash', price: '$4.99', minutes: 120, floor: 2.5e4, icon: '$$' },
@@ -869,15 +863,18 @@ const PACKS = [
 const packAmount = k => Math.max(k.floor, game.totalRate() * 60 * k.minutes);
 function openShop() {
   sfx.tap();
-  const rows = PACKS.map(k => `<button class="shop-row" data-act="buy" data-pack="${k.id}">
+  const town = game.townName(), w = game.world;
+  const rows = PACKS.map(k => `<button class="shop-row${k.best ? ' best' : ''}" data-act="buy" data-pack="${k.id}">
       <span class="s-ic">${PACK_ART[k.id] || k.icon}</span>
-      <span class="s-t"><b>${k.name}${k.best ? '<span class="shop-best">BEST</span>' : ''}</b><small>+$${fmt(packAmount(k))}</small></span>
+      <span class="s-t"><b>${k.name}${k.best ? '<span class="shop-best">BEST</span>' : ''}</b><small>+$${fmt(packAmount(k))}</small><i>for ${town}</i></span>
       <span class="s-price"><s>${k.price}</s><b>Free</b></span>
     </button>`).join('');
   openModal(`
-    <div class="big-icon">${ICON.gift}</div>
-    <h2>Shop</h2>
-    <p class="small">Free while the game is being tested.</p>
+    <div class="shop-head w-${w.id}">
+      <span class="shop-globe" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
+      <span class="shop-where"><small>Cash for</small><b>${town}</b><em>${w.name}</em></span>
+    </div>
+    <p class="small">Money goes into <b>${town}</b>'s wallet and is spent here in ${w.short}. Each world keeps its own money. <span class="shop-test">Free while the game is being tested.</span></p>
     <div class="shop-list">${rows}</div>
     <button class="btn plain" data-act="dismiss">Close</button>`, () => {});
 }
@@ -887,7 +884,7 @@ modal.addEventListener('click', e => {
   e.stopPropagation();
   const k = PACKS.find(p => p.id === b.dataset.pack);
   const amount = packAmount(k);
-  game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)}`);
+  game.addCash(amount); sfx.reward(); toast(`+$${fmt(amount)} added to ${game.townName()} in ${game.world.short}`);
   track('iap_placeholder', { pack: k.id });
   closeModal(false);
 }, true);

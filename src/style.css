@@ -418,6 +418,18 @@ body.selecting .boost, body.selecting #contract, body.selecting #ep, body.select
 .shop-row:active { background: var(--mint-2); }
 .shop-row .s-ic { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: #fff3cf; box-shadow: inset 0 -3px 0 rgba(201,138,18,.25); color: var(--gold-ink); font: 800 18px var(--display); flex-shrink: 0; }
 .shop-row .s-ic svg { display: block; }
+.shop-row .s-ic { width: 60px; height: 60px; background: none; box-shadow: 0 3px 0 rgba(0,0,0,.12); border-radius: 16px; }
+.shop-best { white-space: nowrap; }
+.shop-row .s-t small { font-size: 16px; }
+.shop-row .s-t i { font: 700 11px var(--body); font-style: normal; color: var(--ink-soft); }
+.shop-row.best { background: linear-gradient(135deg, #fff6d6, #ffe7a3); box-shadow: 0 0 0 2px #f0b33a inset; }
+.shop-head { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 2px 0 6px; }
+.shop-globe svg { width: 64px; height: 64px; display: block; filter: drop-shadow(0 3px 0 rgba(0,0,0,.15)); }
+.shop-where { display: flex; flex-direction: column; text-align: left; line-height: 1.15; }
+.shop-where small { font: 800 12px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.shop-where b { font: 800 24px var(--display); }
+.shop-where em { font: 700 13px var(--body); font-style: normal; color: var(--green); }
+.shop-test { display: block; margin-top: 4px; opacity: .8; }
 .shop-row .s-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .shop-row .s-t b { font: 800 16px var(--body); }
 .shop-row .s-t small { font: 800 13px var(--body); color: var(--green); }
