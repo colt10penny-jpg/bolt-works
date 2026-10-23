@@ -26,7 +26,10 @@ export const SUPPORT = [
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
-export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 50000, baseCost: 50000, growth: 1, perLevel: 0, need: 0 };
+export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 50000, baseCost: 50000, growth: 1.17, perLevel: 0, need: 0 };
+// While you're away, managers drop what they collect off at headquarters, up to a limit
+// measured in hours of their pay: 2 hours at level 1, 10 more minutes per level, up to a day.
+export const vaultHours = level => Math.min(24, 2 + Math.max(0, level - 1) / 6);
 export const BUILDINGS = [...ALL, HQ];
 // Open land around town: develop a plot, then build an extra factory of any kind on it.
 export { isPlot } from './layout.js';

@@ -1,7 +1,7 @@
 // Game state: worlds (each its own town), stored money, managers, boosts, contracts,
 // launches, and the per-frame tick.
 import {
-  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, inWorld,
+  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, vaultHours, inWorld,
   isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, buildSecs,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR, EXITS } from './layout.js';
@@ -22,7 +22,7 @@ const OLD_KEYS = ['boltworks.save.v4', 'boltworks.save.v3'];
 function freshRun() {
   const levels = {};
   for (const f of BUILDINGS) levels[f.id] = 0;
-  return { cash: 0, runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, bins: {}, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, jobs: {}, lastActive: Date.now() };
+  return { cash: 0, runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, bins: {}, vault: 0, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, jobs: {}, lastActive: Date.now() };
 }
 // the old fixed layout (before towns were built by hand), for bringing saves forward
 const OLD_CORE = { mine: [28, 28], furnace: [0, 28], press: [-28, 28], gear: [-28, 0], engine: [0, 0], power: [28, 0], rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28], hq: [14, 14] };
@@ -506,8 +506,15 @@ export class Game {
           else run.bins[id] = Math.min(this.binCap(id, wId), (run.bins[id] || 0) + part);
         }
       }
-      // managers pay into that world's own wallet
-      if (mine) { run.runEarned += mine; run.cash = (run.cash || 0) + mine; this.s.totalEarned += mine; direct[wId] = mine; }
+      // while you play, managers pay straight into that world's own wallet; while you're
+      // away they leave it at headquarters (up to its limit) for you to collect
+      if (mine && live) { run.runEarned += mine; run.cash = (run.cash || 0) + mine; this.s.totalEarned += mine; direct[wId] = mine; }
+      else if (mine) {
+        const before = run.vault || 0;
+        const cap = mine / seconds * this.vaultHours(wId) * 3600;
+        run.vault = Math.max(before, Math.min(cap, before + mine));
+        if (run.vault > before) direct[wId] = run.vault - before;
+      }
     }
     return direct;
   }
@@ -520,6 +527,24 @@ export class Game {
     this.addEarned(amount);
     this.s.tutorial.collected = true;
     this.emit('collected', id, amount);
+    return amount;
+  }
+
+  // ---- headquarters vault: what managers collected while you were away ----
+  vault(worldId = this.s.current) { return this.s.worlds[worldId]?.vault || 0; }
+  vaultHours(worldId = this.s.current) { return vaultHours(this.level('hq', this.s.worlds[worldId]) || 1); }
+  // what the managers in this world make per second (no ad boost)
+  managerRate(worldId = this.s.current) {
+    const run = this.s.worlds[worldId];
+    return Object.keys(run.managers).filter(id => run.managers[id]).reduce((a, id) => a + this.earnRate(id, worldId) / (this.boostLeft() > 0 ? 2 : 1), 0);
+  }
+  vaultCap(worldId = this.s.current) { return Math.max(this.vault(worldId), this.managerRate(worldId) * this.vaultHours(worldId) * 3600); }
+  collectVault(mult = 1) {
+    const amount = this.vault() * mult;
+    if (amount <= 0) return 0;
+    this.run.vault = 0;
+    this.addEarned(amount);
+    this.emit('change');
     return amount;
   }
 
@@ -642,8 +667,8 @@ export class Game {
     const from = this.s.lastSeen || now;
     return Math.min(Math.max(0, (now - from) / 1000), GAME.offlineCapHours * 3600);
   }
-  // runs the time away; returns what the managers collected in each world
-  // ({ worldId: amount }, already in that world's wallet)
+  // runs the time away; returns what the managers left at each world's headquarters
+  // ({ worldId: amount })
   applyOffline(seconds) {
     this.finishJobs();
     if (seconds <= 0) return {};

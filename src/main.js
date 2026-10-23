@@ -2,7 +2,7 @@ import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
   FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, lookTier,
-  nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES,
+  nextMilestone, milestoneCount, EP_BONUS, epForRun, themeFor, THEME_NAMES, vaultHours,
 } from './economy.js';
 import { Game } from './state.js';
 import { World } from './world.js';
@@ -96,6 +96,8 @@ function labelFor(lot) {
   const job = game.jobOf(id);
   if (job) return { cls: 'bub job', html: `${ICON.hammer}<b>${fmtTime(game.jobLeft(id))}</b>`, aria: `${d.name}: being built, ${fmtTime(game.jobLeft(id))} left` };
   if (id === 'hq' && lv > 0) {
+    const v = game.vault();
+    if (v >= 1) return { cls: 'bub cash', html: `${COIN}<b>${fmt(v)}</b>`, aria: `${d.name}: your managers left $${fmt(v)} here while you were away. Tap to collect.` };
     const free = game.freeManagers();
     return free > 0 ? { cls: 'bub idle', html: `${ICON.person}<b>${free}</b>`, aria: `${free} manager${free > 1 ? 's' : ''} waiting for a job. Tap to send them out.` } : { cls: '', html: '', aria: '' };
   }
@@ -221,7 +223,7 @@ function managerRow(d) {
 // open land: develop it, then pick what to build
 function whatItDoes(t) {
   const i = idx(t), prev = i > 0 ? def(FACTORIES[i - 1].id) : null, d = def(t);
-  if (t === 'hq') return 'Hire managers to collect money for you';
+  if (t === 'hq') return 'Hire managers to collect money for you, even while you\'re away';
   if (t === 'power') return `Makes electricity for the ${def('datacenter').name}`;
   if (t === 'datacenter') return 'Turns power into compute that speeds up every factory';
   return prev ? `Turns ${prev.unit} into ${d.makes}` : `Digs ${d.makes}`;
@@ -268,13 +270,23 @@ function hqSheet(d) {
            : `<button class="btn small" data-act="assign" data-id="${f.id}" ${free > 0 ? '' : 'disabled'}>Send</button>`}
     </div>`;
   }).join('');
-  const sub = staff ? `${staff} manager${staff > 1 ? 's' : ''} · ${free} waiting for a job` : 'Hire managers to collect money for you';
-  return head(d, ICON.hq, d.name, sub) + `
+  const sub = staff ? `${staff} manager${staff > 1 ? 's' : ''} · ${free} waiting for a job` : 'Hire managers to collect money for you, even while you\'re away';
+  const lv = game.level('hq');
+  // the vault: what managers collected while you were away, and how much it can hold
+  const v = game.vault(), cap = game.vaultCap(), hrs = game.vaultHours();
+  const nextHrs = vaultHours(lv + buyCount(d, lv));
+  const vault = `<div class="hq-vault">
+      <div class="hq-vault-top"><span>Collected while you were away</span><b>$${fmt(v)}</b></div>
+      <span class="sh-bar"><i style="width:${cap > 0 ? Math.min(100, v / cap * 100).toFixed(1) : 0}%"></i></span>
+      <small>Holds up to ${fmtHours(hrs)} of your managers' pay${cap >= 1 ? ` ($${fmt(cap)})` : ''}. Upgrade to hold ${fmtHours(nextHrs)}.</small>
+      ${v >= 1 ? `<div class="hq-vault-btns"><button class="btn green" data-act="vault">Collect $${fmt(v)}</button><button class="btn gold" data-act="vault2">${AD} Collect 2×</button></div>` : ''}
+    </div>`;
+  return head(d, ICON.hq, d.name, sub, lv) + vault + buyRow(d, lv) + `
     <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${!more ? 'One manager per factory: build more to hire more' : `Hire a manager · $${fmtCost(cost)}`}</button></div>
     ${afford || !more ? '' : cashAdButton(cost - game.cash)}
     <div class="hq-list">${rows}</div>${demolishRow(d)}`;
 }
-
+const fmtHours = h => { const m = Math.round(h * 60); return m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60} hours`; };
 function renderSheet(force = false) {
   const lot = world.selected;
   if (!lot) { sheet.hidden = true; sheetKey = ''; delete sheet.dataset.for; return; }
@@ -355,6 +367,10 @@ sheet.addEventListener('click', async e => {
   if (b.dataset.goto) { world.select(b.dataset.goto); world.focus(b.dataset.goto); sfx.tap(); return; }
   const act = b.dataset.act;
   if (act === 'close') world.select(null);
+  if (act === 'vault') { const v = game.collectVault(); if (v) { world.pop(lot, `+$${fmt(v)}`, 'big'); world.bounce(lot); sfx.coin(); } }
+  if (act === 'vault2') {
+    if (await watch('vault_double', 'double what managers collected')) { const v = game.collectVault(2); if (v) { world.pop(lot, `+$${fmt(v)}`, 'big'); world.bounce(lot); sfx.reward(); } }
+  }
   if (act === 'upgrade' && id) {
     const d = def(id), lv = game.level(id);
     if (game.buyLevels(id, buyCount(d, lv))) world.bounce(lot);
@@ -393,6 +409,14 @@ sheet.addEventListener('click', async e => {
 function collectAt(lot) {
   const id = slotAt(lot);
   if (!id) return 0;
+  if (id === 'hq') {
+    const v = game.vault();
+    if (v < 1 || game.jobOf('hq')) return 0;
+    game.collectVault();
+    world.pop(lot, `+$${fmt(v)}`, 'big'); world.bounce(lot); sfx.coin();
+    track('vault_collected', { amount: Math.round(v) });
+    return v;
+  }
   const amount = !isSupport(typeOf(id)) && game.built(id) && !game.hasManager(id) ? game.bin(id) : 0;
   if (amount < 1) return 0;
   game.collect(id);
@@ -891,39 +915,40 @@ function achievementTick(silent = false) {
 }
 
 // ---------- offline earnings ----------
-// Managers paid into each world's own wallet. The big number is this world's; money
-// made in your other worlds stays there and is mentioned underneath.
+// While you're away, managers leave what they collect at headquarters (up to its limit),
+// and you go there to pick it up. The welcome-back bubble points you to it.
 function welcomeBack() {
   const seconds = game.offlineSeconds();
   game.s.lastSeen = Date.now();
   if (seconds < 60) return;
   const byWorld = game.applyOffline(seconds);
-  const capped = seconds >= GAME.offlineCapHours * 3600 - 1;
-  if (!Object.values(byWorld).some(v => v >= 1)) {
-    if (Object.keys(game.s.worlds).some(w => FACTORIES.some(f => (game.s.worlds[w].bins[f.id] || 0) > 0)))
-      toast(`Your factories filled up while you were away. Tap their coins to collect!`);
-    return;
-  }
-  offlineModal(seconds, capped, byWorld);
-}
-function offlineModal(seconds, capped, byWorld) {
-  const here = byWorld[game.s.current] || 0;
   const others = Object.entries(byWorld).filter(([w, v]) => w !== game.s.current && v >= 1);
-  const elsewhere = others.length ? `<p class="small">Managers in ${others.map(([w, v]) => `${worldById(w).short} made $${fmt(v)}`).join(' and ')}, kept in ${others.length > 1 ? 'those worlds' : 'that world'}.</p>` : '';
-  openModal(`
-    <div class="big-icon">${ICON.moon}</div>
-    <h2>Welcome back, boss</h2>
-    <p>Your managers kept collecting for ${fmtTime(seconds)} while you were away${capped ? ` (they work up to ${GAME.offlineCapHours} hours)` : ''}. Factories without a manager filled their storage.</p>
-    <div class="big-num">$${fmt(here)}</div>
-    ${elsewhere}
-    <button class="btn gold" data-act="o2">${AD} Double it all</button>
-    <button class="btn plain" data-act="o1">Nice!</button>`, async act => {
-    if (act !== 'o2') return;
-    if (await watch('offline_double', 'double offline earnings')) {
-      for (const [w, v] of Object.entries(byWorld)) if (v > 0) game.addEarned(v, w);
-      game.emit('change'); sfx.reward(); toast(here >= 1 ? `+$${fmt(here)} more` : 'Doubled!');
-    } else offlineModal(seconds, capped, byWorld);   // ad closed early: offer it again
+  if (game.vault() >= 1 && game.built('hq')) { pendingVaultTip = true; return; }
+  if (others.length) toast(`Managers in ${others.map(([w]) => worldById(w).short).join(' and ')} left money at headquarters there`);
+  else if (Object.keys(game.s.worlds).some(w => FACTORIES.some(f => (game.s.worlds[w].bins[f.id] || 0) > 0)))
+    toast(`Your factories filled up while you were away. Tap their coins to collect!`);
+}
+// shown once nothing else is on screen (pop-ups from the start, the daily gift...)
+let pendingVaultTip = false;
+function vaultTip() {
+  if (!pendingVaultTip || current || launching) return;
+  pendingVaultTip = false;
+  if (game.vault() < 1) return;
+  tutorial.tip({
+    say: () => `Welcome back! Your managers collected <b>$${fmt(game.vault())}</b> while you were away. Collect it at your <b>${def('hq').name}</b>.`,
+    lot: lotOf('hq'),
+    done: () => game.vault() < 1,
+    hold: () => world.selected === lotOf('hq'),
   });
+}
+// the first time a headquarters opens in your first town
+function hqIntro(id) {
+  const tips = game.s.tutorial.tips ||= {};
+  if (game.typeOf(id) !== 'hq' || tips.hq || game.s.current !== 'colorado') return;
+  if (!tutorial.tip({ say: `Your <b>${def('hq').name}</b> is open! <b>Hire managers</b> to collect money for you, even while you're away.`, lot: lotOf('hq'), done: () => game.staff() > 0 || world.selected === lotOf('hq') })) return;
+  tips.hq = true;
+  track('tip', { id: 'hq' });
+  save();
 }
 
 // ---------- the short opening tutorial (see tutorial.js) ----------
@@ -995,12 +1020,15 @@ game.on('manager', id => world.sendManager(lotOf('hq'), lotOf(id)));
 game.on('recall', id => world.sendManager(lotOf(id), lotOf('hq')));
 game.on('constructed', id => {
   world.setWork(lotOf(id), null); world.bounce(lotOf(id));
-  sfx.milestone(); toast(`${def(id).name} is open for business!`);
+  sfx.milestone();
+  if (game.typeOf(id) === 'hq' && !game.s.tutorial.tips?.hq && game.s.current === 'colorado') hqIntro(id);
+  else toast(`${def(id).name} is open for business!`);
 });
 game.on('upgrade', (id, before, after) => {
   world.setWork(lotOf(id), null);
   world.setGrowth(lotOf(id), lookTier(after));
   const crossed = MILESTONES.filter(m => before < m && after >= m);
+  if (game.typeOf(id) === 'hq') { sfx.upgrade(); if (crossed.length) toast(`${def(id).name} level ${crossed[crossed.length - 1]}: a bigger office!`); return; }
   if (crossed.length) {
     const m = crossed[crossed.length - 1];
     sfx.milestone();
@@ -1080,6 +1108,7 @@ function loop(now) {
   perfCheck(now, dt);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
+  vaultTip();
   tutorial.frame(!!current);
   $('cash').textContent = '$' + (game.cash < 1000 ? Math.floor(game.cash) : fmt(game.cash));
   $('rate').textContent = `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`;
@@ -1100,7 +1129,7 @@ function loop(now) {
     const nxt = game.nextWorld();
     const showLaunch = game.canLaunch() && (game.launchPreview() >= 1 || (nxt && !game.s.worlds[nxt.id])) && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;
-    const h = world.selected || showLaunch || tutorial.active ? '' : hintText();
+    const h = world.selected || showLaunch || tutorial.active || tutorial.tipping ? '' : hintText();
     if (h !== hintCache) { hintCache = h; $('hint').textContent = h; $('hint').hidden = !h; }
     renderContract();
     if (!sheet.hidden) renderSheet();

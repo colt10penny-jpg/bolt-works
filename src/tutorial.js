@@ -80,7 +80,7 @@ export function createTutorial(ctx) {
   ];
 
   // ---- the speech bubble at the bottom ----
-  let shown = -2, lastHtml = '', tipOpen = false;
+  let shown = -2, lastHtml = '', tipOpen = null;   // tipOpen: a one-off tip ({ say, lot, done })
   function show(html, next) {
     const full = `<span class="guide-text">${html}</span>${next ? `<button class="btn small green guide-next">${next}</button>` : ''}`;
     if (full !== lastHtml) {
@@ -97,7 +97,7 @@ export function createTutorial(ctx) {
   guide.addEventListener('click', e => {
     if (!e.target.closest('.guide-next')) return;
     sfx.tap();
-    if (tipOpen) { tipOpen = false; hide(); return; }
+    if (tipOpen) { tipOpen = null; hide(); return; }
     const n = st();
     if (n === STEPS.length - 1) finish(); else setStep(n + 1);
   });
@@ -175,7 +175,13 @@ export function createTutorial(ctx) {
     // every frame: keep the bubble and the arrow up to date, and move on when a step is done.
     // `blocked` is true while a pop-up window is open, so she waits behind it.
     frame(blocked) {
-      if (tipOpen) { if (blocked) hide(); return; }
+      if (tipOpen) {
+        if (blocked || tipOpen.hold?.()) { hide(); return; }   // hold: step aside for now (e.g. while its panel is open)
+        if (tipOpen.done?.()) { tipOpen = null; hide(); return; }
+        show(typeof tipOpen.say === 'function' ? tipOpen.say() : tipOpen.say, tipOpen.next || 'Got it');
+        pointAt(tipOpen.lot ? { lot: tipOpen.lot } : null);
+        return;
+      }
       const n = st();
       if (n == null || n < 1 || blocked) { if (n == null || n < 0) document.body.classList.remove('tutorial'); hide(); return; }
       document.body.classList.add('tutorial');
@@ -188,5 +194,9 @@ export function createTutorial(ctx) {
       pointAt(s.point?.() || null);
     },
     finish,
+    // a one-off tip in the same speech bubble, pointing at a building; it closes with
+    // "Got it" or once done() turns true. Waits until the opening tutorial is over.
+    tip(t) { const n = st(); if (n != null && n >= 0) return false; tipOpen = t; return true; },
+    get tipping() { return !!tipOpen; },
   };
 }

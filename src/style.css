@@ -358,6 +358,14 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .a-t { display: flex; flex-direction: column; line-height: 1.2; }
 .a-t b { font: 800 15px var(--display); }
 .a-t small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+/* headquarters: what managers collected while you were away */
+.hq-vault { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; margin-bottom: 8px; border-radius: 14px; background: #fff6dc; }
+.hq-vault-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 800; font-size: 13px; color: var(--ink-soft); }
+.hq-vault-top b { font: 800 18px var(--display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.hq-vault .sh-bar { flex: none; width: 100%; background: #f1e3b8; }
+.hq-vault small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.25; }
+.hq-vault-btns { display: flex; gap: 6px; margin-top: 2px; }
+.hq-vault-btns .btn { flex: 1; min-height: 40px; font-size: 14px; }
 .hq-list { display: flex; flex-direction: column; gap: 4px; max-height: 34vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .hq-row { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 2px 4px 2px 8px; border-radius: 12px; background: var(--mint); }
 .hq-row.on { background: #e3f4ea; }
