@@ -327,7 +327,7 @@ function renderSheet(force = false) {
       const prev = def(FACTORIES[idx('rocket') - 1].id), made = game.typeInfo('rocket')?.made || 0;
       const ready = game.hasRocket(), frac = Math.min(1, game.run.rocketsBuilt || 0), need = rocketNeed(game.s.rocketsSent);
       const eta = made > 0 ? fmtTime((1 - frac) * need / made) : null;
-      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}, and this bay turns them into rocket parts. This ${one(d.unit)} needs <b>${fmt(need)} parts</b>. Every ${one(d.unit)} any of your worlds sends makes the next one need ${ROCKET_GROWTH}× more. The bay holds one at a time.</p>`;
+      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}, and this bay turns them into rocket parts. This ${one(d.unit)} needs <b>${fmt(need)} parts</b>. Every ${one(d.unit)} any of your worlds sends makes the next one need ${ROCKET_GROWTH}× more, so <b>upgrade this bay</b> to keep up. It holds one at a time.</p>`;
       const prog = ready ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `${fmt(frac * need)} of ${fmt(need)} parts · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
       return how + prog + `<div class="sh-row"><span>${ready ? `${one(d.unit)[0].toUpperCase() + one(d.unit).slice(1)} ready!` : ''}</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!ready ? `Building ${one(d.unit)}` : unlocks ? `Launch · unlock ${next.short}` : can ? 'Send cargo' : 'Trade routes full'}</button></div>`;

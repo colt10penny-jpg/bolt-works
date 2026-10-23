@@ -202,9 +202,9 @@ const FIELDS = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 
 // half-width, height, turn]. Placed clear of the town, the two roads out, the landing
 // spot (40, 40) and the Mojave's salt flat.
 const MESAS = {
-  desert: [[-42, 14, 14, 7, 8, 0.78], [42, -16, 14, 7, 8, 0.78], [-50, 40, 13, 8, 8, 0.75], [44, -44, 14, 9, 9, 0.8], [-52, -50, 16, 10, 10, -0.2], [6, -64, 15, 9, 9, 0.1],
+  desert: [[-42, 20, 14, 7, 8, 0.78], [42, -16, 14, 7, 8, 0.78], [-50, 40, 13, 8, 8, 0.75], [44, -44, 14, 9, 9, 0.8], [-52, -50, 16, 10, 10, -0.2], [6, -64, 15, 9, 9, 0.1],
     [-66, 18, 9, 7, 7, 0.3], [-14, 66, 13, 8, 8, -0.4], [68, -4, 10, 7, 7, 0.5], [30, 92, 14, 9, 8, 0.6], [-8, -98, 20, 12, 12, 0.2]],
-  mars: [[-42, 14, 13, 7, 9, 0.78], [42, -16, 14, 7, 8, 0.78], [-48, 44, 12, 8, 9, -0.6], [46, -40, 13, 9, 8, 0.9], [-56, -46, 15, 10, 10, 0.3], [10, -66, 14, 9, 9, -0.2],
+  mars: [[-42, 20, 13, 7, 9, 0.78], [42, -16, 14, 7, 8, 0.78], [-48, 44, 12, 8, 9, -0.6], [46, -40, 13, 9, 8, 0.9], [-56, -46, 15, 10, 10, 0.3], [10, -66, 14, 9, 9, -0.2],
     [-66, 20, 9, 7, 8, 0.1], [-16, 68, 12, 8, 8, 0.4], [70, -2, 10, 7, 7, -0.3], [64, 84, 13, 9, 9, 0.2], [-12, -100, 20, 12, 12, -0.1]],
 };
 // how far up a mesa this point is: { h: height, top: the mesa's full height } (h 0 off it)
@@ -215,10 +215,13 @@ function mesaAt(name, x, z) {
     if (Math.abs(dx) > a + b + 12 || Math.abs(dz) > a + b + 12) continue;
     const c = Math.cos(rot), s = Math.sin(rot);
     const u = (dx * c + dz * s) / a, v = (-dx * s + dz * c) / b;
-    const d = Math.hypot(u, v) + (fbm(x / 7, z / 7, 2, 23) - 0.5) * 0.28;   // ragged edges
+    // ragged edges: big bays and headlands, plus finer gullies down the cliffs
+    const d = Math.hypot(u, v) + (fbm(x / 7, z / 7, 2, 23) - 0.5) * 0.28 + (fbm(x / 2.2, z / 2.2, 2, 57) - 0.5) * 0.07;
     // a flat top, steep cliffs, a narrow ledge part way down and a skirt of scree at the foot
     const cliff = smooth(1.02, 0.86, d), ledge = smooth(1.12, 1.0, d) * 0.42, scree = smooth(1.45, 1.05, d) * 0.12;
-    const h = ht * Math.max(cliff, ledge, scree);
+    let h = ht * Math.max(cliff, ledge, scree);
+    // layers of harder rock stick out as soft steps on the way up
+    if (h > 0.5 && h < ht * 0.97) { const L = 1.6, t = h / L, f = t - Math.floor(t); h = h * 0.55 + (Math.floor(t) + smooth(0.25, 0.75, f)) * L * 0.45; }
     if (h > best) { best = h; top = ht; }
   }
   return { h: best, top };
@@ -333,10 +336,8 @@ export function buildLand(name, T, blocks) {
   const pos = tg.attributes.position;
   const col = new Float32Array(pos.count * 3);
   const c = new THREE.Color(), c2 = new THREE.Color();
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const h = H(x, z);
-    pos.setY(i, h - 0.02);
+  // the colour of the ground at a point (sets c)
+  const shade = (x, z, h) => {
     const n = fbm(x / 18, z / 18, 3, 4), n2 = fbm(x / 7, z / 7, 2, 8);
     const g = P.grass;
     c.setHex(g[0]).lerp(c2.setHex(g[1]), smooth(0.35, 0.7, n)).lerp(c2.setHex(g[2]), smooth(0.6, 0.85, n2) * 0.6).lerp(c2.setHex(g[3]), smooth(0.62, 0.8, fbm(x / 40, z / 40, 2, 12)) * 0.7);
@@ -364,6 +365,23 @@ export function buildLand(name, T, blocks) {
       if (ms.h > ms.top * 0.93) c.lerp(c2.setHex(name === 'desert' ? 0xd9a066 : 0xa8502e), 0.75);
     }
     if (name === 'desert') c.lerp(c2.setHex(0xefe6d2), smooth(21, 12, Math.hypot(x - 66, z - 64) + (n2 - 0.5) * 6) * 0.9);   // salt flat
+  };
+  // Mesas get their own fine, smooth-shaded patch of ground laid over the land (the land
+  // is coarse, which made them look blocky). The coarse land well inside each patch drops
+  // out of sight beneath it.
+  const MS = (name === 'desert' || name === 'mars') ? MESAS[name] : [];
+  // each patch covers its mesa's scree skirt (1.45x its size) and a little more; where
+  // two overlap, each sits a hair higher than the last so they never flicker
+  const patchBox = MS.map(([cx, cz, a, b, , r]) => {
+    const A = a * 1.45, B = b * 1.45, ex = Math.hypot(A * Math.cos(r), B * Math.sin(r)) + 2, ez = Math.hypot(A * Math.sin(r), B * Math.cos(r)) + 2;
+    return { x0: cx - ex, x1: cx + ex, z0: cz - ez, z1: cz + ez };
+  });
+  const underPatch = (x, z) => patchBox.some(q => x > q.x0 + 3.5 && x < q.x1 - 3.5 && z > q.z0 + 3.5 && z < q.z1 - 3.5);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = H(x, z);
+    pos.setY(i, h - 0.02 - (underPatch(x, z) ? 3 : 0));
+    shade(x, z, h);
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -371,6 +389,32 @@ export function buildLand(name, T, blocks) {
   const terrain = new THREE.Mesh(tg, withClouds(std(0xffffff, { vertexColors: true, flatShading: true, roughness: name === 'moon' ? 0.95 : 0.9 })));
   terrain.receiveShadow = true;
   ground.add(terrain);
+  if (patchBox.length) {
+    const pm = withClouds(std(0xffffff, { vertexColors: true, roughness: 0.9 }));
+    // overlapping patches get different heights (a few hundredths apart), so they never flicker
+    const lift = [];
+    patchBox.forEach((q, i) => {
+      const used = new Set(patchBox.slice(0, i).map((p, j) => (p.x0 < q.x1 && q.x0 < p.x1 && p.z0 < q.z1 && q.z0 < p.z1) ? lift[j] : -1));
+      let l = 0; while (used.has(l)) l++; lift.push(l);
+    });
+    patchBox.forEach((q, k) => {
+      const w = q.x1 - q.x0, d = q.z1 - q.z0, nx = Math.ceil(w / 0.6), nz = Math.ceil(d / 0.6);
+      const pg = new THREE.PlaneGeometry(w, d, nx, nz);
+      pg.rotateX(-Math.PI / 2); pg.translate((q.x0 + q.x1) / 2, 0, (q.z0 + q.z1) / 2);
+      const pp = pg.attributes.position, pc = new Float32Array(pp.count * 3);
+      for (let i = 0; i < pp.count; i++) {
+        const x = pp.getX(i), z = pp.getZ(i), h = H(x, z);
+        pp.setY(i, h + 0.05 + lift[k] * 0.03);
+        shade(x, z, h);
+        pc[i * 3] = c.r; pc[i * 3 + 1] = c.g; pc[i * 3 + 2] = c.b;
+      }
+      pg.setAttribute('color', new THREE.BufferAttribute(pc, 3));
+      pg.computeVertexNormals();
+      const patch = new THREE.Mesh(pg, pm);
+      patch.receiveShadow = true;
+      ground.add(patch);
+    });
+  }
   ground.userData.base = new THREE.Color(P.grass[0]);
 
   // lake (Colorado)
