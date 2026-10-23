@@ -1139,7 +1139,7 @@ function dayCheck() {
 
 // ---------- main loop ----------
 let last = performance.now(), uiT = 0, hintCache = null, achT = 1;
-const hintSeen = new Map(), HINT_SHOW = 7000, HINT_AGAIN = 45000;   // when each hint was last shown
+const hintSeen = new Map(), HINT_SHOW = 7000, HINT_AGAIN = 120000;   // when each hint was last shown
 // On the first run, watch the frame rate for a few seconds. If the phone struggles
 // with the full effects, switch to battery saver for it (the player can change it).
 let perf = { start: 0, frames: 0, done: false };
