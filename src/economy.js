@@ -172,13 +172,22 @@ export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
 // next world, and you can travel back and forth. Every world has the same prices; each
 // has a perk so it's worth revisiting.
 export const WORLDS = [
-  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
-  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 } },
-  { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power, and launches give 3× Engineering Points.', perks: { power: 3, ep: 3 } },
+  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 }, price: 1 },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 }, price: 3 },
+  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 }, price: 15 },
+  { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power, and launches give 3× Engineering Points.', perks: { power: 3, ep: 3 }, price: 75 },
 ];
 // a building's numbers in a given world (the same everywhere now)
-export function inWorld(def) { return def; }
+// Each world costs more than the last (building, upgrading, land, roads and managers all
+// scale by its price), because you arrive with more Engineering Points each time: about
+// 2.4x income in the Mojave, 8x on the Moon and 34x on Mars. Without this every world
+// would go faster than the one before; with it each one takes a little longer.
+export function inWorld(def, world) {
+  const p = world?.price || 1;
+  if (!def || p === 1) return def;
+  return { ...def, unlock: def.unlock * p, baseCost: def.baseCost * p, first: def.first ? def.first * p : def.first };
+}
+export const priceOf = world => world?.price || 1;
 export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 
 // Factories store the money they make until you tap to collect it.

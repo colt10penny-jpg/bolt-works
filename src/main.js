@@ -628,7 +628,7 @@ function openLaunch() {
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
     <h2>Launch?</h2>
-    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch takes you to <b>${next.name}</b>, where you start fresh with an Ore Mine and no money. Your money here stays here, and you can come back any time.` : ''}</p>
+    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch takes you to <b>${next.name}</b>, where you start fresh with an Ore Mine and no money, and everything costs ${next.price || 1}× what it does in ${WORLDS[0].short}. Your money here stays here, and you can come back any time.` : ''}</p>
     <div class="stats">
       <div class="stat"><small>Engineering Points</small><b><em>+${gain}</em></b></div>
       <div class="stat"><small>Income bonus after</small><b>+${fmt(totalAfter)}%</b></div>
@@ -689,6 +689,7 @@ async function doLaunch(mult) {
       <div class="big-icon red">${ICON.rocket}</div>
       <h2>Welcome to ${nw.name}!</h2>
       <p>A fresh start: an Ore Mine and an empty wallet. ${nw.perk}</p>
+      <p class="small">Everything here costs <b>${nw.price || 1}×</b> what it does in ${WORLDS[0].short}, but your Engineering Points boost your income to match.</p>
       <div class="stats">
         <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
         <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
@@ -754,7 +755,7 @@ function openMap() {
     const status = here ? '<span class="w-here">Here</span>' : `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`;
     return `<div class="w-card ${here ? 'here' : ''} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank</small></span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${(w.price || 1) > 1 ? ` · prices ${w.price}×` : ''}</small></span>
       ${status}
     </div>`;
   }).join('');

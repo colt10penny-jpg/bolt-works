@@ -1,7 +1,7 @@
 // Game state: worlds (each its own town), stored money, managers, boosts, contracts,
 // launches, and the per-frame tick.
 import {
-  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, vaultHours, inWorld,
+  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, vaultHours, inWorld, priceOf,
   isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, buildSecs,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR, EXITS } from './layout.js';
@@ -179,7 +179,7 @@ export class Game {
     const land = this.landPrice();
     let built = this.roadsBuilt(), roads = 0;
     const list = this.roadsFor(plot);
-    for (const r of list) roads += roadCost(r.kind, built++, this.world);
+    for (const r of list) roads += roadCost(r.kind, built++, this.world) * priceOf(this.world);
     return { land, roads, total: land + roads, list };
   }
   #startWorld(w) {
@@ -445,7 +445,7 @@ export class Game {
   // ---- land ----
   // Colorado's mine plot came free, so it doesn't push the price up
   // the Ore Mine's lot comes free in every world
-  landPrice() { return landCost(Math.max(0, Object.keys(this.run.land).length - 1)); }
+  landPrice() { return landCost(Math.max(0, Object.keys(this.run.land).length - 1)) * priceOf(this.world); }
   // develop a plot: buy the land and fix (or build) the roads it needs
   develop(plot) {
     if (!isPlot(plot) || this.run.land[plot]) return false;
@@ -621,7 +621,7 @@ export class Game {
   staff() { return this.run.staff || 0; }
   working() { return this.factorySlots().filter(id => this.run.managers[id]).length; }
   freeManagers() { return Math.max(0, this.staff() - this.working()); }
-  nextHireCost() { return hireCost(this.staff()); }
+  nextHireCost() { return hireCost(this.staff()) * priceOf(this.world); }
   // you can only hire as many managers as you have factories for them to run
   canHireMore() { return this.staff() < this.factorySlots().length; }
   hire() {
