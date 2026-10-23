@@ -28,8 +28,8 @@ export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
 export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 50000, baseCost: 50000, growth: 1.17, perLevel: 0, need: 0 };
 // While you're away, managers drop what they collect off at headquarters, up to a limit
-// measured in hours of their pay: 2 hours at level 1, 10 more minutes per level, up to a day.
-export const vaultHours = level => Math.min(24, 2 + Math.max(0, level - 1) / 6);
+// measured in hours of their pay: 30 minutes at level 1, 2 more minutes per level, up to 8 hours.
+export const vaultHours = level => Math.min(8, 0.5 + Math.max(0, level - 1) / 30);   // 30 min at level 1, +2 min a level, up to 8 hours
 export const BUILDINGS = [...ALL, HQ];
 // Open land around town: develop a plot, then build an extra factory of any kind on it.
 export { isPlot } from './layout.js';
@@ -183,7 +183,7 @@ export const worldById = id => WORLDS.find(w => w.id === id) || WORLDS[0];
 
 // Factories store the money they make until you tap to collect it.
 // Storage holds this many seconds of the building's earnings.
-export const BIN_SECONDS = 600;
+export const BIN_SECONDS = 180;   // a factory's storage holds 3 minutes of what it makes
 
 // Building takes time: a few seconds for the first buildings, longer the further along
 // the chain a building is. Every world builds at the same speed. Upgrades are instant.

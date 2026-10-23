@@ -288,7 +288,7 @@ function hqSheet(d) {
     ${afford || !more ? '' : cashAdButton(cost - game.cash)}
     <div class="hq-list">${rows}</div>${demolishRow(d)}`;
 }
-const fmtHours = h => { const m = Math.round(h * 60); return m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60} hours`; };
+const fmtHours = h => { const m = Math.round(h * 60); return m < 60 ? `${m} minutes` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m === 60 ? '1 hour' : `${m / 60} hours`; };
 function renderSheet(force = false) {
   const lot = world.selected;
   if (!lot) { sheet.hidden = true; sheetKey = ''; delete sheet.dataset.for; return; }

@@ -503,7 +503,7 @@ export class Game {
         for (const id of slots) {
           const part = slots.length === 1 ? amount : amount * this.share(id, wId);
           if (run.managers[id]) mine += part;
-          else run.bins[id] = Math.min(this.binCap(id, wId), (run.bins[id] || 0) + part);
+          else { const have = run.bins[id] || 0; run.bins[id] = Math.max(have, Math.min(this.binCap(id, wId), have + part)); }   // never shrinks money already stored
         }
       }
       // while you play, managers pay straight into that world's own wallet; while you're
