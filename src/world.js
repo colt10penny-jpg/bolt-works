@@ -10,6 +10,7 @@ import { GLOW } from './models.js';
 import './buildings.js';   // the detailed Colorado buildings replace the plain ones
 import './buildings-mojave.js';   // and the Mojave ones
 import './buildings-moon.js';     // and the Moon ones
+import './buildings-mars.js';     // and the Mars colony
 import { withDetail } from './surface.js';
 const NIGHT_LIST = () => GLOW.night;
 import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
@@ -25,6 +26,7 @@ let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
   desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0xd8c39c, pad: 0xe8dcc4 },
+  mars:     { ground: 0x7a2e1c, sky: 0x7a2e1c, hemiSky: 0xffe0bc, hemiGround: 0x6a2a1a, sun: 2.4, hemi: 1.4, road: 0x3b2a28, walk: 0xb98a74, pad: 0xd8c2b6 },
   moon:     { ground: 0x9c9ca2, sky: 0x9c9ca2, hemiSky: 0xdfe6ff, hemiGround: 0x3a3d48, sun: 2.6, hemi: 1.2, road: 0x4b4e57, walk: 0xb4b4ba, pad: 0xc9c9cf },
 };
 
@@ -222,7 +224,7 @@ export class World {
     this.land = land.ground.userData;
     this.heightAt = land.height;
     this.#roads();
-    this.scene.fog.near = name === 'moon' ? 260 : 165; this.scene.fog.far = name === 'moon' ? 600 : 430;
+    this.scene.fog.near = name === 'moon' ? 260 : name === 'mars' ? 210 : 165; this.scene.fog.far = name === 'moon' ? 600 : name === 'mars' ? 540 : 430;
     if (!this.padMats) this.padMats = {};
     if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
     for (const L of Object.values(this.lots)) L.pad.material = this.padMats[name];
@@ -240,7 +242,7 @@ export class World {
     this.roadGroup = r.group;
     this.scene.add(r.group);
     this.roadData = r;
-    this.#lampGlow(r.lamps, this.themeName === 'moon');
+    this.#lampGlow(r.lamps, this.themeName === 'moon' || this.themeName === 'mars');
   }
   #respawnAmbient() {
     const idle = this.idleCars.splice(0);
@@ -272,6 +274,7 @@ export class World {
       let o;
       if (theme === 'colorado') o = r() < 0.5 ? tree(0.8 + r() * 0.6, [0x3f8f4a, 0x4fa152, 0x357d40][Math.floor(r() * 3)]) : pine(0.8 + r() * 0.7);
       else if (theme === 'desert') o = r() < 0.6 ? cactus(0.7 + r() * 0.5) : rock(0.6 + r(), 0xb98b5c);
+      else if (theme === 'mars') o = rock(0.5 + r() * 1.3, r() < 0.6 ? 0x3a2622 : 0x7a3420);   // dark basalt and rusty stones
       else o = rock(0.6 + r() * 1.4, 0x85858b);
       o.position.set(x, 0, z); o.rotation.y = r() * 6.28;
       g.add(o);
@@ -291,7 +294,7 @@ export class World {
       st.scale(1, 0.55, 1); st.translate((r() - 0.5) * 9, sz * 0.3, (r() - 0.5) * 9); stones.push(st);
     }
     const grassC = theme === 'colorado' ? 0x5f9e3c : theme === 'desert' ? 0xc2a862 : null;
-    const stoneC = theme === 'colorado' ? 0x9a978f : theme === 'desert' ? 0xa87f58 : 0x8e8e94;
+    const stoneC = theme === 'colorado' ? 0x9a978f : theme === 'desert' ? 0xa87f58 : theme === 'mars' ? 0x4a2c24 : 0x8e8e94;
     if (grassC) g.add(new THREE.Mesh(mergeGeometries(blades.map(b => b.toNonIndexed())), mat(grassC, { flatShading: true })));
     g.add(new THREE.Mesh(mergeGeometries(stones.map(b => b.index ? b.toNonIndexed() : b)), mat(stoneC, { flatShading: true })));
     blades.forEach(b => b.dispose());
@@ -347,7 +350,7 @@ export class World {
     this.poolTex ||= soft(128, r => r >= 1 ? 0 : Math.exp(-r * r * 3.2) * (1 - r * r));
     this.haloTex ||= soft(64, r => r >= 1 ? 0 : Math.exp(-r * r * 5) * (1 - r));
     const quads = pts.map(p => { const q = new THREE.PlaneGeometry(moon ? 9 : 17, moon ? 9 : 17); q.rotateX(-Math.PI / 2); q.translate(p.x, 0.17, p.z); return q; });
-    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x4f9dff : 0xffc98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.pools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? (this.themeName === 'mars' ? 0x3fe0b0 : 0x4f9dff) : 0xffc98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.pools.renderOrder = 2;
     this.scene.add(this.pools);
     quads.forEach(q => q.dispose());
@@ -387,7 +390,7 @@ export class World {
     }
     if (!quads.length || !this.poolTex) return;
     const moon = this.themeName === 'moon';
-    this.bldPools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x8fb8ff : 0xffb877, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+    this.bldPools = new THREE.Mesh(mergeGeometries(quads), new THREE.MeshBasicMaterial({ map: this.poolTex, color: moon ? 0x8fb8ff : this.themeName === 'mars' ? 0x9fd0ff : 0xffb877, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
     this.bldPools.renderOrder = 2;
     this.scene.add(this.bldPools);
     quads.forEach(q => q.dispose());
@@ -575,7 +578,7 @@ export class World {
         const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), mat(0x4fa152, { flatShading: true })); crown.position.set(cx, 1.65, cz); ex.add(crown);
       }
     }
-    if (this.themeName !== 'moon') for (const [cx, cz] of spare.slice(tier <= 1 ? 2 : tier >= 7 ? 1 : 0)) {
+    if (this.themeName !== 'moon' && this.themeName !== 'mars') for (const [cx, cz] of spare.slice(tier <= 1 ? 2 : tier >= 7 ? 1 : 0)) {
       if (rnd() < 0.45) continue;
       const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
       const c = car(colors[Math.floor(rnd() * colors.length)]);

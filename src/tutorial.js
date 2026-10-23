@@ -32,6 +32,7 @@ const NAMES = {
   colorado: ['Rivet Ridge', 'Bolton Springs', 'Copper Gulch', 'Iron Hollow', 'Gearwood', 'Sprocket Falls', 'Anvil Creek', 'Steelhaven'],
   desert: ['Sunbolt', 'Dusty Gear', 'Mesa Forge', 'Cactus Coil', 'Sandspark', 'Mirage Mill'],
   moon: ['Tranquility Works', 'Crater Point', 'Lunaburg', 'Moonbolt', 'Dustfall Base', 'New Bolton'],
+  mars: ['Red Rivet', 'New Jezero', 'Rustwater', 'Olympus Gate', 'Bolton Prime', 'Dustdevil Flats'],
 };
 const clean = s => (s || '').replace(/[<>&"]/g, '').replace(/\s+/g, ' ').trim().slice(0, 22);
 

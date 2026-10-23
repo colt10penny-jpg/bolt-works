@@ -688,6 +688,12 @@ const WORLD_ART = {
     <circle cx="31" cy="29" r="7" fill="#9b9ba6"/><circle cx="32" cy="30" r="5.2" fill="#a9a9b3"/>
     <circle cx="13" cy="33" r="3" fill="#9b9ba6"/><circle cx="33" cy="13" r="2.4" fill="#9b9ba6"/><circle cx="24" cy="40" r="2" fill="#9b9ba6"/>`,
     `<rect x="23.3" y="1" width="1.4" height="6" fill="#e8e8ee"/><path d="M24.7 1 h6 v3.6 h-6 Z" fill="#e85a3c"/>`),
+  // rusty red, a canyon, a frosty cap and a green greenhouse dome
+  mars: globe('ma', `<rect width="48" height="48" fill="#b8492c"/>
+    <path d="M0 6 Q24 0 48 6 V11 Q24 6 0 11 Z" fill="#f4ece6"/>
+    <path d="M4 26 Q16 22 26 27 T46 24" stroke="#6e2416" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="13" cy="36" r="4" fill="#8f3520"/><circle cx="36" cy="16" r="3" fill="#8f3520"/>
+    <path d="M28 40 a6 6 0 0 1 12 0 Z" fill="#9cf08a"/><path d="M28 40 a6 6 0 0 1 12 0" stroke="#fff" stroke-width="1" fill="none"/>`),
 };
 function openMap() {
   sfx.tap();

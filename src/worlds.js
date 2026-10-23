@@ -41,6 +41,18 @@ export const SKINS = {
     hq: C('Mission Control', 'managers', 'managers', 0xcfd3da, 'hqmoon', 'Radio signals take about 1.3 seconds to travel between the Earth and the Moon, so every conversation with Mission Control has a small delay.'),
     datacenter: C('Quantum Lab', 'compute', 'PFLOPS', 0x2d6a8f, 'quantum', 'Quantum computers use qubits that can hold a mix of 0 and 1 at once, and most kinds must be chilled close to absolute zero.'),
   },
+  mars: {
+    mine: C('Ice Driller', 'water ice', 'ice', 0x6fc3e0, 'icedrill', 'Mars has lots of water frozen as ice, at its poles and just under the dusty ground in many places.'),
+    furnace: C('Oxygen Plant', 'oxygen', 'oxygen', 0x2fb5a0, 'oxyplant', 'Splitting water with electricity gives oxygen to breathe and hydrogen for rocket fuel.'),
+    press: C('Greenhouse Dome', 'crops', 'crops', 0x5cc04a, 'greenhouse', 'Mars soil has many plant nutrients but also toxic salts, so it would need washing before crops could grow in it.'),
+    gear: C('Brick Kiln', 'Mars bricks', 'bricks', 0xc0583a, 'brickworks', 'Engineers have made strong bricks just by squeezing Mars-like soil hard, without any baking or glue.'),
+    engine: C('Hab Factory', 'habitats', 'habs', 0xe9eef2, 'habworks', 'Mars air is about 1% as thick as Earth\u2019s, so homes there must be sealed and pressurized like a spacecraft.'),
+    turbine: C('Atmosphere Processor', 'air', 'air', 0x8a7fd0, 'atmos', 'NASA\u2019s MOXIE experiment on the Perseverance rover made oxygen from Mars\u2019 carbon dioxide air.'),
+    rocket: C('Mars Spaceport', 'starships', 'starships', 0xdfe3e8, 'marsport', 'Mars and Earth line up for the shortest trip only about every 26 months.'),
+    power: C('Wind Farm', 'electricity', 'MW', 0xf2f4f6, 'windfarm', 'Mars winds can whip dust into storms that cover the whole planet for weeks.'),
+    hq: C('Colony Command', 'managers', 'managers', 0x2fb5a0, 'hqmars', 'A day on Mars, called a sol, lasts 24 hours and 39 minutes.'),
+    datacenter: C('Ice Vault Data Center', 'compute', 'PFLOPS', 0x4f7fbf, 'icevault', 'Mars is cold (around -60\u00b0C on average), so a data center there could be cooled for free.'),
+  },
 };
 
 export const CUSTOMERS = {
@@ -61,6 +73,15 @@ export const CUSTOMERS = {
     engine: ['Wildfire Watch', 'Desert Mail Drones', 'Film Crew Aerials'],
     turbine: ['Mars Prep Lab', 'Dune Racing League', 'Canyon Survey Team'],
     rocket: ['Satellite Startup', 'Weather Service', 'Space Agency'],
+  },
+  mars: {
+    mine: ['Colony Water Works', 'Ice Rink Club', 'Hydroponics Co-op'],
+    furnace: ['Rocket Fuel Depot', 'Life Support Team', 'Breathable Air Co.'],
+    press: ['Colony Canteen', 'Jezero Bakery', 'Seed Vault'],
+    gear: ['Dome Builders', 'Canyon Bridge Crew', 'Road Pavers Guild'],
+    engine: ['New Settlers League', 'Crater Hotel Mars', 'Science Station'],
+    turbine: ['Terraforming Authority', 'Sky Thickeners Inc.', 'Weather Makers'],
+    rocket: ['Jupiter Expedition', 'Belt Miners Union', 'Deep Space Fleet'],
   },
   moon: {
     mine: ['Habitat Builders', 'Lunar Brickworks', 'Crater Road Crew'],

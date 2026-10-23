@@ -156,7 +156,7 @@ function serverWing(g, { color, tier, cx, cz, floors }) {
 }
 // two silos on a frame with a catwalk between them
 function siloWing(g, { color, tier, floors, theme }) {
-  const c = theme === 'moon' ? MW : tier <= 3 ? new THREE.Color(color).lerp(new THREE.Color(0xa8a49a), 0.35).getHex() : shade(color, 0.15);
+  const c = theme === 'moon' || theme === 'mars' ? MW : tier <= 3 ? new THREE.Color(color).lerp(new THREE.Color(0xa8a49a), 0.35).getHex() : shade(color, 0.15);
   const hh = Math.max(1.6, floors * FH);
   let top = 0;
   for (const [x, z] of [[-0.5, -0.45], [0.55, 0.5]]) top = Math.max(top, tank(g, x, z, 0.55, hh, c));
@@ -204,7 +204,7 @@ export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
   const floors = 2 + Math.floor(Math.min(9, tier) / 3) + (i === 0 ? 1 : 0) + (tier >= 8 ? 1 : 0);
   const o = { color, tier, cx, cz, floors, theme };
   let top;
-  if (theme === 'moon') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
+  if (theme === 'moon' || theme === 'mars') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
   else if (kind === 'silo') top = siloWing(g, o);
   else if (kind === 'sawtooth') top = sawWing(g, o);
   else if (kind === 'hangar') top = hangarWing(g, o);

@@ -221,6 +221,23 @@ function rawHeight(name, x, z) {
     if (ds < 22) h = h * smooth(14, 22, ds) + 0.02;   // the salt flat
     return h;
   }
+  if (name === 'mars') {
+    // wind-carved ripples, a wide canyon across the back, a giant shield volcano off to the
+    // side, and a few frosty craters
+    let h = (fbm(x / 24, z / 24, 4, 21) - 0.5) * 2.2 + Math.sin(x * 0.22 + z * 0.12 + fbm(x / 12, z / 12, 2, 5) * 4) * 0.25;
+    const along = (x - z) * 0.7071, across = -(x + z) * 0.7071;
+    const wob = (fbm(along / 40, 0.5, 3, 61) - 0.5) * 30;
+    const cd = Math.abs(across - 150 - wob);                         // the canyon, far behind town
+    h += 7 * smooth(80, 130, across) * (0.7 + 0.6 * fbm(along / 30, across / 30, 2, 17));   // the rising land it cuts into
+    if (cd < 26) h -= 14 * (1 - smooth(8, 26, cd)) * smooth(90, 120, across);
+    const vd = Math.hypot(x + 130, z - 10);                          // the volcano
+    h += 40 * Math.max(0, 1 - vd / 95) ** 1.6 - (vd < 12 ? 10 * (1 - vd / 12) : 0);
+    for (const c of MARS_CRATERS) {
+      const d = Math.hypot(x - c[0], z - c[1]), r = c[2];
+      if (d < r * 1.8) h += -c[3] * Math.max(0, 1 - (d / r) ** 2) + c[3] * 0.5 * Math.exp(-(((d - r) / (r * 0.3)) ** 2));
+    }
+    return h;
+  }
   // moon: bumpy ground and craters
   let h = (fbm(x / 20, z / 20, 4, 3) - 0.5) * 1.6;
   for (const c of MOON_CRATERS) {
@@ -240,6 +257,16 @@ const MOON_CRATERS = (() => {
   return out;
 })();
 
+const MARS_CRATERS = (() => {
+  const out = []; const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(313);
+  for (let i = 0; i < 26; i++) {
+    const x = (r() - 0.5) * 320, z = (r() - 0.5) * 320, rad = 4 + r() ** 2 * 14;
+    if (townDist(x, z) < rad + 6) continue;
+    out.push([x, z, rad, 0.7 + rad * 0.14]);
+  }
+  return out;
+})();
+
 export function makeHeight(name) {
   return (x, z) => {
     const flat = smooth(3.2, 9, roadDist(x, z)) * smooth(1, 9, townDist(x, z));
@@ -250,6 +277,8 @@ export function makeHeight(name) {
 const PAL = {
   colorado: { grass: [0x86c25a, 0x6eaf49, 0x9ccf68, 0xb4c463], rock: 0x8d8a82, snow: 0xf4f6fa, dirt: 0xa98a62 },
   desert: { grass: [0xe2c58f, 0xd9b77d, 0xebd3a3, 0xd2a46e], rock: 0xc06c45, snow: 0xd88a5a, dirt: 0xc9a06b },
+  // rust and maroon dust over dark basalt, with frost on the heights and in craters
+  mars: { grass: [0x8e3820, 0x6e2a18, 0xa8482a, 0x4e1e14], rock: 0x2e1e1c, snow: 0xf3ece8, dirt: 0x9c4a2e },
   moon: { grass: [0x9a9aa0, 0x77777f, 0xaeaeb4, 0x5f6068], rock: 0x86868d, snow: 0xc4c4ca, dirt: 0x8f8f96 },
 };
 
@@ -259,7 +288,7 @@ export function buildLand(name, T, blocks) {
   const H = makeHeight(name);
   const P = PAL[name] || PAL.colorado;
   const ground = new THREE.Group(), scenery = new THREE.Group();
-  SHARED.cloudAmt.value = name === 'moon' ? 0 : name === 'desert' ? 0.1 : 0.17;
+  SHARED.cloudAmt.value = name === 'moon' ? 0 : name === 'desert' ? 0.1 : name === 'mars' ? 0.06 : 0.17;
 
   // terrain
   const SIZE = 640, SEG = 200;
@@ -278,6 +307,13 @@ export function buildLand(name, T, blocks) {
     if (h > 6) c.lerp(c2.setHex(P.rock), smooth(6, 12, h + n2 * 4));
     if (h > 20) c.lerp(c2.setHex(P.snow), smooth(20, 28, h + n * 8));
     if (name === 'colorado' && h < -0.4) c.lerp(c2.setHex(0xc9b48a), 0.8);   // lake shore sand
+    if (name === 'mars') {
+      // dark basalt showing through the dust in streaks, and frost in the crater floors
+      c.lerp(c2.setHex(P.rock), smooth(0.5, 0.68, fbm(x / 22 + z / 60, z / 22, 3, 33)) * 0.8);          // dark lava fields
+      c.lerp(c2.setHex(0xc8643a), smooth(0.62, 0.8, fbm(x / 9, z / 9, 2, 91)) * 0.45);                // bright dust drifts
+      for (const cr of MARS_CRATERS) { const d = Math.hypot(x - cr[0], z - cr[1]); if (d < cr[2] * 0.75) c.lerp(c2.setHex(P.snow), smooth(cr[2] * 0.75, cr[2] * 0.3, d) * 0.85); }
+      if (h > 14) c.lerp(c2.setHex(0x5a2a1e), smooth(14, 26, h));
+    }
     if (name === 'desert') c.lerp(c2.setHex(0xefe6d2), smooth(21, 12, Math.hypot(x - 66, z - 64) + (n2 - 0.5) * 6) * 0.9);   // salt flat
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
@@ -367,6 +403,15 @@ export function buildLand(name, T, blocks) {
     place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180 });
     place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 0.3, blob: 0.7 });
     place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 1, blob: 0 });
+  } else if (name === 'mars') {
+    // black basalt boulders and wind-carved spires, rusty stones, frost-dusted rocks, and
+    // the odd old lander left from the first missions
+    place(700, r => S.rock(r, 0, r() < 0.55 ? 0x3a2420 : 0x8a3a22), { pad: 0.3, blob: 0.8 });
+    place(900, (r, h) => S.pebbles(r, h, 0x5a2c22), { pad: 0.1, blob: 0, span: 180 });
+    place(120, (r, h) => S.boulder(r, h, 0x2e1e1c), { pad: 1, blob: 0.6 });
+    place(160, S.spire, { pad: 1, blob: 0.7 });
+    place(90, S.frostRock, { pad: 0.6, blob: 0.5 });
+    place(6, S.lander, { pad: 3, span: 150, blob: 0.8 });
   } else {
     place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 0.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180 });
@@ -426,6 +471,40 @@ function sceneryKit() {
       const lm = m(col, {}, 1.0 * s);
       for (let i = 0; i < 3; i++) g.add(mesh(new THREE.ConeGeometry((1.0 - i * 0.25) * s, 1.25 * s, 7), lm, 0, (1.05 + i * 0.62) * s, 0));
       g.userData.r = s;
+      return g;
+    },
+    // a wind-carved basalt spire, layered and leaning
+    spire(r) {
+      const g = new THREE.Group(), s = 0.8 + r() * 1.6, cols = [0x3a2420, 0x5a2a1e, 0x7a3420];
+      let y = 0, w = 0.9 * s;
+      for (let k = 0; k < 3 + Math.floor(r() * 2); k++) {
+        const hh = (0.6 + r() * 0.7) * s, geo = new THREE.CylinderGeometry(w * 0.75, w, hh, 6);
+        const o = mesh(geo, m(cols[k % 3], { roughness: 1 }), (r() - 0.5) * 0.2 * s, y + hh / 2, (r() - 0.5) * 0.2 * s); o.rotation.y = r() * 3; g.add(o);
+        y += hh; w *= 0.62 + r() * 0.2;
+      }
+      g.rotation.z = (r() - 0.5) * 0.25;
+      g.userData.r = s * 0.8;
+      return g;
+    },
+    // a dark rock with frost on its top
+    frostRock(r) {
+      const g = new THREE.Group(), s = 0.5 + r() * 0.9;
+      const a = mesh(new THREE.DodecahedronGeometry(0.8 * s, 0), m(0x3a2420, { roughness: 1 }), 0, 0.35 * s, 0); a.scale.y = 0.65; g.add(a);
+      const f = mesh(new THREE.DodecahedronGeometry(0.62 * s, 0), m(0xf3ece8, { roughness: 0.6 }), 0.05 * s, 0.62 * s, 0); f.scale.set(1, 0.3, 1); g.add(f);
+      g.userData.r = s;
+      return g;
+    },
+    // an old robotic lander from the first missions: a gold-foil body on legs, a dish and
+    // two dusty solar wings
+    lander(r) {
+      const g = new THREE.Group(), s = 1.0 + r() * 0.3;
+      g.add(mesh(new THREE.CylinderGeometry(0.7 * s, 0.7 * s, 0.4 * s, 6), m(0xc9a24a, { roughness: 0.4, metalness: 0.6 }), 0, 0.9 * s, 0));
+      for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; const leg = mesh(new THREE.CylinderGeometry(0.04 * s, 0.04 * s, 1.0 * s, 5), m(0xb9b4a8), Math.cos(a) * 0.75 * s, 0.45 * s, Math.sin(a) * 0.75 * s); leg.rotation.z = Math.cos(a) * 0.35; leg.rotation.x = -Math.sin(a) * 0.35; g.add(leg); }
+      for (const sd of [-1, 1]) { const p = mesh(new THREE.BoxGeometry(1.2 * s, 0.04 * s, 0.8 * s), m(0x6a5a5a, { roughness: 0.8 }), sd * 1.3 * s, 0.95 * s, 0); p.rotation.z = sd * 0.2; g.add(p); }
+      const dish = mesh(new THREE.SphereGeometry(0.4 * s, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2.4), m(0xe8e4dc, { side: THREE.DoubleSide }), 0.2 * s, 1.5 * s, 0); dish.rotation.x = 0.6; g.add(dish);
+      g.add(mesh(new THREE.CylinderGeometry(0.03 * s, 0.03 * s, 0.4 * s, 4), m(0xb9b4a8), 0.2 * s, 1.2 * s, 0));
+      g.rotation.z = 0.06;
+      g.userData.r = 1.4 * s;
       return g;
     },
     // a tall forest fir: four tiers, dark and dense, for the woods round town
@@ -559,8 +638,9 @@ export function buildRoads(name, T, stateOf) {
   const walkM = withClouds(std(T.walk, { roughness: 0.9 }));
   const curbM = std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
-  const HW = ROAD_W / 2, SW = 0.7, moon = name === 'moon';
-  const edgeM = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
+  const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', moon = name === 'moon' || mars;   // Mars roads are lit like the Moon's, not painted
+  const edgeM = mars ? new THREE.MeshStandardMaterial({ color: 0x9fffe0, emissive: 0x3fe0b0, emissiveIntensity: 0.4, roughness: 0.4 })
+    : new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
   edgeM.userData.night = 2.2;
   let seed = 4242;
   const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -612,9 +692,9 @@ export function buildRoads(name, T, stateOf) {
   // ragged at the edges like Colorado's old roads, with a little surveyor's stake at each
   // corner, so you can make out the plots without it shouting
   if (plan.length) {
-    const trackM = withClouds(std(moon ? 0xa3a3a9 : 0xe4cd9c, { roughness: 1 }));
-    const blendM = withClouds(std(moon ? 0x98989e : 0xdcbd86, { roughness: 1 }));
-    const pebM = std(moon ? 0x8a8a90 : 0xbf9466, { flatShading: true, roughness: 1 });
+    const trackM = withClouds(std(mars ? 0x7a3420 : moon ? 0xa3a3a9 : 0xe4cd9c, { roughness: 1 }));
+    const blendM = withClouds(std(mars ? 0x8e3a22 : moon ? 0x98989e : 0xdcbd86, { roughness: 1 }));
+    const pebM = std(mars ? 0x3a2420 : moon ? 0x8a8a90 : 0xbf9466, { flatShading: true, roughness: 1 });
     const stakeM = std(0xcaa877, { roughness: 0.9 });
     const tipM = std(0xff7a3a, { roughness: 0.6 });
     const stakes = new Map();

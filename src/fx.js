@@ -45,6 +45,18 @@ const DAY = {
     [0.80, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
     [1.00, 0xc4d0ff, 1.8, 0x9aa8d8, 0x4a4d5a, 1.3, 1.0, 0x1b2030],
   ],
+  // Mars: a hazy butterscotch sky by day, and the famous blue sunset; nights are a deep
+  // violet with a little light from its two small moons
+  mars: [
+    [0.00, 0xb8a6ff, 1.5, 0x8a78c8, 0x5a2a28, 1.45, 1.0, 0x2e1c3a],
+    [0.06, 0x9cc4ff, 1.6, 0xa6c8ff, 0x6a3428, 1.2, 0.6, 0x5f86b8],     // blue sunrise
+    [0.14, 0xffe2c0, 2.5, 0xffd9b0, 0x8a3a24, 1.25, 0.0, 0xe8b07a],    // butterscotch morning
+    [0.55, 0xfff0dc, 2.7, 0xffe0bc, 0x8a3a24, 1.3, 0.0, 0xe9b583],
+    [0.66, 0xffc890, 1.9, 0xf2c4a0, 0x7a3424, 1.1, 0.2, 0xd99a6a],
+    [0.72, 0x8fbcff, 1.6, 0x9ec0f0, 0x5a3040, 1.3, 0.75, 0x4f78b0],    // blue sunset
+    [0.80, 0xb8a6ff, 1.5, 0x8a78c8, 0x5a2a28, 1.45, 1.0, 0x2e1c3a],
+    [1.00, 0xb8a6ff, 1.5, 0x8a78c8, 0x5a2a28, 1.45, 1.0, 0x2e1c3a],
+  ],
 };
 // "Miniature": a tilt-shift lens. Sharp across the middle, softly blurred toward the top
 // and bottom, like a photo of a model town. Run twice: across, then up and down.
@@ -117,7 +129,7 @@ export class Look {
   }
 
   setLights(sun, hemi, ground) { this.sun = sun; this.hemi = hemi; this.groundBase = ground; }
-  setWorld(name) { this.kind = name === 'moon' ? 'moon' : 'earth'; this.worldName = name; this.update(0); }
+  setWorld(name) { this.kind = name === 'moon' || name === 'mars' ? name : 'earth'; this.worldName = name; this.update(0); }
 
   setQuality(q) {
     this.quality = q;

@@ -162,7 +162,7 @@ export const EP_BONUS = 0.10; // each Engineering Point = +10% income, forever
 export function epForRun(runEarned) {
   return Math.floor(Math.sqrt(Math.max(0, runEarned) / 1e7));
 }
-export const THEMES = ['colorado', 'desert', 'moon'];
+export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
 
 // Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
 // no money), and money stays in the world it was made in. Launching a rocket unlocks the
@@ -172,6 +172,7 @@ export const WORLDS = [
   { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
   { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
   { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 } },
+  { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power, and launches give 3× Engineering Points.', perks: { power: 3, ep: 3 } },
 ];
 // a building's numbers in a given world (the same everywhere now)
 export function inWorld(def) { return def; }
@@ -187,7 +188,7 @@ export const BUILD_SECS = { mine: 5, furnace: 15, hq: 20, press: 40, gear: 75, e
 export const buildSecs = type => BUILD_SECS[type] || 30;
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
-export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base' };
+export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base', mars: 'Jezero Colony' };
 export const themeFor = launches => THEMES[Math.min(launches, THEMES.length - 1)];
 
 // ---- formatting ----
