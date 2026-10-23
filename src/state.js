@@ -1,7 +1,7 @@
 // Game state: worlds (each its own town), stored money, managers, boosts, contracts,
 // launches, and the per-frame tick.
 import {
-  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, epForRun, EP_BONUS, WORLDS, worldById, BIN_SECONDS, hireCost, vaultHours, inWorld, priceOf,
+  FACTORIES, ALL, BUILDINGS, flow, upgradeCost, TRADE_STEP, TRADE_MAX, WORLDS, worldById, BIN_SECONDS, hireCost, vaultHours, inWorld, priceOf,
   isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, buildSecs,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR, EXITS } from './layout.js';
@@ -41,12 +41,11 @@ export function freshState() {
     firstSeen: Date.now(),
     lastSeen: Date.now(),
     totalEarned: 0,
-    econ: 5,             // economy version (5 = a wallet per world, every world priced the same)
+    econ: 6,             // economy version (6 = trade routes instead of Engineering Points)
     layout: 4,           // town layout version (4 = fixed 3x3 plan, HQ by the mine, two roads out)
     current: 'colorado',
     worlds: { colorado: freshRun() },
-    ep: 0,               // Engineering Points (permanent, shared by every world)
-    epClaimed: 0,        // points already taken from lifetime earnings
+    trade: {},           // trade routes: 'colorado|desert' -> level (see TRADE_STEP)
     launches: 0,
     boostUntil: 0,
     contract: null,      // active order (in the current world)
@@ -318,6 +317,21 @@ export class Game {
       }
       this.invalidate();
     }
+    // v6: Engineering Points are gone; worlds trade instead. Every world you'd reached gets a
+    // route to the one before it (the rocket that took you there carried the first cargo),
+    // and money piled up by the old points is trimmed to about an hour of what each town
+    // makes now.
+    if ((saved.econ || 1) < 6) {
+      s.econ = 6;
+      s.trade ||= {};
+      const ids = WORLDS.map(w => w.id).filter(w => s.worlds[w]);
+      for (let i = 1; i < ids.length; i++) s.trade[this.routeKey(ids[i - 1], ids[i])] = Math.max(1, s.trade[this.routeKey(ids[i - 1], ids[i])] || 0);
+      const hadEP = (saved.ep || 0) > 0;
+      delete s.ep; delete s.epClaimed;
+      this.invalidate();
+      if (hadEP) for (const w of ids) { const r = s.worlds[w], hour = this.flowFor(w).income * 3600; r.cash = Math.min(r.cash || 0, Math.max(1000, hour)); r.vault = Math.min(r.vault || 0, hour); }
+      if (hadEP || ids.length > 1) this.tradeIntro = true;
+    }
   }
   async save() {
     this.s.lastSeen = Date.now();
@@ -357,8 +371,21 @@ export class Game {
   developed(plot) { return !!this.run.land[plot]; }
   hasManager(id) { return !!this.run.managers[id]; }
   boostLeft(now = Date.now()) { return Math.max(0, this.s.boostUntil - now) / 1000; }
-  epMult() { return 1 + this.s.ep * EP_BONUS; }
-  mult(now = Date.now()) { return (this.boostLeft(now) > 0 ? 2 : 1) * this.epMult(); }
+  mult(now = Date.now()) { return (this.boostLeft(now) > 0 ? 2 : 1) * this.tradeMult(); }
+
+  // ---- trade routes ----
+  routeKey(a, b) { const i = WORLDS.findIndex(w => w.id === a), j = WORLDS.findIndex(w => w.id === b); return i < j ? a + '|' + b : b + '|' + a; }
+  routeLevel(a, b) { return a === b ? 0 : this.s.trade?.[this.routeKey(a, b)] || 0; }
+  // the other worlds you've reached, with this world's route to each
+  routesOf(w = this.s.current) { return WORLDS.filter(o => o.id !== w && this.s.worlds[o.id]).map(o => ({ world: o, level: this.routeLevel(w, o.id) })); }
+  tradeMult(w = this.s.current) { return 1 + this.routesOf(w).reduce((a, r) => a + r.level, 0) * TRADE_STEP; }
+  // somewhere a rocket can go from here: the next world (not reached yet), or a route that isn't full
+  launchTargets() {
+    const next = this.nextWorld();
+    const out = next && !this.s.worlds[next.id] ? [next.id] : [];
+    for (const r of this.routesOf()) if (r.level < TRADE_MAX) out.push(r.world.id);
+    return out;
+  }
   // a building's numbers in a world (later worlds cost more)
   defOf(id, worldId = this.s.current) { return inWorld(BUILDINGS.find(f => f.id === id), worldById(worldId)); }
   // the numbers for whatever stands in a slot (extra copies cost more)
@@ -400,12 +427,12 @@ export class Game {
     for (const [id, e] of Object.entries(run.extra || {})) if (e && e.type === type && e.level > 0) out.push(id);
     return out;
   }
-  // flow without the ad boost, cached per world until levels or EP change
+  // flow without the ad boost, cached per world until levels or trade routes change
   flowFor(worldId) {
     const r = this.s.worlds[worldId];
     if (!r) return null;
     if (!this.cache) this.cache = {};
-    return (this.cache[worldId] ||= flow(this.workLevels(r), this.epMult(), worldById(worldId).perks, this.extrasOf(r), this.effCore(r)));
+    return (this.cache[worldId] ||= flow(this.workLevels(r), this.tradeMult(worldId), worldById(worldId).perks, this.extrasOf(r), this.effCore(r)));
   }
   baseFlow() { return this.flowFor(this.s.current); }
   // totals for a product type
@@ -497,7 +524,7 @@ export class Game {
         const units = p.made * seconds;
         run.made[d.id] = (run.made[d.id] || 0) + units;
         if (d.id === 'rocket') run.rocketsBuilt += units;
-        const amount = units * d.value * this.epMult() * boost;
+        const amount = units * d.value * this.tradeMult(wId) * boost;
         // split between the main building and any copies on developed land
         const slots = this.slotsOf(d.id, run);
         for (const id of slots) {
@@ -712,7 +739,7 @@ export class Game {
     const rate = this.typeInfo(pick).made;
     const stretch = 1.15 + Math.random() * 0.6;
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
-    const reward = Math.max(50, target * d.value * this.epMult() * 2.5);
+    const reward = Math.max(50, target * d.value * this.tradeMult() * 2.5);
     const list = (CUSTOMERS[this.s.current] || CUSTOMERS.colorado)[pick];
     this.s.contract = {
       id: pick, unit: this.unitOf ? this.unitOf(pick) : d.unit, customer: list[Math.floor(Math.random() * list.length)],
@@ -733,32 +760,29 @@ export class Game {
   }
 
   // ---- rocket launch ----
-  // Engineering Points come from everything you've ever earned (all worlds):
-  // total points = floor(sqrt(lifetime / 10M)). A launch claims the ones you've
-  // earned since last time, so launching often or rarely gives the same total.
-  // Launching uses up one rocket and keeps your town as it is.
-  pendingEP() { return Math.max(0, epForRun(this.s.totalEarned) - (this.s.epClaimed || 0)); }
-  canLaunch() { return this.run.rocketsBuilt >= 1; }
-  launchPreview() { return this.pendingEP() * (this.world.perks.ep || 1); }
+  // A rocket goes to another world. The first one to a world you haven't reached unlocks
+  // it (and opens a trade route there); after that, each rocket sent to a world raises
+  // the trade route between the two by a level (`levels`: 2 with the ad). Your town
+  // stays as it is.
+  hasRocket() { return this.run.rocketsBuilt >= 1; }
+  canLaunch() { return this.hasRocket() && this.launchTargets().length > 0; }
   nextWorld() {
     const i = WORLDS.findIndex(w => w.id === this.s.current);
     return WORLDS[i + 1] || null;
   }
-  launch(adMult = 1) {
-    const pending = this.pendingEP();
-    const gained = pending * (this.world.perks.ep || 1) * adMult;
-    this.s.epClaimed = (this.s.epClaimed || 0) + pending;
-    this.s.ep += gained;
+  launch(to, levels = 1) {
+    if (!this.hasRocket() || !this.launchTargets().includes(to)) return null;
+    const from = this.s.current;
+    let unlocked = null;
+    if (!this.s.worlds[to]) { this.#startWorld(to); unlocked = to; }
+    const k = this.routeKey(from, to), before = this.s.trade[k] || 0;
+    this.s.trade[k] = Math.min(TRADE_MAX, before + levels);
     this.s.launches++;
     this.run.rocketsBuilt = Math.max(0, this.run.rocketsBuilt - 1);
-    const from = this.s.current;
-    const next = this.nextWorld();
-    let unlocked = null;
-    if (next && !this.s.worlds[next.id]) { this.#startWorld(next.id); unlocked = next.id; }
     this.invalidate();
-    this.emit('launched', gained, unlocked);
+    this.emit('launched', to, unlocked);
     this.emit('change');
-    return { gained, unlocked, from };
+    return { to, unlocked, from, before, level: this.s.trade[k] };
   }
 
   // ---- daily reward ----

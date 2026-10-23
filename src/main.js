@@ -2,7 +2,7 @@ import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
   FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, lookTier,
-  nextMilestone, milestoneCount, LEVEL_CAP, EP_BONUS, epForRun, themeFor, THEME_NAMES, vaultHours,
+  nextMilestone, milestoneCount, LEVEL_CAP, TRADE_STEP, TRADE_MAX, themeFor, THEME_NAMES, vaultHours,
 } from './economy.js';
 import { Game } from './state.js';
 import { World } from './world.js';
@@ -319,8 +319,8 @@ function renderSheet(force = false) {
     const earn = f.made * d.value * game.mult();
     const sub = `${fmtRate(f.made)} ${d.unit}/s · $${fmt(earn)}/s${game.hasManager(id) ? ' · <span class="mgr-on">manager</span>' : ''}`;
     const rocket = t === 'rocket' ? (() => {
-      const pts = game.launchPreview(), next = game.nextWorld(), unlocks = next && !game.s.worlds[next.id];
-      const can = game.canLaunch() && (pts >= 1 || unlocks);
+      const next = game.nextWorld(), unlocks = next && !game.s.worlds[next.id];
+      const can = game.canLaunch();
       // how rockets get built: parts arrive by truck, the bay puts them together, then you launch
       const prev = def(FACTORIES[idx('rocket') - 1].id), made = game.typeInfo('rocket')?.made || 0;
       const ready = Math.floor(game.run.rocketsBuilt), frac = game.run.rocketsBuilt - ready;
@@ -328,7 +328,7 @@ function renderSheet(force = false) {
       const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}; this bay puts every ${d.need} together into one ${one(d.unit)}. When one is ready, launch it.</p>`;
       const prog = ready >= 1 ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `Next ${one(d.unit)}: ${Math.floor(frac * 100)}% · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
       return how + prog + `<div class="sh-row"><span>${ready} ${ready === 1 ? one(d.unit) : d.unit} ready</span>
-        <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.canLaunch() ? `Building first ${one(d.unit)}` : pts >= 1 ? `Launch · +${pts} EP` : unlocks ? `Launch · unlock ${next.short}` : 'Earn more for points'}</button></div>`;
+        <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!game.hasRocket() ? `Building first ${one(d.unit)}` : unlocks ? `Launch · unlock ${next.short}` : can ? 'Send cargo' : 'Trade routes full'}</button></div>`;
     })() : '';
     html = head(d, ICON.factory, d.name, sub, lv) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
   }
@@ -620,28 +620,37 @@ game.on('contract', c => {
   }
 });
 
-// ---------- rocket launch ----------
+// ---------- rocket launch: new worlds and trade routes ----------
+// what a world sends on its trade rockets (what its second building makes)
+const good = w => skin(w, 'furnace').makes;
+const pips = level => `<span class="pips" aria-label="level ${level} of ${TRADE_MAX}">${Array.from({ length: TRADE_MAX }, (_, i) => `<i class="${i < level ? 'on' : ''}"></i>`).join('')}</span>`;
+const routeLine = (a, b) => { const l = game.routeLevel(a, b); return `level ${l}, <b>+${fmt(l * TRADE_STEP * 100)}%</b> income in ${worldById(a).short} and ${worldById(b).short}`; };
 function openLaunch() {
-  const gain = game.launchPreview();
-  const totalAfter = (game.s.ep + gain) * EP_BONUS * 100;
-  const w = game.world, next = game.nextWorld();
+  const here = game.s.current, next = game.nextWorld();
   const unlocks = next && !game.s.worlds[next.id];
   const r = def('rocket');
+  const ad = id => `<button class="btn small gold" data-act="ad:${id}">${AD} +2</button>`;
+  const routes = game.routesOf().map(({ world: w, level }) => `<div class="w-card w-${w.id}">
+      <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${good(here)} for ${good(w.id)} · +${fmt(level * TRADE_STEP * 100)}% each</small>${pips(level)}</span>
+      ${level >= TRADE_MAX ? '<span class="w-here">Full</span>' : `<span class="tr-btns"><button class="btn small red" data-act="send:${w.id}">Send</button>${level < TRADE_MAX - 1 ? ad(w.id) : ''}</span>`}
+    </div>`).join('');
+  const newWorld = unlocks ? `<div class="w-card new">
+      <span class="w-swatch" aria-hidden="true">${WORLD_ART[next.id] || ''}</span>
+      <span class="w-info"><b>${next.name}</b><small>A new world! Start a town there with an Ore Mine and no money, and open a trade route with ${worldById(here).short}. ${next.perk}</small></span>
+      <button class="btn small red" data-act="send:${next.id}">Go</button>
+    </div>` : '';
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
-    <h2>Launch?</h2>
-    <p>Send one of your ${r.unit} up. Your town stays exactly as it is.${unlocks ? ` This launch takes you to <b>${next.name}</b>, where you start fresh with an Ore Mine and no money, and everything costs ${next.price || 1}× what it does in ${WORLDS[0].short}. Your money here stays here, and you can come back any time.` : ''}</p>
-    <div class="stats">
-      <div class="stat"><small>Engineering Points</small><b><em>+${gain}</em></b></div>
-      <div class="stat"><small>Income bonus after</small><b>+${fmt(totalAfter)}%</b></div>
-    </div>
-    <p class="small">Points come from all the cash you've earned in every world. Each one adds ${EP_BONUS * 100}% income everywhere, forever.${w.perks.ep ? ' Low gravity here doubles them.' : ''}</p>
-    ${gain >= 1 ? `<button class="btn gold" data-act="l2">${AD} Launch with 2× points (+${gain * 2})</button>` : ''}
-    <button class="btn red" data-act="l1">Launch now</button>
+    <h2>Where to?</h2>
+    <p class="small">Send one of your ${r.unit}. Each rocket to a world you've reached raises your trade route with it a level: <b>+${TRADE_STEP * 100}% income in both worlds</b> (up to ${TRADE_MAX} levels). Your town stays as it is.</p>
+    <div class="w-list">${newWorld}${routes}</div>
     <button class="btn plain" data-act="dismiss">Not yet</button>`, async act => {
-    let mult = 1;
-    if (act === 'l2') { if (await watch('launch_double', 'double Engineering Points')) mult = 2; else { openLaunch(); return; } }
-    if (act === 'l1' || act === 'l2') await doLaunch(mult);
+    const [kind, to] = (act || '').split(':');
+    if (!to) return;
+    let levels = 1;
+    if (kind === 'ad') { if (await watch('launch_double', 'a double cargo')) levels = 2; else { openLaunch(); return; } }
+    await doLaunch(to, levels);
   });
 }
 
@@ -663,7 +672,7 @@ let launching = false;
 // Lift-off, the rocket climbs off the top of the screen, everything fades to black. In
 // a new world it fades back in on the sky above the landing spot and the rocket comes
 // down on its engine; otherwise it fades back to your town.
-async function doLaunch(mult) {
+async function doLaunch(to, levels = 1) {
   if (launching) return;
   launching = true;
   world.select(null);
@@ -672,9 +681,10 @@ async function doLaunch(mult) {
   await world.launchRocket();
   await fadeTo(true);
   world.endLaunch();
-  const before = game.s.ep;
-  const { gained, unlocked, from } = game.launch(mult);
-  track('rocket_launched', { ep_gained: gained, launches: game.s.launches, doubled: mult === 2, world: from, unlocked: unlocked || '' });
+  const res = game.launch(to, levels);
+  if (!res) { await fadeTo(false); document.body.classList.remove('launching'); launching = false; return; }
+  const { unlocked, from, before, level } = res;
+  track('rocket_launched', { to, route_level: level, launches: game.s.launches, doubled: levels === 2, world: from, unlocked: unlocked || '' });
   save();
   const nw = unlocked ? worldById(unlocked) : null;
   if (nw) {
@@ -691,11 +701,7 @@ async function doLaunch(mult) {
       <div class="big-icon red">${ICON.rocket}</div>
       <h2>Welcome to ${nw.name}!</h2>
       <p>A fresh start: an Ore Mine and an empty wallet. ${nw.perk}</p>
-      <p class="small">Everything here costs <b>${nw.price || 1}×</b> what it does in ${WORLDS[0].short}, but your Engineering Points boost your income to match.</p>
-      <div class="stats">
-        <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
-        <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
-      </div>
+      <p class="small">Your rocket carried ${good(from)} here, opening a trade route: ${routeLine(from, nw.id)}.</p>
       <button class="btn green" data-act="start">Start building</button>
       <p class="small">${game.townName(from)} and its money are saved in ${worldById(from).short}, and it keeps earning. Go back any time with the map button.</p>`,
       () => tutorial.askName(nw.id), () => tutorial.askName(nw.id));
@@ -707,12 +713,13 @@ async function doLaunch(mult) {
   launching = false;
   openModal(`
     <div class="big-icon red">${ICON.rocket}</div>
-    <h2>Launch successful!</h2>
-    <p>Your town is just as you left it, now with a bigger income bonus.</p>
+    <h2>Cargo delivered!</h2>
+    <p>Your ${good(from)} reached ${game.townName(to)}, and ${good(to)} is on its way back.</p>
     <div class="stats">
-      <div class="stat"><small>Engineering Points</small><b>${before} → <em>${game.s.ep}</em></b></div>
-      <div class="stat"><small>Income bonus</small><b><em>+${fmt(game.s.ep * EP_BONUS * 100)}%</em></b></div>
+      <div class="stat"><small>Trade route</small><b>Level ${before} → <em>${level}</em></b></div>
+      <div class="stat"><small>Income in both</small><b><em>+${fmt(level * TRADE_STEP * 100)}%</em></b></div>
     </div>
+    <p class="small">${worldById(from).short} now earns <b>+${fmt((game.tradeMult(from) - 1) * 100)}%</b> from all its trade routes.</p>
     <button class="btn green" data-act="dismiss">Keep building</button>`);
 }
 
@@ -757,14 +764,14 @@ function openMap() {
     const status = here ? '<span class="w-here">Here</span>' : `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`;
     return `<div class="w-card ${here ? 'here' : ''} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${(w.price || 1) > 1 ? ` · prices ${w.price}×` : ''}</small></span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${game.tradeMult(w.id) > 1 ? ` · trade +${fmt((game.tradeMult(w.id) - 1) * 100)}%` : ''}</small></span>
       ${status}
     </div>`;
   }).join('');
   openModal(`
     <div class="big-icon">${ICON.globe}</div>
     <h2>Your worlds</h2>
-    <p class="small">Each world keeps its own money. Travel back any time.</p>
+    <p class="small">Each world keeps its own money. Send cargo rockets between them to open trade routes: every level adds ${TRADE_STEP * 100}% income to both worlds.</p>
     <div class="w-list">${cards}</div>
     <button class="btn plain" data-act="dismiss">Close</button>`, act => {});
   // travel buttons live inside the modal
@@ -893,7 +900,7 @@ function openSettings() {
     <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
     <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
     <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
-    <p>Rockets launched: <b>${game.s.launches}</b> · Engineering Points: <b>${game.s.ep}</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
+    <p>Rockets launched: <b>${game.s.launches}</b> · Trade bonus here: <b>+${fmt((game.tradeMult() - 1) * 100)}%</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
     <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it.</p>
     <button class="btn danger" data-act="reset-ask">Start over</button>
     <button class="btn plain" data-act="back">Back</button>`, async act => {
@@ -923,7 +930,7 @@ function openSettings() {
       save(); openSettings();
     }
     if (act === 'reset-ask') {
-      openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, achievements and Engineering Points. It can’t be undone.</p>
+      openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, trade routes and achievements. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
         if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); syncLander(); seenAch = 0; track('reset'); showTown(); tutorial.start(); }
@@ -1030,7 +1037,7 @@ function hintText() {
   if (!game.built('hq') && game.built('furnace') && game.canAfford(def('hq').unlock)) return `Build a ${def('hq').name} to hire managers`;
   if (game.built('hq') && game.staff() === 0 && game.canAfford(game.nextHireCost())) return `Hire a manager at your ${def('hq').name}`;
   if (game.freeManagers() > 0 && FACTORIES.some(f => game.built(f.id) && !game.hasManager(f.id))) return `A manager is waiting at your ${def('hq').name} for a job`;
-  if (game.built('rocket') && !game.canLaunch()) {
+  if (game.built('rocket') && !game.hasRocket()) {
     const r = def('rocket'), p = def('turbine');
     return game.typeInfo('rocket')?.made > 0 ? `Your ${r.name} is putting a rocket together from ${p.unit}: ${Math.floor(game.run.rocketsBuilt * 100)}%` : `Your ${r.name} needs ${p.unit} from a ${p.name} to build a rocket`;
   }
@@ -1112,7 +1119,7 @@ function dayCheck() {
   const first = new Date(game.s.firstSeen); first.setHours(0, 0, 0, 0);
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const day = Math.round((now - first) / 86400000);
-  track('app_open', { day_number: day, first_open_today: !already, launches: game.s.launches, ep: game.s.ep, factories: ALL.filter(f => game.built(f.id)).length });
+  track('app_open', { day_number: day, first_open_today: !already, launches: game.s.launches, trade: game.tradeMult(), factories: ALL.filter(f => game.built(f.id)).length });
 }
 
 // ---------- main loop ----------
@@ -1155,14 +1162,14 @@ function loop(now) {
     bb.classList.toggle('on', left > 0);
     $('boost-text').textContent = left > 0 ? fmtTime(left) : '×2';
     bb.setAttribute('aria-label', left > 0 ? `Double earnings active, ${fmtTime(left)} left. Watch an ad to add more.` : 'Watch an ad for double earnings');
-    document.body.classList.toggle('has-ep', game.s.ep > 0);
-    if (game.s.ep > 0) { $('ep').hidden = false; $('ep').textContent = `+${fmt(game.s.ep * EP_BONUS * 100)}% · ${game.s.ep} EP`; }
+    const trade = game.tradeMult() - 1;
+    document.body.classList.toggle('has-ep', trade > 0);
+    if (trade > 0) { $('ep').hidden = false; $('ep').textContent = `Trade +${fmt(trade * 100)}% income`; }
     else $('ep').hidden = true;
     world.setRocketReady(game.canLaunch(), game.run.rocketsBuilt % 1);
     const mb = $('map-btn'); const wl = game.unlockedWorlds().length;
     mb.hidden = wl < 2; mb.setAttribute('aria-label', `Your worlds (now in ${game.world.short})`);
-    const nxt = game.nextWorld();
-    const showLaunch = game.canLaunch() && (game.launchPreview() >= 1 || (nxt && !game.s.worlds[nxt.id])) && !world.selected && !launching;
+    const showLaunch = game.canLaunch() && !world.selected && !launching;
     $('launch-btn').hidden = !showLaunch;
     const h = world.selected || showLaunch || tutorial.active || tutorial.tipping ? '' : hintText();
     if (h !== hintCache) { hintCache = h; $('hint').textContent = h; $('hint').hidden = !h; }
@@ -1195,6 +1202,7 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   world.ready = true;
   achievementTick(true);   // anything already done counts quietly
   if (game.rebalanced) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Big update!</h2><p>Upgrades are now bigger steps: each one costs more but makes a real difference, and buildings grow as you upgrade them. Your towns were converted to the new levels.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
+  if (game.tradeIntro) openModal(`<div class="big-icon">${ICON.globe}</div><h2>Your worlds trade now</h2><p>Engineering Points are gone. Instead, send cargo rockets between your worlds: every rocket raises the trade route between two worlds a level, and each level adds <b>${TRADE_STEP * 100}% income to both</b>.</p><p class="small">Each world you'd reached already has a route to the one before it. Money from the old points was trimmed to about an hour of what each town makes now.</p><button class="btn green" data-act="dismiss">Got it</button>`);
   if (game.walletsSplit) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A wallet for each world</h2><p>Money now stays in the world it was made in, and every world has the same prices. Your money is in ${game.world.short}; your other worlds keep everything you built and start their wallets at $0. You can travel back and forth any time.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   if (game.relevelled4) openModal(`<div class="big-icon">${ICON.factory}</div><h2>Upgrades are instant again</h2><p>No more waiting, and no level limit. Buildings get a new look and 2× output at levels 5, 10, 25, 50, 100 and 250. Your buildings moved to the matching new levels.</p><button class="btn green" data-act="dismiss">Let's go</button>`);
   else if (game.relaidOut) openModal(`<div class="big-icon">${ICON.globe}</div><h2>A tidier town plan</h2><p>Every world now has the same plan: a 3×3 grid with one spot for each factory, and the headquarters beside the Ore Mine. Your buildings moved to their spots and kept their levels. Where you had extra copies, the best one was kept.</p><button class="btn green" data-act="dismiss">Let's go</button>`);

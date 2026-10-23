@@ -160,28 +160,26 @@ export function maxAffordable(def, level, cash, cap = LEVEL_CAP - level) {
   return lo;
 }
 
-// ---- Rocket launches (prestige) ----
-export const EP_BONUS = 0.10; // each Engineering Point = +10% income, forever
-export function epForRun(runEarned) {
-  return Math.floor(Math.sqrt(Math.max(0, runEarned) / 1e7));
-}
+// ---- Trade routes between worlds ----
+// Each pair of worlds you've reached can trade. Every rocket you send from one to the
+// other raises their route a level (up to TRADE_MAX), and each level adds TRADE_STEP to
+// the income of both worlds. With four worlds, a world trades with three others, so the
+// most any world can get is +300% (4x income): a reward for travelling, with a ceiling.
+export const TRADE_STEP = 0.25, TRADE_MAX = 4;
 export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
 
 // Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
 // no money), and money stays in the world it was made in. Launching a rocket unlocks the
 // next world, and you can travel back and forth. Every world has the same prices; each
-// has a perk so it's worth revisiting.
+// has a perk, and trade routes with your other worlds make every town earn more.
 export const WORLDS = [
-  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 }, price: 1 },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 }, price: 3 },
-  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: rocket launches here give 2× Engineering Points.', perks: { ep: 2 }, price: 15 },
-  { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power, and launches give 3× Engineering Points.', perks: { power: 3, ep: 3 }, price: 75 },
+  { id: 'colorado', name: 'Golden, Colorado', short: 'Colorado', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
+  { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: the Rocket Bay builds rockets 2× faster.', perks: { rocket: 2 } },
+  { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power.', perks: { power: 3 } },
 ];
-// a building's numbers in a given world (the same everywhere now)
-// Each world costs more than the last (building, upgrading, land, roads and managers all
-// scale by its price), because you arrive with more Engineering Points each time: about
-// 2.4x income in the Mojave, 8x on the Moon and 34x on Mars. Without this every world
-// would go faster than the one before; with it each one takes a little longer.
+// a building's numbers in a given world. A world with a `price` would scale every cost by
+// it; none do now (they were for Engineering Points, which trade routes replaced).
 export function inWorld(def, world) {
   const p = world?.price || 1;
   if (!def || p === 1) return def;

@@ -295,6 +295,11 @@ body.launching #hud, body.launching .boost, body.launching .contract, body.launc
 .w-card.locked { opacity: .6; }
 .w-swatch { width: 46px; height: 46px; flex-shrink: 0; display: block; filter: drop-shadow(0 2px 0 rgba(0,0,0,.15)); }
 .w-swatch svg { display: block; }
+.w-card.new { outline: 3px dashed var(--red, #d9482b); outline-offset: -3px; }
+.tr-btns { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.pips { display: flex; gap: 4px; margin-top: 3px; }
+.pips i { width: 18px; height: 6px; border-radius: 3px; background: rgba(0,0,0,.14); }
+.pips i.on { background: var(--green); }
 .w-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .w-info b { font: 800 16px var(--display); }
 .w-info small { font-size: 12px; color: var(--ink-soft); line-height: 1.3; }
