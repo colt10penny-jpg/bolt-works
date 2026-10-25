@@ -1,6 +1,6 @@
 {
   "appId": "com.boltworks.idlefactory",
-  "appName": "Bolt Works",
+  "appName": "Engineer Empire",
   "webDir": "dist",
   "android": { "backgroundColor": "#8cc65f" },
   "ios": { "backgroundColor": "#8cc65f", "contentInset": "never" },

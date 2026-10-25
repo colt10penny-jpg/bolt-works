@@ -382,7 +382,7 @@ export class Game {
   invalidate() { this.cache = {}; }
   get cash() { return this.run.cash; }
   // each world's town has a name the player picks (raw: null if they haven't yet)
-  townName(w = this.s.current, raw = false) { return this.s.worlds[w]?.name || (raw ? null : w === 'colorado' ? 'Bolt Works' : worldById(w).short); }
+  townName(w = this.s.current, raw = false) { return this.s.worlds[w]?.name || (raw ? null : w === 'colorado' ? 'Engineer Empire' : worldById(w).short); }
   setTownName(w, name) { if (this.s.worlds[w]) { this.s.worlds[w].name = name; this.emit('change'); } }
   cashIn(w) { return this.s.worlds[w]?.cash || 0; }
   get levels() { return this.run.levels; }

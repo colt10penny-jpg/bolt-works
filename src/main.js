@@ -882,10 +882,12 @@ function openSettings() {
     <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
     <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
     <p>Rockets launched: <b>${game.s.launches}</b> · Trade bonus here: <b>+${Math.round((game.tradeMult() - 1) * 100)}%</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
-    <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it.</p>
+    <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it. Your player ID: <b class="pid">${String(game.s.playerId).slice(0, 13)}</b></p>
+    <button class="btn plain toggle" data-act="privacy">Privacy policy</button>
     <button class="btn danger" data-act="reset-ask">Start over</button>
     <button class="btn plain" data-act="back">Back</button>`, async act => {
     if (act === 'back') openMenu();
+    if (act === 'privacy') { openPrivacy(); return; }
     if (act === 'rename') tutorial.askName(game.s.current, openSettings);
     if (act === 'sound') {
       game.s.settings.sound = !game.s.settings.sound;
@@ -918,6 +920,18 @@ function openSettings() {
       });
     }
   });
+}
+// the privacy policy: the same page that's published on the web (public/privacy.html),
+// shown inside the game so it works offline too
+async function openPrivacy() {
+  let body = '<p>The privacy policy could not be loaded.</p>';
+  try {
+    const html = await (await fetch('privacy.html')).text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const card = doc.getElementById('policy');
+    if (card) { card.querySelector('h1')?.remove(); card.querySelectorAll('a[href^="http"]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; }); body = card.innerHTML; }
+  } catch { /* offline in a browser: fall back to the message above */ }
+  openModal(`<h2>Privacy policy</h2><div class="policy">${body}</div><button class="btn plain" data-act="back">Back</button>`, act => { if (act === 'back') openSettings(); }, openSettings);
 }
 $('menu-btn').addEventListener('click', openMenu);
 

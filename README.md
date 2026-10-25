@@ -1,4 +1,4 @@
-# Bolt Works
+# Engineer Empire
 
 Idle factory game: a fixed-angle 3D town where you build and upgrade factories. Monetized with rewarded ads (Google AdMob).
 

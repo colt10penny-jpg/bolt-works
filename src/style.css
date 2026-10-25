@@ -541,3 +541,11 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 .sh-name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sh-name-row b { min-width: 0; }
 .lv-pill { flex-shrink: 0; padding: 2px 9px 1px; border-radius: 999px; background: var(--gold); color: var(--gold-ink); box-shadow: inset 0 -2px 0 var(--gold-d); font: 800 15px/1.25 var(--display); font-variant-numeric: tabular-nums; }
+
+/* the privacy policy inside the game: a scrolling page of text */
+.policy { max-height: 58vh; overflow-y: auto; text-align: left; padding: 4px 4px 8px; -webkit-overflow-scrolling: touch; }
+.policy h2 { font: 800 17px var(--body); margin: 14px 0 4px; }
+.policy p, .policy li { font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+.policy ul { padding-left: 18px; margin: 4px 0; }
+.policy .date { font-size: 12px; }
+.pid { font-variant-numeric: tabular-nums; }
