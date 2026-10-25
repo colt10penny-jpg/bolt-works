@@ -30,7 +30,7 @@ const LANDER_AT = [40, 40];
 let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
 const THEME = {
-  colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
+  colorado: { ground: 0x91cb6a, sky: 0x91cb6a, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x3c4654, walk: 0xe0ded4, pad: 0xe0dfd8 },
   desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0x9a7248, pad: 0xcaa67a },
   mars:     { ground: 0x7a2e1c, sky: 0x7a2e1c, hemiSky: 0xffe0bc, hemiGround: 0x6a2a1a, sun: 2.4, hemi: 1.4, road: 0x3b2a28, walk: 0xb98a74, pad: 0xd8c2b6 },
   moon:     { ground: 0x9c9ca2, sky: 0x9c9ca2, hemiSky: 0xdfe6ff, hemiGround: 0x3a3d48, sun: 2.6, hemi: 1.2, road: 0x4b4e57, walk: 0xb4b4ba, pad: 0xc9c9cf },
@@ -192,7 +192,9 @@ export class World {
 
     this.scene = new THREE.Scene();
     this.target = new THREE.Vector3(14, 0, 17);
-    this.zoom = 1;
+    // Start close enough to appreciate the buildings on both phones and desktops.
+    // Pinch/wheel zoom is unchanged and the player can still zoom back out.
+    this.zoom = 1.38;
     this.shake = 0;
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
 
@@ -246,7 +248,7 @@ export class World {
     c.left = -45; c.right = 45; c.top = 45; c.bottom = -45; c.near = 1; c.far = 120;
     sun.shadow.bias = -0.0005;
     sun.shadow.normalBias = 0.035;
-    sun.shadow.radius = 3;
+    sun.shadow.radius = 4; // softer edges like a miniature tabletop scene
     this.sun = sun;
     this.scene.add(sun, sun.target);
   }
@@ -371,6 +373,17 @@ export class World {
     if (grassC) g.add(new THREE.Mesh(mergeGeometries(blades.map(b => b.toNonIndexed())), mat(grassC, { flatShading: true })));
     g.add(new THREE.Mesh(mergeGeometries(stones.map(b => b.index ? b.toNonIndexed() : b)), mat(stoneC, { flatShading: true })));
     blades.forEach(b => b.dispose());
+    // Make empty factory plots read as planned construction sites instead of
+    // indistinguishable patches of forest. Low, unlit ground marks add no lights
+    // or expensive effects and remain invisible once the plot is developed.
+    const edgeC = theme === 'colorado' ? 0xffcb49 : theme === 'desert' ? 0xf3cc74 : theme === 'mars' ? 0xffa46f : 0x8fc9ff;
+    const boundary = [
+      box(9.4, 0.07, 0.13, edgeC, 0, 0.10, -4.58),
+      box(9.4, 0.07, 0.13, edgeC, 0, 0.10, 4.58),
+      box(0.13, 0.07, 9.4, edgeC, -4.58, 0.10, 0),
+      box(0.13, 0.07, 9.4, edgeC, 4.58, 0.10, 0),
+    ];
+    for (const m of boundary) { m.castShadow = false; m.receiveShadow = false; g.add(m); }
     // the sign
     g.add(box(0.14, 1.5, 0.14, 0x7a5230, 2.6, 0, -2.6));
     const sign = box(1.7, 0.9, 0.1, 0xf4efe0, 2.6, 1.15, -2.53);
