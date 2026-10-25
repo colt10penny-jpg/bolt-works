@@ -19,6 +19,7 @@ import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, NET } from './t
 
 import { plotsOf, boundsOf, startView } from './layout.js';
 import { STYLE, PROPS } from './upgrades.js';
+import { WEST_STYLE, westGear } from './west-upgrades.js';
 import { buildWing } from './wings.js';
 const LOT = 10;
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
@@ -567,11 +568,13 @@ export class World {
     // each kind of building has its own upgrades: what goes on the roof (or the yard) at
     // levels 3, 5, 7 and 8, and a golden beacon at level 10
     const style = STYLE[this.typeOf?.(id)] || STYLE.default;
+    // the Wild West has its own additions and gear for every kind of building
+    const west = this.themeName === 'desert' ? (WEST_STYLE[this.typeOf?.(id)] || WEST_STYLE.default) : null;
     const later = [], ground = [];   // no room on the main roof: onto a wing, or into the yard
     [2, 4, 6, 7, 9].forEach((need, k) => {
       if (tier < need) return;
-      const name = k < 4 ? style.props[k] : 'beacon';
-      const P = PROPS[name](color, k);
+      const name = k < 4 ? (west ? west.props[k] : style.props[k]) : 'beacon';
+      const P = west ? westGear(name, color, this.typeOf?.(id)) : PROPS[name](color, k);
       if (P.ground) { ground.push(P.g); return; }
       const p = roofSpot(P.fw, P.fd, P.minY || 1.8);
       if (p) { P.g.position.copy(p); g.add(P.g); } else later.push(P.g);
@@ -588,17 +591,36 @@ export class World {
     // (only factories trucks deliver to: no bays on power, compute or the headquarters)
     if (!['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) ex.add(this.#bay(side, color));
     // free corners: an extra wing for each upgrade tier, parked cars in the rest
-    const corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
-      .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8))
-      .filter(([cx, cz]) => { const hit = topAt(lx + cx, lz + cz); return !(hit && hit.point.y > 0.6); });
+    let corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
+      .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8));
+    if (west) {
+      // On the frontier the barrels, horses and hay round the main building only hold a
+      // corner until something better comes along: a corner is free as long as the main
+      // building itself hardly stands in it (sampled on a grid, ignoring low things like
+      // track and boardwalk), and whatever claims it clears the clutter away.
+      const coreG = m.group.children.find(o => o.userData.core);
+      const coreMeshes = []; coreG?.traverse(o => { if (o.isMesh) coreMeshes.push(o); });
+      const coreTop = (x, z) => { ray.set(new THREE.Vector3(x, 80, z), down); const h = ray.intersectObjects(coreMeshes, false)[0]; return h ? h.point.y - L.group.position.y : 0; };
+      corners = corners.map(([cx, cz]) => [Math.sign(cx) * 3.2, Math.sign(cz) * 3.2]).filter(([cx, cz]) => {
+        let tall = 0;
+        for (let a = -1; a <= 1; a += 0.5) for (let b = -1; b <= 1; b += 0.5) if (coreTop(lx + cx + a, lz + cz + b) > 0.6) tall++;
+        return tall <= 4;
+      });
+      // the corners the camera sees best fill in first
+      corners.sort((a, b) => (b[0] + b[1]) - (a[0] + a[1]));
+    } else corners = corners.filter(([cx, cz]) => { const hit = topAt(lx + cx, lz + cz); return !(hit && hit.point.y > 0.6); });
+    const clearCorner = ([cx, cz]) => {
+      if (!west) return;
+      for (const o of [...m.group.children]) if (!o.userData.core && Math.abs(o.position.x - cx) < 1.45 && Math.abs(o.position.z - cz) < 1.45) m.group.remove(o);
+    };
     const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
-    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { const wg = this.#wing(cx, cz, color, tier, i, style.wing); ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
+    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { clearCorner([cx, cz]); const wg = this.#wing(cx, cz, color, tier, i, west ? west.wings[i] : style.wing); ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
     // yard props take the free corners first; anything that didn't fit on the main roof
     // goes on a wing roof, or failing that into a free corner
     let spare = corners.slice(wings);
     ground.forEach(it => {
       const c = spare.shift();
-      if (c) { it.position.set(c[0], 0.15, c[1]); ex.add(it); } else later.push(it);
+      if (c) { clearCorner(c); it.position.set(c[0], 0.15, c[1]); ex.add(it); } else later.push(it);
     });
     later.forEach((it, i) => {
       const at = wingTops[i % Math.max(1, wingTops.length)] || (spare[i] ? [spare[i][0], 0.15, spare[i][1]] : null);

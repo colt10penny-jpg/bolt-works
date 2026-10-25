@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { box, cyl, mat } from './models.js';
 import { styledWing } from './upgrades.js';
 import { falseFront, wWin, porch, balcony, barrel } from './buildings-west.js';
+import { westWing as frontierWing } from './west-upgrades.js';
 import { TRIM, DARK, IRON, HAZ, GLASS, WARM, shade, mesh, at, onWall, win, door, sideDoor, hall, tank, railing } from './buildings.js';
 
 const W = 2.3, D = 2.2, FH = 0.8;
@@ -247,7 +248,13 @@ export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
   const floors = 2 + Math.floor(Math.min(9, tier) / 3) + (i === 0 ? 1 : 0) + (tier >= 8 ? 1 : 0);
   const o = { color, tier, cx, cz, floors, theme };
   let top;
-  if (theme === 'desert') top = westWing(g, { ...o, i });
+  if (theme === 'desert') {
+    // each frontier building has its own additions (west-upgrades.js); a wing in a back
+    // corner on the right turns to face the side street so its front can be seen
+    top = frontierWing(kind, g, { ...o, i });
+    if (cz < 0 && cx > 0) g.rotation.y = Math.PI / 2;
+    
+  }
   else if (theme === 'mars') top = marsWing(g, o);
   else if (theme === 'moon') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
   else if (kind === 'silo') top = siloWing(g, o);

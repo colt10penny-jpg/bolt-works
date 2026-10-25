@@ -15,7 +15,7 @@ const WOOD = 0x9a6b42, WOOD_D = 0x6e4a2c, WOOD_L = 0xc29a66, GREY = 0x8f8574, TR
 // The main building of each lot is built at this scale (in a group of its own) so it fills
 // the lot; the barrels, horses and poles round the corners stay life size.
 const S = 1.3;
-function core(g) { const c = new THREE.Group(); c.scale.setScalar(S); g.add(c); return c; }
+function core(g) { const c = new THREE.Group(); c.scale.setScalar(S); c.userData.core = true; g.add(c); return c; }
 
 // ---- frontier parts ----
 // vertical boards (battens) on the front (+z) and right (+x) faces of a w x h x d box
@@ -24,38 +24,95 @@ function battens(g, x, z, w, d, y0, h, color) {
   for (let a = -w / 2 + 0.22; a < w / 2 - 0.1; a += 0.3) g.add(onWall('z', x + a, y0, z + d / 2, 0.04, h, 0.03, c));
   for (let a = -d / 2 + 0.22; a < d / 2 - 0.1; a += 0.3) g.add(onWall('x', z + a, y0, x + w / 2, 0.04, h, 0.03, c));
 }
-// a window: white trim, a dark (warm at night) pane with muntins, a sill and a lintel
-function wWin(g, axis, a, y, f, w = 0.5, h = 0.72, trim = TRIM, glass = GLASS) {
+// a window: white trim, a dark (warm at night) pane with muntins, a sill and a lintel, and
+// (shut = a colour) a pair of board shutters folded back either side
+function wWin(g, axis, a, y, f, w = 0.5, h = 0.72, trim = TRIM, glass = GLASS, shut = null) {
   const s = Math.sign(f) || 1;
   g.add(onWall(axis, a, y - 0.06, f, w + 0.14, h + 0.12, 0.04, trim));
   g.add(onWall(axis, a, y, f + s * 0.02, w, h, 0.04, glass, glass === WARM ? { emissive: 0xff9a3a, emissiveIntensity: 0.5 } : undefined));
   g.add(onWall(axis, a, y, f + s * 0.05, 0.035, h, 0.02, trim), onWall(axis, a, y + h * 0.5, f + s * 0.05, w, 0.035, 0.02, trim));
   g.add(onWall(axis, a, y + h + 0.04, f, w + 0.26, 0.08, 0.1, trim), onWall(axis, a, y - 0.1, f, w + 0.2, 0.05, 0.12, trim));
+  if (shut != null) for (const e of [-1, 1]) {
+    g.add(onWall(axis, a + e * (w / 2 + 0.17), y - 0.04, f, w * 0.42, h + 0.08, 0.035, shut));
+    for (const k of [0.25, 0.75]) g.add(onWall(axis, a + e * (w / 2 + 0.17), y + h * k - 0.02, f + s * 0.035, w * 0.42, 0.03, 0.015, shade(shut, -0.25)));
+  }
 }
-// a painted sign board with a frame and pale "lettering"
-function wSign(g, axis, a, y, f, w, h, color, letters = 5, ink = CREAM) {
+// Painted sign lettering: drawn once per sign on a canvas (a serif face, an inner border
+// and little diamonds at the ends) and shared after that.
+const SIGNS = new Map();
+function signTex(text, bg, ink, aspect) {
+  const key = text + bg + ink + aspect.toFixed(1);
+  if (SIGNS.has(key)) return SIGNS.get(key);
+  const H = 96, W = Math.max(128, Math.min(1024, Math.round(H * aspect)));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const c = cv.getContext('2d'), hex = n => '#' + n.toString(16).padStart(6, '0');
+  c.fillStyle = hex(bg); c.fillRect(0, 0, W, H);
+  // weathering: a few faint streaks along the boards
+  c.globalAlpha = 0.08; c.fillStyle = '#000';
+  for (let y = 12; y < H; y += 24) c.fillRect(0, y, W, 2);
+  c.globalAlpha = 1;
+  c.strokeStyle = hex(ink); c.lineWidth = 3; c.strokeRect(7, 7, W - 14, H - 14);
+  const pad = 30;
+  let size = H * 0.56;
+  c.font = `bold ${size}px Georgia, 'Times New Roman', serif`;
+  const tw = c.measureText(text).width;
+  if (tw > W - pad * 2) { size *= (W - pad * 2) / tw; c.font = `bold ${size}px Georgia, 'Times New Roman', serif`; }
+  c.fillStyle = hex(ink); c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text, W / 2, H / 2 + size * 0.06);
+  for (const x of [17, W - 17]) { c.beginPath(); c.moveTo(x, H / 2 - 7); c.lineTo(x + 5, H / 2); c.lineTo(x, H / 2 + 7); c.lineTo(x - 5, H / 2); c.closePath(); c.fill(); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
+  SIGNS.set(key, m); return m;
+}
+// a lettered panel facing out from a wall (or standing free when axis is null)
+function textPanel(g, axis, a, y, f, w, h, text, bg, ink) {
+  const s = Math.sign(f) || 1, m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), signTex(text, bg, ink, w / h));
+  if (axis === 'z') { m.position.set(a, y + h / 2, f + s * 0.002); if (s < 0) m.rotation.y = Math.PI; }
+  else { m.position.set(f + s * 0.002, y + h / 2, a); m.rotation.y = s * Math.PI / 2; }
+  g.add(m); return m;
+}
+// a painted sign board with a frame: real lettering when there's text, otherwise a row of
+// pale blocks standing in for it
+function wSign(g, axis, a, y, f, w, h, color, letters = 5, ink = CREAM, text = null) {
   const s = Math.sign(f) || 1;
   g.add(onWall(axis, a, y, f + s * 0.02, w + 0.12, h + 0.12, 0.04, WOOD_D));
   g.add(onWall(axis, a, y + 0.06, f + s * 0.05, w, h, 0.03, color));
+  if (text) { textPanel(g, axis, a, y + 0.06, f + s * 0.08, w, h, text, color, ink); return; }
   const lw = (w - 0.3) / letters;
   for (let i = 0; i < letters; i++) g.add(onWall(axis, a - (w - 0.3) / 2 + lw * (i + 0.5), y + h * 0.3, f + s * 0.07, lw * 0.66, h * 0.45, 0.02, ink, { emissive: ink, night: 1.4 }));
 }
-// a false-front building: a timber box with a pitched roof behind a tall square facade that
-// hides it, a cornice along the top, a sign, and boards on the walls. Returns the facade top.
-function falseFront(g, { x = 0, z = 0, w, d, h, fh = 0.9, color = WOOD, sign = WOOD_D, letters = 5, roof = SHINGLE, cornice = true }) {
+// a false-front building: a timber box with a shingled pitched roof behind a tall square
+// facade that hides it, a cornice with brackets along the top, a lettered sign, corner
+// boards, battens on the walls and a stovepipe. Returns the facade top.
+function falseFront(g, { x = 0, z = 0, w, d, h, fh = 0.9, color = WOOD, sign = WOOD_D, letters = 5, roof = SHINGLE, cornice = true, text = null, ink = CREAM, pipe = true }) {
   g.add(box(w + 0.2, 0.25, d + 0.2, 0x7a6a55, x, 0, z));                                       // stone footing
+  for (let k = 0; k < Math.floor(w / 0.5); k++) g.add(onWall('z', x - w / 2 + 0.3 + k * 0.5, 0.08, z + d / 2 + 0.1, 0.02, 0.1, 0.01, 0x5e5244));
   g.add(box(w, h, d, color, x, 0.25, z));
   battens(g, x, z, w, d, 0.25, h, color);
-  // a low pitched roof running back from the facade
-  const sh = new THREE.Shape(); sh.moveTo(-w / 2 - 0.12, 0); sh.lineTo(w / 2 + 0.12, 0); sh.lineTo(0, 0.6); sh.closePath();
+  const cb = shade(color, -0.3);
+  for (const e of [-1, 1]) { g.add(onWall('z', x + e * (w / 2 - 0.05), 0.25, z + d / 2, 0.1, h, 0.04, cb)); g.add(onWall('x', z + e * (d / 2 - 0.05), 0.25, x + w / 2, 0.1, h, 0.04, cb)); }
+  // a low pitched roof running back from the facade, with shingle courses down each slope
+  const hw = w / 2 + 0.12, rise = 0.6, sl = Math.atan2(rise, hw);
+  const sh = new THREE.Shape(); sh.moveTo(-hw, 0); sh.lineTo(hw, 0); sh.lineTo(0, rise); sh.closePath();
   const rg = new THREE.ExtrudeGeometry(sh, { depth: d - 0.1, bevelEnabled: false }); rg.translate(0, 0, -(d - 0.1) / 2);
   const r = mesh(rg, roof); r.position.set(x, 0.25 + h, z - 0.05); g.add(r);
+  for (const e of [-1, 1]) for (let k = 1; k <= 4; k++) {
+    const t = k / 5, c = box(0.05, 0.03, d - 0.14, shade(roof, -0.25), x + e * hw * (1 - t), 0.25 + h + rise * t - 0.005, z - 0.05);
+    c.rotation.z = e * sl; g.add(c);
+  }
+  g.add(box(0.1, 0.06, d - 0.1, shade(roof, -0.35), x, 0.25 + h + rise - 0.03, z - 0.05));     // ridge cap
+  if (pipe) {
+    const px = x + w * 0.22, pz = z - d * 0.2, py = 0.25 + h + rise * (1 - 0.44) - 0.05;
+    g.add(cyl(0.06, 0.06, 0.75, 0x2a2d33, px, py, pz, 8), cyl(0.1, 0.1, 0.05, 0x2a2d33, px, py + 0.75, pz, 8));
+    const cap = mesh(new THREE.ConeGeometry(0.13, 0.12, 8), 0x2a2d33); cap.position.set(px, py + 0.9, pz); g.add(cap);
+  }
   // the facade, standing proud of the roof, with a stepped top
   const fy = 0.25 + h, f = z + d / 2;
   g.add(box(w + 0.12, fh, 0.14, color, x, fy, f - 0.05));
   g.add(box(w * 0.5, 0.3, 0.14, color, x, fy + fh, f - 0.05));
+  for (const e of [-1, 1]) g.add(box(0.1, fh + 0.05, 0.18, cb, x + e * (w / 2 + 0.01), fy, f - 0.04));   // pilasters up the facade edges
   if (cornice) { g.add(box(w + 0.3, 0.1, 0.3, TRIM, x, fy + fh - 0.05, f + 0.02), box(w * 0.5 + 0.2, 0.08, 0.28, TRIM, x, fy + fh + 0.28, f + 0.01)); for (let k = 0; k < 6; k++) g.add(box(0.08, 0.14, 0.12, TRIM, x - w / 2 + 0.2 + k * (w - 0.4) / 5, fy + fh - 0.19, f + 0.04)); }
-  wSign(g, 'z', x, fy + 0.12, f + 0.02, Math.min(w - 0.5, 2.6), fh - 0.35, sign, letters);
+  wSign(g, 'z', x, fy + 0.12, f + 0.02, Math.min(w - 0.5, 2.6), fh - 0.35, sign, letters, ink, text);
   return fy + fh + 0.3;
 }
 // a covered porch / boardwalk along a wall: a plank deck, posts, a sloping shed roof
@@ -64,7 +121,12 @@ function porch(g, { axis = 'z', a = 0, f, len, depth = 0.9, h = 1.6, color = WOO
   g.add(P(0, depth / 2, 0.12, len, 0.12, depth, 0x8a6a45));
   for (let k = 0; k < Math.round(len / 0.3); k++) g.add(P(-len / 2 + 0.15 + k * 0.3, depth / 2, 0.245, 0.02, 0.01, depth, 0x6e5232));
   const n = Math.max(2, Math.round(len / 1.3));
-  for (let i = 0; i <= n; i++) g.add(P(-len / 2 + 0.06 + (len - 0.12) * i / n, depth - 0.06, 0.24, 0.1, h - 0.1, 0.1, color));
+  for (let i = 0; i <= n; i++) {
+    const along = -len / 2 + 0.06 + (len - 0.12) * i / n;
+    g.add(P(along, depth - 0.06, 0.24, 0.1, h - 0.1, 0.1, color));
+    // a little bracket at the top of each post, on both sides where there's room
+    for (const e of [-1, 1]) { if ((i === 0 && e < 0) || (i === n && e > 0)) continue; const b = P(along + e * 0.13, depth - 0.06, h - 0.32, 0.22, 0.05, 0.05, color); if (axis === 'z') b.rotation.z = -e * 0.7; else b.rotation.x = e * 0.7; g.add(b); }
+  }
   const roof = P(0, depth / 2, h + 0.1, len + 0.2, 0.06, depth + 0.25, SHINGLE); if (axis === 'z') roof.rotation.x = 0.16 * s; else roof.rotation.z = -0.16 * s; g.add(roof);
   g.add(P(0, depth - 0.06, h, len, 0.1, 0.1, color));
   if (rail) for (const side of [-1, 1]) { g.add(P(side * len / 2 * 0.75, depth - 0.06, 0.62, len * 0.25, 0.06, 0.05, color)); }
@@ -163,7 +225,15 @@ Object.assign(BUILDERS, {
     sheave.position.set(hx, H + 0.55, hz); sheave.rotation.y = Math.PI / 2; c.add(sheave);
     rod(c, [hx, H + 0.55, hz + 0.42], [hx + 2.5, 1.4, hz + 0.42], 0.02, 0x2a2d33);           // the cable to the hoist
     // the hoist house: a false front with "MINE" sign
-    falseFront(c, { x: 1.85, z: -1.4, w: 2.1, d: 1.7, h: 1.5, fh: 0.8, color: GREY, sign: color, letters: 4 });
+    falseFront(c, { x: 1.85, z: -1.4, w: 2.1, d: 1.7, h: 1.5, fh: 0.8, color: GREY, sign: 0x2a2420, text: 'GOLD MINE', ink: 0xe8c46a });
+    c.add(onWall('z', 1.4, 0.25, -0.55, 0.55, 1.15, 0.05, 0x3a2a1e)); wWin(c, 'z', 2.35, 0.75, -0.55, 0.45, 0.5, TRIM, WARM, 0x6e4a2c);
+    // a rail round the shaft collar, a lantern on the headframe and the shaft bell
+    for (const [x0, z0, x1, z1] of [[-0.6, 0.6, 0.6, 0.6], [0.6, -0.6, 0.6, 0.6], [-0.6, -0.6, -0.6, 0.6]]) { c.add(box(0.06, 0.6, 0.06, WOOD_D, hx + x0, 0.25, hz + z0), box(0.06, 0.6, 0.06, WOOD_D, hx + x1, 0.25, hz + z1)); rod(c, [hx + x0, 0.75, hz + z0], [hx + x1, 0.75, hz + z1], 0.025, 0xb5532a); }
+    c.add(box(0.14, 0.2, 0.14, 0xfff1cf, hx + 0.45, 2.6, hz + 0.45, { emissive: 0xffc070, night: 2.6 }), box(0.18, 0.04, 0.18, 0x2a2d33, hx + 0.45, 2.8, hz + 0.45));
+    c.add(box(0.3, 0.3, 0.06, 0x6e4a2c, hx + 0.9, 1.3, hz + 0.78)); c.add(cyl(0.06, 0.1, 0.12, 0xc9a24a, hx + 0.9, 1.32, hz + 0.84, 8));
+    // a chute from the headframe's ore bin down to the cart
+    const ch = box(0.4, 0.06, 1.2, WOOD_L, hx + 0.6, 1.0, hz + 1.6); ch.rotation.x = 0.55; c.add(ch);
+    for (const e of [-0.2, 0.2]) { const sd = box(0.04, 0.16, 1.2, WOOD_D, hx + 0.6 + e, 1.0, hz + 1.6); sd.rotation.x = 0.55; c.add(sd); }
     wWin(c, 'x', -1.4, 0.75, 2.9, 0.5, 0.55);
     const stack = [[2.5, -2.2]]; for (const [sx, sz] of stack) { c.add(cyl(0.12, 0.14, 1.4, 0x3a3f48, sx, 2.1, sz, 10)); }
     // rails from the shaft out to the tailings, with a cart that rolls along them
@@ -209,6 +279,12 @@ Object.assign(BUILDERS, {
     for (let k = 0; k < 4; k++) { const x = 2.6, z = 2.4 - k * 1.0, y = 1.3 + k * 0.45; c.add(box(0.08, y, 0.08, WOOD_D, x - 0.2, 0.15, z), box(0.08, y, 0.08, WOOD_D, x + 0.2, 0.15, z)); }
     const flume = box(0.35, 0.22, 4.0, WOOD_L, 2.6, 2.4, 0.9); flume.rotation.x = -0.23; c.add(flume);
     const water = box(0.25, 0.02, 4.0, 0x4a8ac8, 2.6, 2.58, 0.9, { emissive: 0x2a5a8a, emissiveIntensity: 0.2 }); water.rotation.x = -0.23; c.add(water);
+    wSign(c, 'z', -0.4, 1.42, 1.1, 1.9, 0.3, 0x2a2420, 5, 0xe8c46a, 'STAMP MILL');
+    for (const lx of [-1.6, 0.8]) c.add(box(0.12, 0.18, 0.12, 0xfff1cf, lx, 1.95, 1.2, { emissive: 0xffc070, night: 2.6 }));
+    // the drive belt from the engine house up to the camshaft, and a catwalk along the top shed
+    const belt = box(0.12, 0.03, 1.4, 0x2a2420, 0.95, 1.7, 1.0); belt.rotation.x = 0.6; c.add(belt);
+    c.add(box(3.6, 0.06, 0.4, 0x8a6a45, -0.8, 3.0, -0.65)); for (let k = 0; k < 8; k++) c.add(box(0.04, 0.4, 0.04, CREAM, -2.5 + k * 0.48, 3.06, -0.47));
+    c.add(box(3.6, 0.04, 0.04, CREAM, -0.8, 3.44, -0.47));
     hay(g, -2.6, 2.6, 0.15, 0.3); barrel(g, 1.3, 2.7); barrel(g, 0.9, 2.85);
     smoke.forEach(v => v.multiplyScalar(S));
     return { group: g, top: 5.6 * S, smoke, anim(t) { stamps.forEach((s, i) => { const p = (t * 1.4 + i * 0.37) % 1; s.position.y = 0.55 + (p < 0.75 ? p / 0.75 : 1 - (p - 0.75) / 0.25) * 0.4; }); } };
@@ -226,9 +302,16 @@ Object.assign(BUILDERS, {
     // a stepped false front with a big gilded sign
     c.add(box(w + 0.1, 0.9, 0.16, color, x, 0.3 + h, z + d / 2 - 0.05), box(w * 0.45, 0.35, 0.16, color, x, 1.2 + h, z + d / 2 - 0.05));
     c.add(box(w + 0.3, 0.12, 0.3, TRIM, x, 1.15 + h, z + d / 2), box(w * 0.45 + 0.2, 0.1, 0.28, TRIM, x, 1.53 + h, z + d / 2));
-    wSign(c, 'z', x, h + 0.42, z + d / 2 + 0.02, 2.0, 0.55, 0x2a2d33, 4, 0xe8c46a);
+    wSign(c, 'z', x, h + 0.42, z + d / 2 + 0.02, 2.0, 0.55, 0x2a2d33, 4, 0xe8c46a, 'BANK');
+    // stone quoins up the front corners, a brick chimney, and a lettered panel over the door
+    for (let k = 0; k < 7; k++) for (const e of [-1, 1]) { const qw = k % 2 ? 0.22 : 0.34; c.add(onWall('z', x + e * (w / 2 - qw / 2), 0.35 + k * 0.4, z + d / 2, qw, 0.34, 0.05, 0xd8d0c0)); c.add(onWall('x', z + d / 2 - qw / 2, 0.35 + k * 0.4, x + w / 2, qw, 0.34, 0.05, 0xd8d0c0)); }
+    c.add(box(0.5, 1.0, 0.5, BRICK, x - 1.2, 0.3 + h, z - 0.8), box(0.6, 0.1, 0.6, 0x5a3a2a, x - 1.2, 1.3 + h, z - 0.8));
+    textPanel(c, 'z', x + 1.55, 1.93, z + d / 2 + 0.38, 1.0, 0.18, 'EST. 1872', 0x2a2d33, 0xe8c46a);
+    // a round clock face on the corner over the entrance
+    const clock = mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 20), CREAM); clock.rotation.x = Math.PI / 2; clock.position.set(x + 1.55, 2.6, z + d / 2 + 0.06); c.add(clock);
+    c.add(box(0.03, 0.2, 0.02, 0x2a2d33, x + 1.55, 2.6, z + d / 2 + 0.1), box(0.14, 0.03, 0.02, 0x2a2d33, x + 1.6, 2.6, z + d / 2 + 0.1));
     // windows with bars, two floors, front and side
-    for (const a of [-1.2, 0.6]) for (const y of [0.85, 2.15]) { wWin(c, 'z', x + a, y, z + d / 2, 0.55, 0.7); if (y < 1) for (let k = 0; k < 4; k++) c.add(onWall('z', x + a - 0.2 + k * 0.13, y, z + d / 2 + 0.07, 0.03, 0.7, 0.03, 0x2a2d33)); }
+    for (const a of [-1.2, 0.6]) for (const y of [0.85, 2.15]) { wWin(c, 'z', x + a, y, z + d / 2, 0.55, 0.7, TRIM, y > 1 ? WARM : GLASS, y > 1 ? 0x2a3a4a : null); if (y < 1) for (let k = 0; k < 4; k++) c.add(onWall('z', x + a - 0.2 + k * 0.13, y, z + d / 2 + 0.07, 0.03, 0.7, 0.03, 0x2a2d33)); }
     for (const a of [-0.8, 0.5]) for (const y of [0.85, 2.15]) wWin(c, 'x', z + a, y, x + w / 2, 0.55, 0.7);
     // the entrance: a cut corner with double doors under a little pediment and columns
     c.add(onWall('z', x + 1.55, 0.3, z + d / 2, 0.8, 1.4, 0.06, 0x3a2a1e));
@@ -248,12 +331,18 @@ Object.assign(BUILDERS, {
   // with barrels, sacks and crates, a ramp, and a wagon wheel leaning by the steps
   genstore(color) {
     const g = new THREE.Group(), c = core(g);
-    const top = falseFront(c, { x: -0.35, z: -0.6, w: 3.6, d: 2.6, h: 2.0, fh: 1.0, color, sign: 0x2a3a2a, letters: 7 });
+    const top = falseFront(c, { x: -0.35, z: -0.6, w: 3.6, d: 2.6, h: 2.0, fh: 1.0, color, sign: 0x2a3a2a, text: 'GENERAL STORE' });
     for (const a of [-1.2, 0.5]) wWin(c, 'z', -0.35 + a, 0.85, 0.7, 0.7, 0.9, TRIM, WARM);
     c.add(onWall('z', -0.05 + 0.6, 0.25, 0.7, 0.75, 1.45, 0.05, 0x3a2a1e));
-    wSign(c, 'z', -1.25, 1.95, 0.7, 1.0, 0.28, 0xb5532a, 4);
-    wSign(c, 'z', 0.55, 1.95, 0.7, 1.0, 0.28, 0x2a2d33, 4);
-    wWin(c, 'x', -0.9, 0.85, 1.45, 0.55, 0.7); wWin(c, 'x', 0.2, 0.85, 1.45, 0.55, 0.7);
+    wSign(c, 'z', -1.25, 1.95, 0.7, 1.0, 0.28, 0xb5532a, 4, CREAM, 'DRY GOODS');
+    wSign(c, 'z', 0.55, 1.95, 0.7, 1.0, 0.28, 0x2a2d33, 4, CREAM, 'FEED & SEED');
+    // a bench, a hanging lantern, a coffee sign on the side wall, and a rack of brooms
+    // and shovels by the door
+    c.add(box(0.9, 0.06, 0.28, 0x8a6a45, -0.35, 0.62, 1.35), box(0.05, 0.38, 0.26, 0x6e5232, -0.75, 0.25, 1.35), box(0.05, 0.38, 0.26, 0x6e5232, 0.05, 0.25, 1.35));
+    c.add(box(0.13, 0.2, 0.13, 0xfff1cf, 0.0, 1.45, 1.45, { emissive: 0xffc070, night: 2.6 }), box(0.02, 0.15, 0.02, 0x2a2d33, 0.0, 1.65, 1.45));
+    textPanel(c, 'x', -0.35, 1.25, 1.47, 0.9, 0.36, 'COFFEE', 0xb5532a, CREAM);
+    for (let k = 0; k < 4; k++) { const br = box(0.04, 0.9, 0.04, k % 2 ? 0xc9a24a : 0x6e5232, 1.2 + k * 0.08, 0.25, 0.85); br.rotation.z = 0.12; c.add(br); }
+    wWin(c, 'x', -1.3, 0.85, 1.45, 0.5, 0.7, TRIM, GLASS, 0x6e4a2c); wWin(c, 'x', 0.45, 0.85, 1.45, 0.5, 0.7, TRIM, GLASS, 0x6e4a2c);
     porch(c, { axis: 'z', a: -0.35, f: 0.7, len: 3.6, depth: 1.0, h: 1.75, color: TRIM });
     for (const [bx, bz] of [[-1.9, 1.35], [-1.55, 1.45], [1.15, 1.4]]) barrel(c, bx, bz, 0.25);
     for (const [cx, cz] of [[-1.1, 1.45]]) { crate(c, cx, cz, 0.25); crate(c, cx, cz, 0.65, 0.34); }
@@ -270,13 +359,20 @@ Object.assign(BUILDERS, {
   // pulley beam, a split-rail corral with horses, hay bales and a water trough
   livery(color) {
     const g = new THREE.Group(), c = core(g);
-    const top = falseFront(c, { x: -0.6, z: -0.9, w: 3.6, d: 2.8, h: 2.5, fh: 1.1, color, sign: 0xb5532a, letters: 7 });
+    const top = falseFront(c, { x: -0.6, z: -0.9, w: 3.6, d: 2.8, h: 2.5, fh: 1.1, color, sign: 0xb5532a, text: 'LIVERY STABLE' });
+    // lanterns either side of the doors and a big horseshoe nailed up over them (for luck)
+    for (const e of [-1.2, 1.2]) c.add(box(0.13, 0.2, 0.13, 0xfff1cf, -0.6 + e, 1.6, 0.58, { emissive: 0xffc070, night: 2.6 }));
+    const shoe = mesh(new THREE.TorusGeometry(0.2, 0.045, 6, 14, Math.PI * 1.4), 0x8a8f99, { metalness: 0.6, roughness: 0.4 }); shoe.rotation.z = -Math.PI * 0.2; shoe.position.set(-0.6, 2.9, 0.58); c.add(shoe);
+    // a saddle on a rail by the door and a feed bin
+    c.add(box(0.9, 0.05, 0.05, WOOD_D, 1.1, 0.85, 0.7), box(0.05, 0.6, 0.05, WOOD_D, 0.7, 0.25, 0.7), box(0.05, 0.6, 0.05, WOOD_D, 1.5, 0.25, 0.7));
+    c.add(box(0.36, 0.14, 0.3, 0x5a2a1a, 1.1, 0.88, 0.7), box(0.12, 0.1, 0.12, 0x3a2418, 1.0, 1.02, 0.7));
+    c.add(box(0.7, 0.45, 0.4, 0x8a6a45, -2.05, 0.25, 0.75), box(0.75, 0.05, 0.45, 0x6e4a2c, -2.05, 0.7, 0.75));
     // big double doors with Z-braces, and the loft door above with a hay-hoist beam
     for (const e of [-0.45, 0.45]) { c.add(onWall('z', -0.6 + e, 0.25, 0.5, 0.86, 1.75, 0.06, shade(color, -0.12))); const zb = onWall('z', -0.6 + e, 1.0, 0.56, 0.08, 1.6, 0.03, TRIM); zb.rotation.z = e > 0 ? 0.45 : -0.45; c.add(zb); c.add(onWall('z', -0.6 + e, 0.35, 0.56, 0.8, 0.07, 0.03, TRIM), onWall('z', -0.6 + e, 1.9, 0.56, 0.8, 0.07, 0.03, TRIM)); }
     c.add(onWall('z', -0.6, 2.15, 0.5, 0.7, 0.55, 0.06, 0x3a2a1e));
     c.add(box(0.12, 0.12, 0.8, WOOD_D, -0.6, 2.85, 0.75)); rod(c, [-0.6, 2.85, 1.12], [-0.6, 1.9, 1.12], 0.015, 0x3a3020);
     hay(c, -0.6, 1.0, 1.75, 0);
-    wWin(c, 'x', -1.6, 1.1, 1.2, 0.5, 0.5); wWin(c, 'x', -0.2, 1.1, 1.2, 0.5, 0.5);
+    wWin(c, 'x', -1.6, 1.1, 1.2, 0.5, 0.5, TRIM, GLASS, 0xb5532a); wWin(c, 'x', -0.2, 1.1, 1.2, 0.5, 0.5, TRIM, GLASS, 0xb5532a);
     // the corral: split rails round the front-right corner with two horses
     const cx0 = 1.75, cx1 = 3.6, cz0 = 1.2, cz1 = 3.6;
     for (const [x0, z0, x1, z1] of [[cx0, cz1, cx1, cz1], [cx1, cz0, cx1, cz1], [cx0, cz0, cx0, cz1]]) {
@@ -300,11 +396,17 @@ Object.assign(BUILDERS, {
     c.add(box(w, h, d, color, x, 0.25, z)); battens(c, x, z, w, d, 0.25, h, color);
     c.add(box(w, 0.12, d, CREAM, x, 0.25 + h * 0.45, z));
     // a wide hipped roof hanging well out over the platform, on brackets
-    const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), SHINGLE); roof.rotation.y = Math.PI / 4; roof.scale.set((w + 0.9) / 1.41, 0.8, (d + 1.3) / 1.41); roof.position.set(x, 0.25 + h + 0.4, z + 0.15); c.add(roof);
+    const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), SHINGLE); roof.rotation.y = Math.PI / 4; roof.scale.set((w + 0.5) / 1.41, 0.7, (d + 0.9) / 1.41); roof.position.set(x, 0.25 + h + 0.35, z + 0.1); c.add(roof);
     for (const a of [-1.6, -0.5, 0.6, 1.7]) { const br = box(0.08, 0.08, 0.7, WOOD_D, x + a, 0.25 + h - 0.15, z + d / 2 + 0.3); br.rotation.x = 0.6; c.add(br); }
     for (const a of [-1.3, 0.3, 1.4]) wWin(c, 'z', x + a, 0.75, z + d / 2, 0.5, 0.8, TRIM, WARM);
     c.add(onWall('z', x - 0.5, 0.25, z + d / 2, 0.6, 1.3, 0.05, 0x3a2a1e));
-    wSign(c, 'z', x + 0.85, h - 0.15, z + d / 2 + 0.02, 1.2, 0.3, 0x2a2d33, 5);
+    wSign(c, 'z', x + 0.85, h - 0.15, z + d / 2 + 0.02, 1.2, 0.3, 0x2a2d33, 5, CREAM, 'DEPOT');
+    // the station name board on two posts at the end of the platform, a bench, a trunk,
+    // and the bay window where the stationmaster watches the line
+    for (const e of [-0.6, 0.6]) c.add(box(0.07, 1.0, 0.07, WOOD_D, x - w / 2 - 0.1 + e, 0.33, z + d / 2 + 0.55));
+    textPanel(c, 'z', x - w / 2 - 0.1, 1.0, z + d / 2 + 0.6, 1.5, 0.32, 'TUMBLEWEED GULCH', 0xf1ece0, 0x2a2d33);
+    c.add(box(1.0, 0.06, 0.28, 0x8a6a45, x + 0.4, 0.62, z + d / 2 + 0.3), box(0.05, 0.3, 0.26, 0x6e5232, x - 0.05, 0.33, z + d / 2 + 0.3), box(0.05, 0.3, 0.26, 0x6e5232, x + 0.85, 0.33, z + d / 2 + 0.3));
+    c.add(box(0.5, 0.3, 0.3, 0x5a3a26, x + 1.55, 0.33, z + d / 2 + 0.35), box(0.52, 0.04, 0.32, 0xc9a24a, x + 1.55, 0.5, z + d / 2 + 0.35));
     // the platform and the track running past it
     c.add(box(w + 0.6, 0.18, 0.9, 0x8a6a45, x, 0.15, z + d / 2 + 0.45));
     const tz = 0.75;
@@ -342,6 +444,13 @@ Object.assign(BUILDERS, {
     c.add(onWall('z', bx, 0.15, bz + bd / 2, 1.2, 1.2, 0.05, 0xa8322a));
     for (const e of [-1, 1]) { const x1 = onWall('z', bx, 0.75, bz + bd / 2 + 0.03, 1.55, 0.08, 0.03, TRIM); x1.rotation.z = e * 0.78; c.add(x1); }
     c.add(onWall('z', bx, 0.15, bz + bd / 2 + 0.03, 1.25, 0.08, 0.03, TRIM), onWall('z', bx, 1.35, bz + bd / 2 + 0.03, 1.25, 0.08, 0.03, TRIM));
+    wSign(c, 'z', bx, bh + 0.25, bz + bd / 2 + 0.02, 1.5, 0.26, 0xf1ece0, 5, 0xa8322a, 'ROCKET RANCH');
+    // a hay-loft door, a lantern, and a little brass rocket weathervane on the ridge
+    c.add(onWall('x', bz, 0.75, bx + bw / 2, 0.6, 0.6, 0.05, shade(0xa8322a, -0.2)));
+    c.add(box(0.12, 0.2, 0.12, 0xfff1cf, bx + 0.75, 1.35, bz + bd / 2 + 0.08, { emissive: 0xffc070, night: 2.6 }));
+    c.add(box(0.03, 0.6, 0.03, 0x2a2d33, bx, bh + 1.05, bz));
+    const vr = cyl(0.05, 0.05, 0.3, 0xc9a24a, bx, bh + 1.55 - 0.15, bz, 8); vr.rotation.z = Math.PI / 2; c.add(vr);
+    const vt = mesh(new THREE.ConeGeometry(0.05, 0.12, 8), 0xc9a24a); vt.rotation.z = -Math.PI / 2; vt.position.set(bx + 0.21, bh + 1.55, bz); c.add(vt);
     const tri = mesh(new THREE.CircleGeometry(0.28, 3), TRIM); tri.position.set(bx, bh + 0.5, bz + bd / 2 + 0.12); tri.rotation.z = Math.PI / 2; c.add(tri);
     // the launch tower, a timber derrick beside the pad
     const px = 0.7, pz = 0.4;
@@ -372,6 +481,10 @@ Object.assign(BUILDERS, {
     c.add(box(1.4, 1.1, 1.0, GREY, 0.6, 0.15, 2.4)); battens(c, 0.6, 2.4, 1.4, 1.0, 0.15, 1.1, GREY);
     const r = box(1.6, 0.06, 1.3, TIN, 0.6, 1.3, 2.4); r.rotation.x = 0.2; c.add(r);
     c.add(onWall('z', 0.4, 0.15, 2.9, 0.45, 0.9, 0.04, 0x3a2a1e));
+    textPanel(c, 'z', 0.6, 1.08, 2.94, 1.1, 0.2, 'DYNAMO', 0x2a2d33, 0xe8c46a);
+    // a split-rail fence round the back of the farm
+    for (let k = 0; k <= 6; k++) c.add(box(0.07, 0.6, 0.07, WOOD_D, -3.0 + k, 0.15, -3.1));
+    for (const y of [0.35, 0.6]) c.add(box(6.0, 0.05, 0.05, 0x8a6a45, 0, y, -3.1));
     c.add(box(0.14, 0.14, 0.14, 0xfff1cf, 0.95, 1.0, 2.95, { emissive: 0xffd28a, night: 2.6 }));
     for (const [x, z] of [[-0.5, 2.3], [-0.9, 2.6]]) { c.add(box(0.06, 1.8, 0.06, WOOD_D, x, 0.15, z)); }
     return { group: g, top: 6.0 * S, anim(t, dt) { rotors.forEach((r, i) => { r.rotation.x += dt * (2.4 + i * 0.4); }); } };
@@ -381,7 +494,11 @@ Object.assign(BUILDERS, {
   // marching off with wires on glass insulators, and a key light blinking in Morse
   telegraph(color) {
     const g = new THREE.Group(), c = core(g);
-    const top = falseFront(c, { x: -0.5, z: -0.7, w: 3.0, d: 2.4, h: 1.8, fh: 0.85, color: CREAM, sign: color, letters: 9 });
+    const top = falseFront(c, { x: -0.5, z: -0.7, w: 3.0, d: 2.4, h: 1.8, fh: 0.85, color: CREAM, sign: color, text: 'TELEGRAPH' });
+    textPanel(c, 'z', 0.3, 1.6, 0.55, 0.8, 0.2, 'WIRES SENT', 0x2a2d33, CREAM);
+    // a lamp by the door and a mail sack waiting for the stage
+    c.add(box(0.13, 0.2, 0.13, 0xfff1cf, 0.85, 1.15, 0.55, { emissive: 0xffc070, night: 2.6 }));
+    const sack = mesh(new THREE.SphereGeometry(0.2, 8, 6), 0xc8b48a); sack.scale.set(1, 0.8, 0.7); sack.position.set(1.4, 0.4, 0.2); c.add(sack);
     // a bay window on the front and a door
     c.add(box(1.1, 1.0, 0.35, CREAM, -1.2, 0.4, 0.65));
     for (const a of [-1.55, -1.2, -0.85]) c.add(onWall('z', a, 0.55, 0.82, 0.28, 0.7, 0.03, WARM, { emissive: 0xff9a3a, emissiveIntensity: 0.5 }));
@@ -417,7 +534,13 @@ Object.assign(BUILDERS, {
     c.add(box(w + 0.1, 0.8, 0.16, color, x, 0.25 + h, z + d / 2 - 0.05));
     for (const [e, hh] of [[-1, 0.3], [0, 0.55], [1, 0.3]]) c.add(box(w * 0.3, hh, 0.16, color, x + e * w * 0.33, 1.05 + h, z + d / 2 - 0.05));
     c.add(box(w + 0.3, 0.1, 0.3, TRIM, x, 1.0 + h, z + d / 2));
-    wSign(c, 'z', x, h + 0.3, z + d / 2 + 0.02, 2.2, 0.55, 0x2a2d33, 6, 0xe8c46a);
+    wSign(c, 'z', x, h + 0.3, z + d / 2 + 0.02, 2.2, 0.55, 0x2a2d33, 6, 0xe8c46a, 'SALOON');
+    // upstairs doors onto the balcony, a hanging ROOMS sign, two brick chimneys and a
+    // painted advert on the side wall
+    for (const a of [-0.6, 0.6]) c.add(onWall('z', x + a, 1.82, z + d / 2, 0.42, 0.95, 0.04, 0x4a2a1a));
+    textPanel(c, 'x', z + d / 2 - 0.2, 1.25, x + w / 2 + 0.86, 0.6, 0.22, 'ROOMS', 0x8a2a1e, CREAM);
+    for (const [cx2, cz2] of [[x - 1.2, z - 0.9], [x + 1.1, z - 0.9]]) c.add(box(0.4, 0.75, 0.4, BRICK, cx2, 0.25 + h, cz2), box(0.48, 0.08, 0.48, 0x5a3a2a, cx2, 1.0 + h, cz2));
+    textPanel(c, 'x', z - 1.05, 0.95, x + w / 2 + 0.035, 0.8, 0.4, 'SARSAPARILLA', 0x8a2a1e, 0xf1e6c8);
     // upstairs windows and the wraparound balcony on turned posts
     for (const a of [-1.2, 0, 1.2]) wWin(c, 'z', x + a, 2.0, z + d / 2, 0.5, 0.75, TRIM, WARM);
     for (const a of [-0.8, 0.5]) wWin(c, 'x', z + a, 2.0, x + w / 2, 0.5, 0.75, TRIM, WARM);
@@ -442,7 +565,7 @@ Object.assign(BUILDERS, {
   },
 });
 
-export { balcony, falseFront, porch, wWin, wSign, battens, barrel, hay, crate, wheel, hitchRail, horse, waterTower, windmill, timberTower, WOOD, WOOD_D, WOOD_L, GREY, TRIM, SHINGLE, CREAM };
+export { signTex, textPanel, balcony, falseFront, porch, wWin, wSign, battens, barrel, hay, crate, wheel, hitchRail, horse, waterTower, windmill, timberTower, WOOD, WOOD_D, WOOD_L, GREY, TRIM, SHINGLE, CREAM };
 
 // ---- out on the range: landmarks scattered round the town (see terrain.js) ----
 // Each returns a Group standing on y = 0 with userData.r its rough radius.

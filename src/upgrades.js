@@ -3,6 +3,7 @@
 // looks (tiers 0-9); the milestone levels 5, 10, 25, 50, 100 and 250 step through them.
 import * as THREE from 'three';
 import { box, cyl, mat } from './models.js';
+import { westLookText } from './west-upgrades.js';
 
 const cylY = (r, h, color, x = 0, y = 0, z = 0, seg = 14) => cyl(r, r, h, color, x, y, z, seg);
 const steel = 0x8a8f99, dark = 0x3a3f48, white = 0xf2f2f0, yellow = 0xffc23d;
@@ -237,7 +238,8 @@ const PROP_NAMES = { conveyor: 'an ore conveyor', silo: 'a storage silo', floodt
   exhaust: 'an exhaust stack', dish: 'a satellite dish', fan: 'a big fan', spheretank: 'a fuel tank', transformer: 'a transformer', pylon: 'a power pylon',
   solar: 'solar panels', ac: 'cooling units', antenna: 'antennas', flag: 'a flag', helipad: 'a helipad' };
 const WING_NAMES = { brick: 'wing', sawtooth: 'workshop', hangar: 'hangar', silo: 'pair of silos', yard: 'switchyard', server: 'server hall' };
-export function lookText(type, level) {
+export function lookText(type, level, world) {
+  if (world === 'desert') return westLookText(type, level);
   const st = STYLE[type] || STYLE.default, w = WING_NAMES[st.wing];
   // the look changes at the milestone levels
   return { 5: `a new ${w} and ${PROP_NAMES[st.props[0]]}`, 10: `a second ${w} and ${PROP_NAMES[st.props[1]]}`, 25: `a third ${w} and ${PROP_NAMES[st.props[2]]}`,

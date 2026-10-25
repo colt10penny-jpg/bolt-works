@@ -185,7 +185,7 @@ function mileBar(lv, type) {
   const nm = nextMilestone(lv);
   const prevM = [...MILESTONES].reverse().find(m => m <= lv) ?? 1;
   const pct = nm ? ((lv - prevM) / (nm - prevM)) * 100 : 100;
-  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${lookText(type, nm)}, 2× output` : 'Fully expanded'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : `Lv ${lv}`}</span></div>`;
+  return `<div class="sh-mile"><span>${nm ? `Lv ${nm}: ${lookText(type, nm, game.s.current)}, 2× output` : 'Fully expanded'}</span><span class="sh-bar"><i style="width:${pct.toFixed(1)}%"></i></span><span>${nm ? `${lv}/${nm}` : `Lv ${lv}`}</span></div>`;
 }
 // work in progress: a bar, the time left, and a button to finish it now with an ad
 function jobRow(id) {
@@ -1069,7 +1069,7 @@ game.on('upgrade', (id, before, after) => {
   if (crossed.length) {
     const m = crossed[crossed.length - 1];
     sfx.milestone();
-    toast(`${def(id).name} level ${m}: ${lookText(game.typeOf(id), m)} and 2× output!`);
+    toast(`${def(id).name} level ${m}: ${lookText(game.typeOf(id), m, game.s.current)} and 2× output!`);
     track('milestone', { factory: id, level: m });
   } else sfx.upgrade();
 });
