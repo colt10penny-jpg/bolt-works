@@ -10,8 +10,12 @@ import * as THREE from 'three';
 import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl, mat } from './models.js';
 
-const TRIM = 0xf1ece0, DARK = 0x2b2f36, STEEL = 0x8a8f99, IRON = 0x5b5f66, HAZ = 0xffc23d, GLASS = 0x9fd6ff, WARM = 0xffb347;
-const PLINTH = 0x9c968a, ROOF = 0x6d7076, RED = 0xd9482b, WHITE = 0xf3efe6;
+// ICON ART DIRECTION: porcelain/blue architectural masses, sunny yellow steelwork,
+// warm lit glazing, white/red stacks. This is a model change, not a screen tint.
+const TRIM = 0xf5f7fc, DARK = 0x273e56, STEEL = 0xa8bac9, IRON = 0x54758f, HAZ = 0xffbd3d, GLASS = 0x89d6ff, WARM = 0xffc775;
+const PLINTH = 0xd3dce8, ROOF = 0x227bd1, RED = 0xef553f, WHITE = 0xfafcff;
+const ICON = { wall: 0xeaf2fb, blue: 0x278ae1, deep: 0x15579b, trim: 0xffffff, gold: 0xffc13e, steel: 0xacc0d2, window: 0xffd080 };
+
 const shade = (hex, f) => {
   const c = new THREE.Color(hex);
   return f > 0 ? c.lerp(new THREE.Color(0xffffff), f).getHex() : c.multiplyScalar(1 + f).getHex();
@@ -106,9 +110,12 @@ function pipe(g, pts, r = 0.1, color = 0xb9b4a8) {
 // a hall: concrete plinth, walls, piers, a belt course near the top, and a flat roof
 // behind a capped parapet (or no parapet, for halls that get their own roof)
 function hall(g, { x = 0, z = 0, w, d, h, color, piers = 1.25, parapet = true, roof = ROOF, belt = true, pierColor }) {
-  const pc = pierColor ?? shade(color, -0.22);
-  g.add(box(w + 0.18, 0.32, d + 0.18, PLINTH, x, 0, z));
-  g.add(box(w, h, d, color, x, 0.3, z));
+  // All Colorado industries share one recognizable miniature-factory shell: bright
+  // ceramic walls, thick cobalt blue framing, and a crisp raised roofline.
+  // The supplied industry colour now lives in accents/machinery, not a solid dark cube.
+  const pc = pierColor ?? ICON.blue;
+  g.add(box(w + 0.34, 0.32, d + 0.34, PLINTH, x, 0, z));
+  g.add(box(w, h, d, ICON.wall, x, 0.3, z));
   const top = h + 0.3;
   // piers on every wall, at the corners and in between
   for (const [axis, len, f] of [['z', w, z + d / 2], ['z', w, z - d / 2], ['x', d, x + w / 2], ['x', d, x - w / 2]]) {
@@ -119,12 +126,28 @@ function hall(g, { x = 0, z = 0, w, d, h, color, piers = 1.25, parapet = true, r
       g.add(onWall(axis, a + (edge ? (i === 0 ? 0.11 : -0.11) : 0), 0.3, f, edge ? 0.24 : 0.2, h, 0.08, pc));
     }
   }
-  if (belt) g.add(box(w + 0.2, 0.14, d + 0.2, shade(color, -0.32), x, top - 0.55, z));
+  if (belt) {
+    g.add(box(w + 0.28, 0.16, d + 0.28, ICON.blue, x, top - 0.48, z));
+    g.add(box(w + 0.34, 0.09, d + 0.34, ICON.trim, x, top - 0.31, z));
+  }
+  // Facade base glazing: narrow warm-light bands across the camera-facing wall.
+  // Placed ABOVE the door height, so it never obstructs the entrance.
+  if (w >= 3.4 && h >= 2.2) {
+    const n = Math.max(3, Math.floor(w / 0.9));
+    for (let i = 0; i < n; i++) {
+      const xx = x - w * 0.41 + (w * 0.82) * i / (n - 1);
+      g.add(onWall('z', xx, top - 0.75, z + d / 2, 0.48, 0.26, 0.065, WARM, { emissive: 0xffba60, night: 1.3 }));
+      g.add(onWall('z', xx, top - 0.77, z + d / 2 + 0.08, 0.55, 0.06, 0.05, ICON.deep));
+    }
+  }
   if (parapet) {
-    g.add(box(w - 0.1, 0.06, d - 0.1, roof, x, top, z));
+    g.add(box(w - 0.1, 0.12, d - 0.1, ICON.blue, x, top, z));
+    // Broad navy roof panel with an illuminated white border: a strong silhouette
+    // from the game's fixed isometric camera.
+    g.add(box(w - 0.65, 0.08, d - 0.65, ICON.deep, x, top + 0.09, z));
     for (const [pw, pd, px, pz] of [[w + 0.12, 0.2, x, z + d / 2 - 0.04], [w + 0.12, 0.2, x, z - d / 2 + 0.04], [0.2, d, x + w / 2 - 0.04, z], [0.2, d, x - w / 2 + 0.04, z]]) {
-      g.add(box(pw, 0.36, pd, color, px, top, pz));
-      g.add(box(pw + 0.06, 0.07, pd + 0.06, TRIM, px, top + 0.36, pz));
+      g.add(box(pw, 0.36, pd, ICON.blue, px, top, pz));
+      g.add(box(pw + 0.1, 0.10, pd + 0.1, TRIM, px, top + 0.36, pz));
     }
     return top + 0.43;
   }
@@ -137,7 +160,7 @@ function gableRoof(g, { x = 0, z = 0, w, d, y, rise = 1, color, along = 'x', eav
   sh.moveTo(-span / 2 - eave, 0); sh.lineTo(span / 2 + eave, 0); sh.lineTo(0, rise); sh.closePath();
   const geo = new THREE.ExtrudeGeometry(sh, { depth: len + eave * 2, bevelEnabled: false });
   geo.translate(0, 0, -(len + eave * 2) / 2);
-  const m = mesh(geo, color);
+  const m = mesh(geo, ICON.blue);
   if (along === 'x') m.rotation.y = Math.PI / 2;
   m.position.set(x, y, z);
   g.add(m);
@@ -146,22 +169,33 @@ function gableRoof(g, { x = 0, z = 0, w, d, y, rise = 1, color, along = 'x', eav
   const L = len + eave * 2;
   for (let i = -3; i <= 3; i++) for (const sd of [-1, 1]) {
     const c = (L / 2) * (i / 3.6), off = sd * (span / 2 + eave) / 2;
-    if (along === 'x') { const m = at(mesh(new THREE.BoxGeometry(0.05, 0.05, half), shade(color, -0.3)), x + c, y + rise / 2 + 0.03, z + off); m.rotation.x = sd * slope; g.add(m); }
-    else { const m = at(mesh(new THREE.BoxGeometry(half, 0.05, 0.05), shade(color, -0.3)), x + off, y + rise / 2 + 0.03, z + c); m.rotation.z = -sd * slope; g.add(m); }
+    // Seams lie flush on the actual slope rather than floating above the roof.
+    const seamX = x + c, seamZ = z + c;
+    if (along === 'x') {
+      const rib = box(0.05, 0.045, half * 2, ICON.deep, seamX, y + rise / 2 + 0.025, z);
+      rib.rotation.x = slope; g.add(rib);
+    } else {
+      const rib = box(half * 2, 0.045, 0.05, ICON.deep, x, y + rise / 2 + 0.025, seamZ);
+      rib.rotation.z = -slope; g.add(rib);
+    }
   }
   // a ridge cap
-  g.add(along === 'x' ? box(L, 0.1, 0.18, shade(color, -0.35), x, y + rise - 0.04, z) : box(0.18, 0.1, L, shade(color, -0.35), x, y + rise - 0.04, z));
+  g.add(along === 'x' ? box(L, 0.14, 0.22, ICON.trim, x, y + rise - 0.04, z) : box(0.22, 0.14, L, ICON.trim, x, y + rise - 0.04, z));
   return y + rise;
 }
 // a chimney: tapering, with red-and-white bands, a ladder, a little platform and a hole
 // in the top for the smoke. Returns where the smoke comes out.
 function chimney(g, x, z, y0, h, r, color, bands = true) {
-  g.add(cyl(r * 0.88, r * 1.08, h, color, x, y0, z, 18));
-  g.add(cyl(r * 1.12, r * 1.18, 0.3, shade(color, -0.25), x, y0, z, 18));
-  if (bands) for (const [k, c] of [[0.78, WHITE], [0.86, RED], [0.94, WHITE]]) g.add(cyl(r * 0.92, r * 0.92, h * 0.08, c, x, y0 + h * k - h * 0.04, z, 18));
+  g.add(cyl(r * 0.88, r * 1.08, h, WHITE, x, y0, z, 18));
+  g.add(cyl(r * 1.12, r * 1.18, 0.3, ICON.deep, x, y0, z, 18));
+  if (bands) for (const [k, c] of [[0.63, RED], [0.76, WHITE], [0.86, RED], [0.94, WHITE]]) g.add(cyl(r * 0.92, r * 0.92, h * 0.08, c, x, y0 + h * k - h * 0.04, z, 18));
   g.add(cyl(r * 0.98, r * 0.98, 0.14, DARK, x, y0 + h - 0.1, z, 18));
   // platform ring near the top
-  const ring = mesh(new THREE.TorusGeometry(r * 1.35, 0.04, 6, 22), IRON); ring.rotation.x = Math.PI / 2; ring.position.set(x, y0 + h * 0.7 + 0.45, z); g.add(ring);
+  const ring = mesh(new THREE.TorusGeometry(r * 1.35, 0.04, 6, 22), HAZ); ring.rotation.x = Math.PI / 2; ring.position.set(x, y0 + h * 0.7 + 0.45, z); g.add(ring);
+  // Eight connected uprights, so the bright guardrails are structurally supported.
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4;
+    g.add(cyl(0.035, 0.035, 0.46, HAZ, x + Math.cos(a) * r * 1.35, y0 + h * 0.7 + 0.22, z + Math.sin(a) * r * 1.35, 6));
+  }
   const deck = mesh(new THREE.CylinderGeometry(r * 1.38, r * 1.38, 0.06, 22), IRON); deck.position.set(x, y0 + h * 0.7, z); g.add(deck);
   // ladder up the side facing the camera
   const lx = x + r * 0.72, lz = z + r * 0.72;
@@ -173,13 +207,17 @@ function chimney(g, x, z, y0, h, r, color, bands = true) {
 // an upright tank on a ring base, with bands, a domed top, a ladder and a rail
 function tank(g, x, z, r, h, color, y0 = 0) {
   g.add(cyl(r + 0.12, r + 0.16, 0.3, PLINTH, x, y0, z, 20));
-  g.add(cyl(r, r, h, color, x, y0 + 0.3, z, 22));
-  for (const k of [0.25, 0.6]) g.add(cyl(r + 0.03, r + 0.03, 0.08, shade(color, -0.25), x, y0 + 0.3 + h * k, z, 22));
+  g.add(cyl(r, r, h, WHITE, x, y0 + 0.3, z, 22));
+  for (const k of [0.25, 0.60, 0.92]) g.add(cyl(r + 0.035, r + 0.035, 0.09, ICON.blue, x, y0 + 0.3 + h * k, z, 22));
   const top = mesh(new THREE.SphereGeometry(r, 22, 8, 0, Math.PI * 2, 0, Math.PI / 2), color); top.scale.y = 0.35; top.position.set(x, y0 + 0.3 + h, z); g.add(top);
   const lx = x + r * 0.71 + 0.05, lz = z + r * 0.71 + 0.05;
   for (const e of [-0.13, 0.13]) g.add(box(0.04, h + 0.2, 0.04, IRON, lx + e * 0.7, y0 + 0.3, lz - e * 0.7));
   for (let y = y0 + 0.5; y < y0 + h + 0.3; y += 0.3) { const rung = box(0.28, 0.025, 0.03, IRON, lx, y, lz); rung.rotation.y = -Math.PI / 4; g.add(rung); }
-  const rail = mesh(new THREE.TorusGeometry(r * 0.6, 0.03, 5, 18), HAZ); rail.rotation.x = Math.PI / 2; rail.position.set(x, y0 + 0.3 + h + r * 0.35 + 0.4, z); g.add(rail);
+  const railY = y0 + 0.3 + h + r * 0.35;
+  const rail = mesh(new THREE.TorusGeometry(r * 0.6, 0.03, 5, 18), HAZ); rail.rotation.x = Math.PI / 2; rail.position.set(x, railY + 0.4, z); g.add(rail);
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4;
+    g.add(cyl(0.025, 0.025, 0.45, HAZ, x + Math.cos(a) * r * 0.6, railY + 0.2, z + Math.sin(a) * r * 0.6, 6));
+  }
   return y0 + 0.3 + h + r * 0.35;
 }
 // a steel lattice: two posts with cross-bracing between them, in the plane facing `axis`
