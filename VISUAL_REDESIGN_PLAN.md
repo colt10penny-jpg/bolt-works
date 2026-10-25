@@ -30,19 +30,25 @@ A vivid, readable miniature 3D factory world:
 - `src/models.js` and `src/buildings*.js`: tighten palette and trim consistency, not overhaul entire building categories at once.
 - Benchmark render performance, especially shader composer, shadow-map use and draw calls.
 
-### Pass 2 — Floating-island world map (highest icon similarity)
-- `src/main.js`, `src/style.css`, `src/worldArt.js`: refresh the existing travel/world-selection interface so each biome reads like a distinct suspended island, with an obvious rocket/travel path.
-- Prefer reusing efficient simple geometries and SVGs already in the project, not shipping large decorative image textures.
-- Lock progression to the existing state: don't reveal inaccessible worlds before unlock.
+### Explicitly out of scope — Floating islands
+- The owner has asked to **keep all four worlds as normal ground-based maps** for now. No floating-island gameplay terrain or world-selection scene should be added.
+- Preserve existing world switching, unlock progression, world map UI and gameplay layout.
 
-### Pass 3 — In-game environmental cohesion
+### Pass 2 — In-game environmental cohesion
 - `src/terrain.js` and `src/world.js`: stylize terrain edge treatment, tree groupings, roads, lot pads, rock and scenery placement. Keep all world coordinates, driveways, collision/pick targets and town layout functional.
-- Create a visually distinct horizon/island setting **only if** the camera boundaries and existing terrain data can support it safely; prototype separately before changing the production terrain.
+- Improve terrain palette, rock/tree contrast and biome-appropriate scenery without changing landscape topology or introducing floating terrain.
 - Ensure Mars and Moon feel differentiated rather than recolored versions of the same settlement.
 
-### Pass 4 — Rocket and transitions
+### Pass 3 — Rocket and transitions
 - `src/rockets.js` and world travel in `src/main.js`: make launch and world travel reinforce the promise of progressing between miniature worlds.
 - Do not change launch prices, unlocked worlds, ads, progression mechanics or saves.
+
+## Changes implemented on the experimental branch (first pass)
+- Brighter filmic lighting, gentler shadows and more balanced color grading in `src/fx.js`.
+- Softer toy-like building materials in `src/models.js` and bright readable factory roofs in `src/buildings.js`.
+- Brighter terrain colors, richer low-poly trees, biome-appropriate contact shadows in `src/terrain.js`.
+- Clearer orange rocket exhaust and a blue viewport on the classic launcher in `src/rockets.js`.
+- **No** gameplay, level layout, economy, storage, or world map edits.
 
 ## Test / acceptance checklist
 
