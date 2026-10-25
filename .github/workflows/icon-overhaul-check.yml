@@ -1,0 +1,22 @@
+name: Validate icon-style overhaul
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+      - name: Check factory geometry and delivery routes
+        run: node --test scripts/icon-overhaul.test.mjs
+      - name: Build website without deploying
+        run: npm run build
