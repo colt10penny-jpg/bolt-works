@@ -473,6 +473,63 @@ export function marsCrawler(color) {
   return mergeVehicle(g);
 }
 
+// ---- Moon vehicles ----
+// a wire-mesh lunar wheel: a silvery mesh tyre with gold chevrons and a dark hub
+function moonWheel(g, x, z, r = 0.3, w = 0.2) {
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 18), mat(0xb9b6ac, { roughness: 0.6, metalness: 0.6 }));
+  t.rotation.x = Math.PI / 2; t.position.set(x, r, z); g.add(t);
+  for (let k = 0; k < 9; k++) { const a = k / 9 * Math.PI * 2; const ch = flatBox(0.1, 0.03, w + 0.02, 0xc9a24a, x + Math.cos(a) * r, r + Math.sin(a) * r - 0.015, z, { metalness: 0.5, roughness: 0.4 }); ch.rotation.z = a + Math.PI / 2; g.add(ch); }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.32, r * 0.32, w + 0.05, 10), mat(0x2a2d33));
+  hub.rotation.x = Math.PI / 2; hub.position.set(x, r, z); g.add(hub);
+}
+// a little astronaut sitting in a seat: white suit, life-support pack, gold visor
+function astronaut(g, x, z) {
+  g.add(flatBox(0.3, 0.06, 0.3, 0x5b5f66, x, 0.5, z), flatBox(0.06, 0.32, 0.3, 0x5b5f66, x - 0.16, 0.5, z));   // the seat
+  g.add(box(0.26, 0.3, 0.24, 0xf4f4f0, x, 0.56, z), box(0.12, 0.26, 0.2, 0xe0e0dc, x - 0.17, 0.6, z));        // suit, backpack
+  g.add(box(0.2, 0.08, 0.08, 0xf4f4f0, x + 0.12, 0.72, z + 0.09));                                             // an arm on the controls
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), mat(0xf6f6f2)); helmet.position.set(x, 0.98, z); g.add(helmet);
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8, -Math.PI / 2, Math.PI, Math.PI * 0.25, Math.PI * 0.45), mat(0xd9a83a, { metalness: 0.9, roughness: 0.15 }));
+  visor.position.set(x + 0.04, 0.98, z); g.add(visor);
+}
+// an open lunar buggy, pointing +x: a tube frame on four mesh wheels with bright fenders,
+// two astronauts aboard, an umbrella antenna and a camera on the front
+export function lunarBuggy(color) {
+  const g = new THREE.Group();
+  g.add(flatBox(1.9, 0.07, 0.8, 0x6a6e76, 0, 0.42, 0));                                             // chassis
+  for (const x of [-0.7, 0.7]) for (const z of [-0.5, 0.5]) {
+    moonWheel(g, x, z, 0.28, 0.18);
+    const f = flatBox(0.62, 0.05, 0.24, color, x, 0.62, z); g.add(f);                                 // fender
+    g.add(flatBox(0.05, 0.2, 0.05, 0x6a6e76, x, 0.42, z * 0.7));
+  }
+  astronaut(g, -0.1, -0.2); astronaut(g, -0.1, 0.22);
+  g.add(box(0.36, 0.22, 0.6, 0xd9a83a, 0.68, 0.49, 0, { metalness: 0.7, roughness: 0.35 }));        // gold-foil battery box
+  g.add(box(0.12, 0.12, 0.14, 0x2a2d33, 0.9, 0.78, 0.2), flatBox(0.03, 0.3, 0.03, 0x9aa0a8, 0.9, 0.49, 0.2));   // camera
+  g.add(cyl(0.015, 0.015, 0.75, 0xd8dbe2, -0.75, 0.49, -0.3, 4));
+  const dish = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.12, 14, 1, true), mat(0xf2f2ee, { side: THREE.DoubleSide }));
+  dish.rotation.z = Math.PI; dish.position.set(-0.75, 1.3, -0.3); g.add(dish);
+  g.add(box(0.3, 0.14, 0.5, 0xd8dbe2, -0.75, 0.49, 0.05));                                          // tool rack
+  lights(g, 0.96, -0.96, 0.46, [-0.26, 0.26], 0.1);
+  return mergeVehicle(g);
+}
+// a lunar cargo hauler, pointing +x: a pressurised cab (a capsule lying across the front
+// with a band of windows), gold-foil panels, and a long flat deck on six mesh wheels
+export function lunarHauler(color) {
+  const g = new THREE.Group();
+  const W = 0.96;
+  g.add(flatBox(2.4, 0.12, 0.8, 0x6a6e76, -0.05, 0.26, 0));
+  for (const x of [-1.0, -0.25, 0.6]) for (const z of [-0.5, 0.5]) moonWheel(g, x, z, 0.24, 0.16);
+  g.add(box(1.6, 0.06, W, 0x9aa0a8, -0.42, 0.34, 0));                                               // the deck
+  for (const sd of [-1, 1]) g.add(flatBox(1.6, 0.1, 0.05, color, -0.42, 0.4, sd * (W / 2 - 0.02)));
+  const cab = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, W - 0.4, 6, 14), mat(0xf2f2ee, { roughness: 0.4 }));
+  cab.rotation.x = Math.PI / 2; cab.position.set(0.8, 0.7, 0); g.add(cab);
+  g.add(flatBox(0.08, 0.12, W - 0.2, 0x1c2f3a, 1.13, 0.72, 0));                                      // window band
+  g.add(flatBox(0.4, 0.06, W - 0.1, color, 0.8, 1.02, 0));
+  g.add(box(0.5, 0.2, 0.3, 0xd9a83a, 0.75, 0.3, 0.35, { metalness: 0.7, roughness: 0.35 }), box(0.5, 0.2, 0.3, 0xd9a83a, 0.75, 0.3, -0.35, { metalness: 0.7, roughness: 0.35 }));
+  g.add(flatBox(0.12, 0.05, 0.12, 0xffa31a, 0.8, 1.08, 0, { emissive: 0xff8a00, night: 1.5 }));
+  lights(g, 1.15, -1.25, 0.5, [-0.3, 0.3], 0.1);
+  return mergeVehicle(g);
+}
+
 // a passenger car, pointing +x: sedans, hatchbacks, SUVs and pickups
 const BODY = ['sedan', 'sedan', 'hatch', 'suv', 'pickup'];
 let carN = 0;

@@ -282,20 +282,58 @@ function rawHeight(name, x, z) {
     }
     return Math.max(h, mesaAt(name, x, z).h);
   }
-  // moon: bumpy ground and craters
-  let h = (fbm(x / 20, z / 20, 4, 3) - 0.5) * 1.6;
+  // moon: bumpy ground and craters, plus the big craters and highland massifs round town
+  let h = (fbm(x / 20, z / 20, 4, 3) - 0.5) * 1.6 + (fbm(x / 4, z / 4, 2, 19) - 0.5) * 0.3;
   for (const c of MOON_CRATERS) {
     const d = Math.hypot(x - c[0], z - c[1]), r = c[2];
     if (d < r * 1.8) h += -c[3] * Math.max(0, 1 - (d / r) ** 2) + c[3] * 0.55 * Math.exp(-(((d - r) / (r * 0.28)) ** 2));
   }
   h += back * (1 - Math.abs(2 * fbm(x / 40, z / 40, 4, 8) - 1)) * 26;
-  return h;
+  return h + moonAt(x, z).h;
+}
+// The Moon's landmarks, clear of the town, the two roads out and the landing spot:
+// big craters [x, z, radius, depth] with terraced walls, a raised rim, a blanket of
+// ejecta and (in the larger ones) a central peak, and rugged highland massifs
+// [x, z, radius, height] of sharp ridges and gullies.
+const BIG_CRATERS = [[-50, 46, 15, 5], [54, -40, 18, 6], [-46, -48, 13, 4.5], [8, -66, 21, 6.5], [64, -4, 9, 3.5], [-20, 72, 13, 4.5], [-80, 30, 11, 4]];
+const MASSIFS = [[-82, -78, 26, 15], [80, -78, 24, 13], [-92, 70, 22, 11], [90, 46, 20, 11], [22, 104, 24, 12], [-108, -14, 18, 12]];
+const ridged = (x, z, seed) => { let v = 0, a = 0.5, f = 1; for (let o = 0; o < 4; o++) { v += a * (1 - Math.abs(2 * vnoise(x * f, z * f, seed + o) - 1)) ** 2; a *= 0.5; f *= 2.1; } return v / 0.94; };
+function moonAt(x, z) {
+  let h = 0, bowl = 0, rim = 0, ray = 0, high = 0;
+  for (const [cx, cz, r, dep] of BIG_CRATERS) {
+    const dx = x - cx, dz = z - cz;
+    if (Math.abs(dx) > r * 3.2 || Math.abs(dz) > r * 3.2) continue;
+    const ang = Math.atan2(dz, dx), wob = (fbm(Math.cos(ang) * 2 + cx, Math.sin(ang) * 2 + cz, 2, 31) - 0.5) * 0.12;
+    const d = Math.hypot(dx, dz) / r + wob;
+    // the bowl: flat-floored, with terraces stepping up the inner wall
+    let b = 0;
+    if (d < 1) { const t = d * d; b = -dep * (1 - t); const terr = Math.sin(d * Math.PI * 4) * 0.12 * dep * smooth(0.45, 0.8, d); b += terr; }
+    // the raised rim, sharp inside and sloping away outside, then the ejecta blanket
+    const rimH = dep * 0.6 * (d < 1 ? Math.exp(-(((d - 1) / 0.16) ** 2)) : Math.exp(-(((d - 1) / 0.42) ** 2)));
+    const blanket = d > 1 ? dep * 0.15 * Math.max(0, 1 - (d - 1) / 1.6) * (0.6 + 0.8 * fbm(x / 3, z / 3, 2, 47)) : 0;
+    // a central peak in the bigger ones
+    const peak = r > 12 ? dep * 0.75 * Math.exp(-((d / 0.2) ** 2)) * (0.8 + 0.4 * ridged(x / 4, z / 4, 61)) : 0;
+    h += b + rimH + blanket + peak;
+    bowl = Math.max(bowl, d < 1 ? 1 - d * 0.6 : 0);
+    rim = Math.max(rim, Math.exp(-(((d - 1) / 0.18) ** 2)));
+    // bright rays thrown out across the plain
+    if (d > 1 && d < 3.2) ray = Math.max(ray, Math.pow(Math.abs(Math.sin(ang * 6.5 + cx)), 14) * (1 - (d - 1) / 2.2) * 0.9);
+  }
+  for (const [mx, mz, mr, mh] of MASSIFS) {
+    const d = Math.hypot(x - mx, z - mz) / mr + (fbm(x / 9, z / 9, 2, 37) - 0.5) * 0.35;
+    if (d > 1.15) continue;
+    const m = smooth(1.15, 0.35, d);
+    const v = mh * m * (0.45 + 0.75 * ridged(x / 11, z / 11, 71)) + m * (fbm(x / 2.5, z / 2.5, 2, 73) - 0.5) * 1.2;
+    h += v; high = Math.max(high, m);
+  }
+  return { h, bowl, rim, ray, high };
 }
 const MOON_CRATERS = (() => {
   const out = []; const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(99);
-  for (let i = 0; i < 46; i++) {
-    const x = (r() - 0.5) * 300, z = (r() - 0.5) * 300, rad = 3 + r() ** 2 * 16;
+  for (let i = 0; i < 150; i++) {
+    const x = (r() - 0.5) * 300, z = (r() - 0.5) * 300, rad = 1.6 + r() ** 2.5 * 12;
     if (townDist(x, z) < rad + 3) continue;
+    if (BIG_CRATERS.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr * 1.3 + rad)) continue;
     out.push([x, z, rad, 0.8 + rad * 0.18]);
   }
   return out;
@@ -361,6 +399,14 @@ export function buildLand(name, T, blocks) {
       for (const cr of MARS_CRATERS) { const d = Math.hypot(x - cr[0], z - cr[1]); if (d < cr[2] * 0.75) c.lerp(c2.setHex(P.snow), smooth(cr[2] * 0.75, cr[2] * 0.3, d) * 0.85); }
       if (h > 14) c.lerp(c2.setHex(0x5a2a1e), smooth(14, 26, h));
     }
+    if (name === 'moon') {
+      // dark lava seas, crater bowls in shadow-grey, bright rims and rays, pale highlands
+      const mf = moonAt(x, z);
+      c.lerp(c2.setHex(0x5c5d66), smooth(0.55, 0.7, fbm(x / 45, z / 45, 3, 29)) * 0.55);
+      c.lerp(c2.setHex(0x6a6b74), mf.bowl * 0.5);
+      c.lerp(c2.setHex(0xd8d8de), Math.max(mf.rim * 0.6, mf.ray * 0.55));
+      c.lerp(c2.setHex(0xbab4aa), mf.high * 0.55 * (0.7 + 0.6 * n2));
+    }
     // mesas: layered rock in bands up the cliffs, a paler cap on top
     const ms = (name === 'desert' || name === 'mars') ? mesaAt(name, x, z) : null;
     if (ms && ms.h > 0.6) {
@@ -374,7 +420,8 @@ export function buildLand(name, T, blocks) {
   // Mesas get their own fine, smooth-shaded patch of ground laid over the land (the land
   // is coarse, which made them look blocky). The coarse land well inside each patch drops
   // out of sight beneath it.
-  const MS = (name === 'desert' || name === 'mars') ? MESAS[name] : [];
+  const MS = (name === 'desert' || name === 'mars') ? MESAS[name]
+    : name === 'moon' ? [...BIG_CRATERS.map(([x, z, r]) => [x, z, r * 1.25, r * 1.25, 0, 0]), ...MASSIFS.map(([x, z, r]) => [x, z, r * 0.82, r * 0.82, 0, 0])] : [];
   // each patch covers its mesa's scree skirt (1.45x its size) and a little more; where
   // two overlap, each sits a hair higher than the last so they never flicker
   const patchBox = MS.map(([cx, cz, a, b, , r]) => {
@@ -395,7 +442,10 @@ export function buildLand(name, T, blocks) {
   terrain.receiveShadow = true;
   ground.add(terrain);
   if (patchBox.length) {
-    const pm = withClouds(std(0xffffff, { vertexColors: true, flatShading: true, roughness: 0.95 }));
+    // rock is faceted; the Moon's craters are smooth, soft dust
+    const pmFlat = withClouds(std(0xffffff, { vertexColors: true, flatShading: true, roughness: 0.95 }));
+    const pmSoft = withClouds(std(0xffffff, { vertexColors: true, roughness: 0.95 }));
+    const soft = k => name === 'moon' && k < BIG_CRATERS.length;
     // overlapping patches get different heights (a few hundredths apart), so they never flicker
     const lift = [];
     patchBox.forEach((q, i) => {
@@ -415,7 +465,7 @@ export function buildLand(name, T, blocks) {
       }
       pg.setAttribute('color', new THREE.BufferAttribute(pc, 3));
       pg.computeVertexNormals();
-      const patch = new THREE.Mesh(pg, pm);
+      const patch = new THREE.Mesh(pg, soft(k) ? pmSoft : pmFlat);
       patch.receiveShadow = true;
       ground.add(patch);
     });

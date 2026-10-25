@@ -2,7 +2,7 @@
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
 import { FACTORIES } from './economy.js';
-import { BUILDERS, box, cyl, mat, truck, car, marsRover, marsCrawler, crate, powerPole, tree, pine, cactus, rock } from './models.js';
+import { BUILDERS, box, cyl, mat, truck, car, marsRover, marsCrawler, lunarBuggy, lunarHauler, crate, powerPole, tree, pine, cactus, rock } from './models.js';
 const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { NightFog } from './nightfog.js';
@@ -219,7 +219,7 @@ export class World {
     this.shower = null; this.nextShower = null;
     for (const m of this.meteorList || []) this.scene.remove(m.obj);
     this.meteorList = [];
-    const fleet = name === 'mars' ? 'mars' : 'earth';
+    const fleet = name === 'mars' ? 'mars' : name === 'moon' ? 'moon' : 'earth';
     if (this.fleet !== fleet) {
       this.traffic.clear('manager');
       this.idleCars = []; this.truckPool = []; this.carPool = [];
@@ -1046,13 +1046,14 @@ export class World {
     this.fleet = 'earth';
     this.#makeFleet();
   }
-  // the town's vehicles, waiting to drive in: cars and trucks on Earth (and the Moon),
-  // pressurised rovers and cargo crawlers on Mars
+  // the town's vehicles, waiting to drive in: cars and trucks on Earth, open buggies and
+  // cargo haulers on the Moon, pressurised rovers and cargo crawlers on Mars
   #makeFleet() {
     const colors = [0xe85a3c, 0x2f7fd1, 0x1f8a5b, 0xffc23d, 0x7f6bbf, 0xf3f0e8, 0x3a3f48];
-    const mars = this.fleet === 'mars';
+    const mars = this.fleet === 'mars', moon = this.fleet === 'moon';
     for (let i = 0; i < 15; i++) {
       const m = mars ? (i % 3 === 0 ? marsCrawler(colors[i % colors.length]) : marsRover(colors[(i * 3) % colors.length]))
+        : moon ? (i % 3 === 0 ? lunarHauler(colors[i % colors.length]) : lunarBuggy(colors[(i * 3) % colors.length]))
         : i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
       m.traverse(o => { if (o.isMesh) o.castShadow = true; });
       this.idleCars.push(m);
@@ -1092,7 +1093,7 @@ export class World {
   #spawnDelivery(fromId, toId) {
     let mesh = this.truckPool.pop();
     if (!mesh) {
-      mesh = this.themeName === 'mars' ? marsCrawler(0x2fb5a0) : truck(0x2f6fb5, true);
+      mesh = this.themeName === 'mars' ? marsCrawler(0x2fb5a0) : this.themeName === 'moon' ? lunarHauler(0x2f6fb5) : truck(0x2f6fb5, true);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
       const cargo = new THREE.Group();
       for (const [x, z, h] of [[-0.75, -0.2, 0.42], [-0.75, 0.2, 0.42], [-0.3, -0.2, 0.42], [-0.3, 0.2, 0.36], [-0.75, 0, 0.3]]) cargo.add(box(0.42, h, 0.38, 0xffffff, x, z === 0 && h === 0.3 ? 0.82 : 0.4, z));
@@ -1116,7 +1117,7 @@ export class World {
   sendManager(fromId, toId) {
     let mesh = this.carPool.pop();
     if (!mesh) {
-      mesh = this.themeName === 'mars' ? marsRover(0x2fb5a0) : car(0x1f8a5b);
+      mesh = this.themeName === 'mars' ? marsRover(0x2fb5a0) : this.themeName === 'moon' ? lunarBuggy(0x1f8a5b) : car(0x1f8a5b);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
     }
     const go = () => this.#drive(fromId, toId, mesh, 'manager', 6.5, { to: toId }, c => {
