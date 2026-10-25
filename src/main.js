@@ -14,6 +14,7 @@ import { initAnalytics, track, flush } from './analytics.js';
 import { GAME } from './config.js';
 import { skin } from './worlds.js';
 import { PACK_ART } from './shopArt.js';
+import { WORLD_ART } from './worldArt.js';
 import { ACHIEVEMENTS, checkAchievements } from './achievements.js';
 import { createTutorial } from './tutorial.js';
 
@@ -325,9 +326,9 @@ function renderSheet(force = false) {
       const can = game.canLaunch();
       // how rockets get built: parts arrive by truck, the bay puts them together, then you launch
       const prev = def(FACTORIES[idx('rocket') - 1].id), made = game.typeInfo('rocket')?.made || 0;
-      const ready = game.hasRocket(), frac = Math.min(1, game.run.rocketsBuilt || 0), need = rocketNeed(game.s.rocketsSent);
+      const ready = game.hasRocket(), frac = Math.min(1, game.run.rocketsBuilt || 0), need = rocketNeed(game.run.rocketsSent);
       const eta = made > 0 ? fmtTime((1 - frac) * need / made) : null;
-      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}, and this bay turns them into rocket parts. This ${one(d.unit)} needs <b>${fmt(need)} parts</b>. Every ${one(d.unit)} any of your worlds sends makes the next one need ${ROCKET_GROWTH}× more, so <b>upgrade this bay</b> to keep up. It holds one at a time.</p>`;
+      const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}, and this bay turns them into rocket parts. This ${one(d.unit)} needs <b>${fmt(need)} parts</b>. Every ${one(d.unit)} ${game.townName()} sends makes its next one need ${ROCKET_GROWTH}× more, so <b>upgrade this bay</b> to keep up. It holds one at a time.</p>`;
       const prog = ready ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `${fmt(frac * need)} of ${fmt(need)} parts · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
       return how + prog + `<div class="sh-row"><span>${ready ? `${one(d.unit)[0].toUpperCase() + one(d.unit).slice(1)} ready!` : ''}</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!ready ? `Building ${one(d.unit)}` : unlocks ? `Launch · unlock ${next.short}` : can ? 'Send cargo' : 'Trade routes full'}</button></div>`;
@@ -733,38 +734,6 @@ async function doLaunch(to, levels = 1) {
 }
 
 // ---------- world map ----------
-// little cartoon scenes for each world
-// little cartoon globes, one for each world's land
-const globe = (id, body, extra = '') => `<svg viewBox="0 0 48 48" width="46" height="46"><defs><clipPath id="g-${id}"><circle cx="24" cy="24" r="20"/></clipPath>
-    <radialGradient id="s-${id}" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient></defs>
-    <g clip-path="url(#g-${id})">${body}</g><circle cx="24" cy="24" r="20" fill="url(#s-${id})"/><circle cx="24" cy="24" r="20" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>${extra}</svg>`;
-const WORLD_ART = {
-  // green continents and blue sea, with snowy mountains and a pine forest
-  colorado: globe('co', `<rect width="48" height="48" fill="#4aa3df"/>
-    <path d="M6 14 Q14 6 24 9 Q30 11 28 18 Q34 20 33 27 Q30 33 22 31 Q16 36 10 31 Q4 26 6 20 Z" fill="#6fbf4a"/>
-    <path d="M34 32 Q40 30 44 35 Q42 42 35 41 Q31 37 34 32 Z" fill="#6fbf4a"/>
-    <path d="M12 22 L17 14 L22 22 Z" fill="#8a96a8"/><path d="M17 14 L15 17.5 L17 16.6 L19 17.5 Z" fill="#fff"/>
-    <path d="M19 22 L23 16 L27 22 Z" fill="#7d8ea3"/><path d="M23 16 L21.6 18.4 L23 17.8 L24.4 18.4 Z" fill="#fff"/>
-    <path d="M14 29 l2 -5 l2 5 Z M19 30 l2 -5 l2 5 Z M24 28 l2 -5 l2 5 Z" fill="#2f6f3e"/>`),
-  // a sandy planet with dunes, cacti and a bright sun
-  desert: globe('de', `<rect width="48" height="48" fill="#f2c178"/>
-    <path d="M0 22 Q12 16 24 21 T48 19 V48 H0 Z" fill="#e5a75e"/><path d="M0 32 Q14 26 28 31 T48 30 V48 H0 Z" fill="#d48c45"/>
-    <path d="M14 26 v-7 a1.6 1.6 0 0 1 3.2 0 v7 Z M14 23 h-2 a1 1 0 0 1 -1 -1 v-2 a.9.9 0 0 1 1.8 0 v1.4 h1.2 Z" fill="#3f7a35"/>
-    <path d="M31 33 v-6 a1.4 1.4 0 0 1 2.8 0 v6 Z M33.8 30 h1.6 v-2 a.9.9 0 0 1 1.8 0 v2.4 a1 1 0 0 1 -1 1 h-2.4 Z" fill="#3f7a35"/>
-    <circle cx="33" cy="12" r="4" fill="#fff4b8"/>`),
-  // grey and cratered, with a little flag planted on top
-  moon: globe('mo', `<rect width="48" height="48" fill="#b7b7c0"/>
-    <circle cx="15" cy="16" r="5" fill="#9b9ba6"/><circle cx="15.8" cy="16.8" r="3.6" fill="#a9a9b3"/>
-    <circle cx="31" cy="29" r="7" fill="#9b9ba6"/><circle cx="32" cy="30" r="5.2" fill="#a9a9b3"/>
-    <circle cx="13" cy="33" r="3" fill="#9b9ba6"/><circle cx="33" cy="13" r="2.4" fill="#9b9ba6"/><circle cx="24" cy="40" r="2" fill="#9b9ba6"/>`,
-    `<rect x="23.3" y="1" width="1.4" height="6" fill="#e8e8ee"/><path d="M24.7 1 h6 v3.6 h-6 Z" fill="#e85a3c"/>`),
-  // rusty red, a canyon, a frosty cap and a green greenhouse dome
-  mars: globe('ma', `<rect width="48" height="48" fill="#b8492c"/>
-    <path d="M0 6 Q24 0 48 6 V11 Q24 6 0 11 Z" fill="#f4ece6"/>
-    <path d="M4 26 Q16 22 26 27 T46 24" stroke="#6e2416" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <circle cx="13" cy="36" r="4" fill="#8f3520"/><circle cx="36" cy="16" r="3" fill="#8f3520"/>
-    <path d="M28 40 a6 6 0 0 1 12 0 Z" fill="#9cf08a"/><path d="M28 40 a6 6 0 0 1 12 0" stroke="#fff" stroke-width="1" fill="none"/>`),
-};
 function openMap() {
   sfx.tap();
   // only the worlds you've reached; later ones stay a surprise

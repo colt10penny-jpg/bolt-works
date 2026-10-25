@@ -171,7 +171,7 @@ export const TRADE_STEP = 0.10, TRADE_MAX = 4;
 // 1x, 1.2x, 1.4x, 1.6x... A straight line, so it never runs away however many worlds.
 export const PRICE_STEP = 0.15;
 // A launch needs a whole rocket's worth of what the Rocket Bay makes, and every rocket
-// your whole empire sends (from any world) needs 1.9x more than the one before it: 1,500,
+// a world sends needs 1.9x more than that world's last one (each world counts its own): 1,500,
 // 2,850, 5,415... Upgrading the bay is how you keep up. It holds one finished rocket at a
 // time, so you can't stock up.
 export const ROCKET_BASE = 1500, ROCKET_GROWTH = 1.9;

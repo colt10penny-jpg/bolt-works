@@ -22,7 +22,7 @@ const OLD_KEYS = ['boltworks.save.v4', 'boltworks.save.v3'];
 function freshRun() {
   const levels = {};
   for (const f of BUILDINGS) levels[f.id] = 0;
-  return { cash: 0, runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, bins: {}, vault: 0, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, jobs: {}, lastActive: Date.now() };
+  return { cash: 0, runEarned: 0, levels, pos: {}, at: {}, made: {}, rocketsBuilt: 0, rocketsSent: 0, bins: {}, vault: 0, managers: {}, staff: 0, land: {}, extra: {}, roads: {}, jobs: {}, lastActive: Date.now() };
 }
 // the old fixed layout (before towns were built by hand), for bringing saves forward
 const OLD_CORE = { mine: [28, 28], furnace: [0, 28], press: [-28, 28], gear: [-28, 0], engine: [0, 0], power: [28, 0], rocket: [-28, -28], turbine: [0, -28], datacenter: [28, -28], hq: [14, 14] };
@@ -41,11 +41,10 @@ export function freshState() {
     firstSeen: Date.now(),
     lastSeen: Date.now(),
     totalEarned: 0,
-    econ: 8,             // economy version (6 = trade routes instead of Engineering Points, 8 = rockets get harder empire-wide)
+    econ: 9,             // economy version (6 = trade routes instead of Engineering Points, 9 = each world counts its own rockets)
     layout: 4,           // town layout version (4 = fixed 3x3 plan, HQ by the mine, two roads out)
     current: 'colorado',
     worlds: { colorado: freshRun() },
-    rocketsSent: 0,      // rockets sent by every world together; each one makes the next cost more
     trade: {},           // trade routes: 'colorado|desert' -> level (see TRADE_STEP)
     launches: 0,
     boostUntil: 0,
@@ -341,6 +340,14 @@ export class Game {
       s.rocketsSent = Object.values(s.trade || {}).reduce((a, l) => a + l, 0);
       for (const r of Object.values(s.worlds)) { r.rocketsBuilt = Math.min(1, r.rocketsBuilt || 0); delete r.rocketsSent; }
     }
+    // v9: each world counts the rockets it has sent itself, so a new world's first rocket is
+    // as cheap as the first one ever was. Each trade route level was one rocket from one of
+    // its two worlds, so each world is given half of the levels on its routes.
+    if ((saved.econ || 1) < 9) {
+      s.econ = 9;
+      for (const [w, r] of Object.entries(s.worlds)) r.rocketsSent = Math.floor(Object.entries(s.trade || {}).filter(([k]) => k.split('|').includes(w)).reduce((a, [, l]) => a + l, 0) / 2);
+      delete s.rocketsSent;
+    }
   }
   async save() {
     this.s.lastSeen = Date.now();
@@ -532,7 +539,7 @@ export class Game {
         const d = FACTORIES[i];
         const units = p.made * seconds;
         run.made[d.id] = (run.made[d.id] || 0) + units;
-        if (d.id === 'rocket') run.rocketsBuilt = Math.min(1, (run.rocketsBuilt || 0) + units / rocketNeed(this.s.rocketsSent));   // one finished rocket at a time
+        if (d.id === 'rocket') run.rocketsBuilt = Math.min(1, (run.rocketsBuilt || 0) + units / rocketNeed(run.rocketsSent));   // one finished rocket at a time
         const amount = units * d.value * this.tradeMult(wId) * boost;
         // split between the main building and any copies on developed land
         const slots = this.slotsOf(d.id, run);
@@ -788,7 +795,7 @@ export class Game {
     this.s.trade[k] = Math.min(TRADE_MAX, before + levels);
     this.s.launches++;
     this.run.rocketsBuilt = 0;
-    this.s.rocketsSent = (this.s.rocketsSent || 0) + 1;
+    this.run.rocketsSent = (this.run.rocketsSent || 0) + 1;
     this.invalidate();
     this.emit('launched', to, unlocked);
     this.emit('change');

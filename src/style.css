@@ -298,7 +298,7 @@ body[data-world="mars"] .lot-label.bub.plus { background: #7a2a1a; border-color:
 .w-card { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 10px; background: var(--mint); }
 .w-card.here { outline: 3px solid var(--sel); }
 .w-card.locked { opacity: .6; }
-.w-swatch { width: 46px; height: 46px; flex-shrink: 0; display: block; filter: drop-shadow(0 2px 0 rgba(0,0,0,.15)); }
+.w-swatch { width: 56px; height: 56px; flex-shrink: 0; display: block; filter: drop-shadow(0 2px 0 rgba(0,0,0,.15)); }
 .w-swatch svg { display: block; }
 .w-card.new { outline: 3px dashed var(--red, #d9482b); outline-offset: -3px; }
 .tr-btns { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
