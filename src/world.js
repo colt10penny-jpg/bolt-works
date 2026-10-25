@@ -770,6 +770,8 @@ export class World {
     const age = Math.max(0, Math.min(1, (3 - tier) / 3)), modern = Math.max(0, Math.min(1, (tier - 5) / 4));
     if (!age && !modern) return;
     this.ageCache ||= new Map();
+    // Early factories should still look like painted, carefully assembled machines.
+    // The previous aging pass buried new geometry under heavy brown-gray darkening.
     const dirt = new THREE.Color(0x857866), hsl = {};
     group.traverse(o => {
       if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
@@ -782,7 +784,7 @@ export class World {
         const a = vc.array, c = new THREE.Color();
         for (let i = 0; i < a.length; i += 3) {
           c.setRGB(a[i], a[i + 1], a[i + 2]);
-          if (age) c.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          if (age) c.lerp(dirt, 0.16 * age).multiplyScalar(1 - 0.06 * age);
           else { c.getHSL(hsl); c.setHSL(hsl.h, Math.min(1, hsl.s * (1 + 0.35 * modern)), Math.min(0.92, hsl.l + 0.05 * modern)); }
           a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b;
         }
@@ -798,7 +800,7 @@ export class World {
           m.roughness = age ? Math.min(1, m.roughness + 0.25 * age) : m.roughness + (0.3 - m.roughness) * modern * 0.85;
           m.metalness = age ? m.metalness * (1 - age) : Math.max(m.metalness, 0.22 * modern);
         } else if (age) {
-          m.color.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          m.color.lerp(dirt, 0.16 * age).multiplyScalar(1 - 0.06 * age);
           m.roughness = Math.min(1, m.roughness + 0.25 * age); m.metalness *= 1 - age;
         } else {
           m.color.getHSL(hsl);
@@ -820,8 +822,8 @@ export class World {
     if (!this.padLooks.has(key)) {
       const m = base.clone(); m.userData = { ...base.userData };
       if (base.onBeforeCompile) m.onBeforeCompile = base.onBeforeCompile;
-      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.45); m.roughness = 1; }
-      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.2);
+      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.16); m.roughness = 0.91; }
+      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.12);
       else if (tier >= 7) { m.color.lerp(new THREE.Color(0xffffff), 0.35); m.roughness = 0.6; }
       this.padLooks.set(key, m);
     }
