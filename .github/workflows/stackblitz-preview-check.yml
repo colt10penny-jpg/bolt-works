@@ -1,0 +1,19 @@
+name: Validate browser-preview dependencies
+on:
+  push:
+    branches: [visual-preview-fixed]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  browser-preview-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install Vite 7 preview dependencies
+        run: npm install --no-package-lock
+      - name: Compile preview without deployment
+        run: npm run build
