@@ -24,15 +24,15 @@ export function mat(color, opts = {}) {
     m = new THREE.MeshStandardMaterial({ color, roughness: 0.4, emissiveIntensity: 0, ...o });
     m.userData.night = night; GLOW.night.push(m);
   } else if (GLASS.has(color) && !opts.emissive) {
-    m = new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.24, emissive: 0xffc98a, emissiveIntensity: 0, ...opts });
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.08, metalness: 0.55, emissive: 0xffc98a, emissiveIntensity: 0, ...opts });
     m.userData.glow = [0.75, 0.35, 0.05][glassVar];
     GLOW.glass.push(m);
   } else if (METAL.has(color)) {
-    m = withDetail(new THREE.MeshStandardMaterial({ color, roughness: 0.43, metalness: 0.36, ...opts }), 0.3);
+    m = withDetail(new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.6, ...opts }), 0.6);
   } else {
-    m = new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0, ...opts });
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...opts });
     if (opts.emissive) { m.userData.baseGlow = opts.emissiveIntensity ?? 1; GLOW.lit.push(m); }
-    else if (!opts.transparent) withDetail(m, 0.3);
+    else if (!opts.transparent) withDetail(m);
   }
   matCache.set(key, m);
   return m;
