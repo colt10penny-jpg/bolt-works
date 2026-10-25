@@ -10,9 +10,6 @@ export const LANE = 0.9;                 // lane centre offset from the road cen
 export const STOP_R = ROAD_W / 2 + 1.1;  // stop line distance from an intersection centre (crosswalk in between)
 export const EDGE = 130;                 // roads out of town run this far; cars appear/vanish there
 export const BLOCK = 14;
-// Delivery vehicles stop in the loading forecourt, not in the middle of a solid
-// factory. A 2.4-unit truck has room to park without its nose crossing the facade.
-export const DOCK_STOP_OFFSET = 5.6;
 const HALF = 1.2;      // half a vehicle length
 const GAP = 2.7;       // centre-to-centre distance kept to the car in front
 const LOOK = 4.2;
@@ -32,10 +29,10 @@ export const segKey = (a, b) => { const ka = key(a.x, a.z), kb = key(b.x, b.z); 
 export function blockSides(cx, cz) {
   const h = BLOCK / 2;
   return [
-    { side: 'x+', road: { x: cx + h, z: cz }, inLot: { x: cx + DOCK_STOP_OFFSET, z: cz }, ends: [{ x: cx + h, z: cz - h }, { x: cx + h, z: cz + h }] },
-    { side: 'x-', road: { x: cx - h, z: cz }, inLot: { x: cx - DOCK_STOP_OFFSET, z: cz }, ends: [{ x: cx - h, z: cz - h }, { x: cx - h, z: cz + h }] },
-    { side: 'z+', road: { x: cx, z: cz + h }, inLot: { x: cx, z: cz + DOCK_STOP_OFFSET }, ends: [{ x: cx - h, z: cz + h }, { x: cx + h, z: cz + h }] },
-    { side: 'z-', road: { x: cx, z: cz - h }, inLot: { x: cx, z: cz - DOCK_STOP_OFFSET }, ends: [{ x: cx - h, z: cz - h }, { x: cx + h, z: cz - h }] },
+    { side: 'x+', road: { x: cx + h, z: cz }, inLot: { x: cx + 2.6, z: cz }, ends: [{ x: cx + h, z: cz - h }, { x: cx + h, z: cz + h }] },
+    { side: 'x-', road: { x: cx - h, z: cz }, inLot: { x: cx - 2.6, z: cz }, ends: [{ x: cx - h, z: cz - h }, { x: cx - h, z: cz + h }] },
+    { side: 'z+', road: { x: cx, z: cz + h }, inLot: { x: cx, z: cz + 2.6 }, ends: [{ x: cx - h, z: cz + h }, { x: cx + h, z: cz + h }] },
+    { side: 'z-', road: { x: cx, z: cz - h }, inLot: { x: cx, z: cz - 2.6 }, ends: [{ x: cx - h, z: cz - h }, { x: cx + h, z: cz - h }] },
   ].map(s => ({ ...s, seg: segKey(s.ends[0], s.ends[1]) }));
 }
 export const NET = { blocks: [], segs: new Map(), good: new Set(), exits: [], adj: new Map(), roads: [] };
@@ -140,8 +137,7 @@ function search(starts, goal, maxSteps = 400) {
   }
   return null;
 }
-// How a truck gets out of a lot: from a clear loading forecourt onto a good road.
-// Never route it through the factory wall; blockSides().inLot is a safe stop.
+// how a truck gets out of a lot: onto any side with good road, toward either end.
 // With `rightOnly`, only turning right out of the lot (into the near lane, crossing nobody).
 const same = (a, b) => a.x === b.x && a.z === b.z;
 function lotStarts([lx, lz], rightOnly = false) {
