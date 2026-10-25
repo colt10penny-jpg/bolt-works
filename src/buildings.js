@@ -226,8 +226,11 @@ Object.assign(BUILDERS, {
     const g = new THREE.Group();
     // hoist house with a pitched metal roof
     const hw = 3.0, hd = 2.3, hx = 1.1, hz = -1.35;
-    const wallTop = hall(g, { x: hx, z: hz, w: hw, d: hd, h: 1.9, color, parapet: false, piers: 1.0 });
-    gableRoof(g, { x: hx, z: hz, w: hw, d: hd, y: wallTop, rise: 0.9, color: 0x4f5560, along: 'x' });
+    const wallTop = hall(g, { x: hx, z: hz, w: hw, d: hd, h: 1.9, color: 0xdce8ed, pierColor: 0x477ab0, parapet: false, piers: 1.0 });
+    gableRoof(g, { x: hx, z: hz, w: hw, d: hd, y: wallTop, rise: 0.9, color: 0x227fc9, along: 'x' });
+    // Bright industrial fascia and a gold nameplate establish the game's factory palette.
+    g.add(box(hw + 0.25, 0.17, 0.15, 0xffc23d, hx, wallTop - 0.25, hz + hd / 2 + 0.12));
+    signBoard(g, 'z', hx, 1.38, hz + hd / 2 + 0.14, 1.5, 0x2c79bf, 4);
     winRow(g, 'z', hx + 0.5, 0.95, hz + hd / 2, 2, 1.0, 0.6, 0.6);
     sideDoor(g, 'z', hx - 0.95, hz + hd / 2);
     door(g, 'x', hz, hx + hw / 2, 1.2, 1.4, 0x8d7a64);
@@ -237,11 +240,11 @@ Object.assign(BUILDERS, {
     lattice(g, fx + s, fz - s, fx + s, fz + s, 0.3, H, IRON, 0.9);
     lattice(g, fx - s, fz - s, fx - s, fz + s, 0.3, H, IRON, 0.9);
     lattice(g, fx - s, fz - s, fx + s, fz - s, 0.3, H, IRON, 0.9);
-    g.add(box(1.7, 0.16, 1.7, DARK, fx, H + 0.3, fz));
+    g.add(box(1.7, 0.16, 1.7, 0xffc23d, fx, H + 0.3, fz));
     railing(g, fx - 0.8, fz + 0.8, fx + 0.8, fz + 0.8, H + 0.46);
     const wheels = [];
     for (const dz of [-0.35, 0.35]) {
-      const w = spokeWheel(0.62, RED, 6, 0.08); w.position.set(fx, H + 1.0, fz + dz); g.add(w); wheels.push(w);
+      const w = spokeWheel(0.62, 0xf0a525, 6, 0.08); w.position.set(fx, H + 1.0, fz + dz); g.add(w); wheels.push(w);
       g.add(box(0.1, 0.55, 0.1, DARK, fx - 0.3, H + 0.46, fz + dz), box(0.1, 0.55, 0.1, DARK, fx + 0.3, H + 0.46, fz + dz));
     }
     // cables from the top of the wheels down into the hoist house
@@ -251,7 +254,7 @@ Object.assign(BUILDERS, {
     // ore bin on legs, fed by an inclined conveyor
     const bx = 2.2, bz = 1.2;
     for (const [dx, dz] of [[-0.55, -0.5], [0.55, -0.5], [-0.55, 0.5], [0.55, 0.5]]) g.add(box(0.14, 1.6, 0.14, IRON, bx + dx, 0.15, bz + dz));
-    g.add(box(1.5, 1.1, 1.3, shade(color, 0.12), bx, 1.7, bz), box(1.6, 0.12, 1.4, TRIM, bx, 2.8, bz));
+    g.add(box(1.5, 1.1, 1.3, 0xe6ae43, bx, 1.7, bz), box(1.6, 0.12, 1.4, 0xf4eee0, bx, 2.8, bz));
     const hop = mesh(new THREE.ConeGeometry(0.85, 0.7, 4), shade(color, -0.1)); hop.rotation.set(Math.PI, Math.PI / 4, 0); hop.position.set(bx, 1.35, bz); g.add(hop);
     for (let k = 0; k < 4; k++) g.add(onWall('z', bx - 0.5 + k * 0.33, 1.9, bz + 0.65, 0.18, 0.7, 0.03, HAZ));
     const cx0 = fx + 0.9, cy0 = 0.6, cx1 = bx - 0.6, cy1 = 2.85, clen = Math.hypot(cx1 - cx0, cy1 - cy0), cang = Math.atan2(cy1 - cy0, cx1 - cx0);
