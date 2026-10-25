@@ -341,7 +341,7 @@ export class World {
     const g = new THREE.Group();
     let seed = (L.group.position.x * 73 + L.group.position.z * 19 + 1000) | 0 || 1;
     const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 3; i++) {
       const x = (r() - 0.5) * 8, z = (r() - 0.5) * 8;
       if (Math.abs(x - 2.6) < 1.3 && Math.abs(z + 2.6) < 1.3) continue;
       let o;
@@ -354,7 +354,7 @@ export class World {
     }
     // grass clumps and stones over the whole plot, merged into one piece each
     const blades = [], stones = [];
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 10; i++) {
       const cx = (r() - 0.5) * 9.5, cz = (r() - 0.5) * 9.5, n = 3 + Math.floor(r() * 4);
       for (let k = 0; k < n; k++) {
         const h = 0.3 + r() * 0.35, b = new THREE.ConeGeometry(0.06, h, 3);
@@ -362,7 +362,7 @@ export class World {
         b.translate(cx + (r() - 0.5) * 0.35, h / 2, cz + (r() - 0.5) * 0.35); blades.push(b);
       }
     }
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 5; i++) {
       const sz = 0.12 + r() * 0.2, st = new THREE.IcosahedronGeometry(sz, 0);
       st.scale(1, 0.55, 1); st.translate((r() - 0.5) * 9, sz * 0.3, (r() - 0.5) * 9); stones.push(st);
     }
@@ -393,11 +393,11 @@ export class World {
     if (this.padTex) return this.padTex;
     const c = document.createElement('canvas'); c.width = c.height = 256;
     const g = c.getContext('2d');
-    g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 2500; i++) { const v = 215 + Math.random() * 40; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
-    g.fillStyle = 'rgba(0,0,0,0.13)';
+    g.fillStyle = '#f6f8fc'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 380; i++) { const v = 235 + Math.random() * 18; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+    g.fillStyle = 'rgba(62,130,191,0.11)';
     for (let k = 1; k < 4; k++) { g.fillRect(k * 64 - 1, 0, 2, 256); g.fillRect(0, k * 64 - 1, 256, 2); }
-    g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 4; g.strokeRect(2, 2, 252, 252);
+    g.strokeStyle = 'rgba(42,115,178,0.17)'; g.lineWidth = 3; g.strokeRect(2, 2, 252, 252);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     return (this.padTex = t);
   }
@@ -882,20 +882,28 @@ export class World {
     if (this.themeName === 'desert') return this.#ramada(side, color);
     if (this.themeName === 'mars') return this.#airlockBay(side, color);
     const g = new THREE.Group();
-    const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
+    const wall = 0xe7f0fa; // Shared cobalt-and-porcelain icon design language
     const W = 2.1, H = 1.75, D = 1.7;
-    g.add(box(W + 0.24, H + 0.16, 0.1, new THREE.Color(wall).multiplyScalar(0.7).getHex(), 0, 0, -D / 2 + 0.02));   // door frame
+    g.add(box(W + 0.24, H + 0.16, 0.1, 0x2378bc, 0, 0, -D / 2 + 0.02));   // door frame
     g.add(box(W, H, 0.12, 0x1e2126, 0, 0, -D / 2 + 0.08));                                // the open door
-    g.add(box(W - 0.1, 0.36, 0.08, 0x9aa0a8, 0, H - 0.38, -D / 2 + 0.16));                  // rolled-up door
-    const roof = box(W + 0.4, 0.1, D + 0.15, new THREE.Color(wall).multiplyScalar(0.8).getHex(), 0, H + 0.1, 0.05);
+    g.add(box(W - 0.1, 0.36, 0.08, 0xe5edf6, 0, H - 0.38, -D / 2 + 0.16));                  // rolled-up door
+    const roof = box(W + 0.55, 0.16, D + 0.22, 0x258ee3, 0, H + 0.1, 0.05);
     roof.rotation.x = 0.06; g.add(roof);
     for (let k = 0; k < 6; k++) g.add(box(0.4, 0.1, 0.05, k % 2 ? 0x2a2a2e : 0xffc23d, -1.0 + k * 0.4, H + 0.06, D / 2 + 0.11));   // hazard fascia
-    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.09, H + 0.1, 0.09, 0x5b5f66, x, 0, D / 2 + 0.02));                      // posts
+    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.14, H + 0.1, 0.14, 0x2a75b4, x, 0, D / 2 + 0.02));                      // posts
     for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.1, 0.5, 0.1, 0xffc23d, x, 0, D / 2 + 0.02));                                // post guards
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
     g.add(box(0.26, 0.08, 0.2, 0xfff1cf, 0, H, 0, { emissive: 0xffd28a, night: 2.5 }));   // a lamp under the canopy
+    // A clear level driveway that visually connects the blue roofed loading dock
+    // to the real truck stop at ±5.55 from the factory's center.
+    const entry = box(2.38, 0.015, 1.68, 0xc6d7e8, 0, 0.015, D / 2 + 0.85);
+    entry.castShadow = false; g.add(entry);
+    for (const sx of [-1.1, 1.1]) {
+      const guide = box(0.055, 0.014, 1.75, 0xffd16c, sx, 0.038, D / 2 + 0.85);
+      guide.castShadow = false; g.add(guide);
+    }
     // the open front faces the driveway
-    const dist = 2.75;
+    const dist = 3.12;
     const rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
