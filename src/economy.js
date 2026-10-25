@@ -186,7 +186,7 @@ export const WORLDS = [
   { id: 'colorado', name: 'Timberline Valley', short: 'Timberline', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
   { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: the Rocket Bay builds rockets 2× faster.', perks: { rocket: 2 } },
   { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power.', perks: { power: 3 } },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
+  { id: 'desert', name: 'Tumbleweed Gulch', short: 'Wild West', perk: 'Prairie wind: the windmills make 3× power.', perks: { power: 3 } },
 ];
 WORLDS.forEach((w, i) => { w.price = Math.round((1 + PRICE_STEP * i) * 100) / 100; });
 // a building's numbers in a given world: every cost scales by the world's price
@@ -211,7 +211,7 @@ export const BUILD_SECS = { mine: 8, furnace: 30, hq: 100, press: 150, gear: 270
 export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.price || 1));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 10 : 150;
-export const THEME_NAMES = { colorado: 'Timberline Valley', desert: 'Mojave Test Site', moon: 'Tranquility Base', mars: 'Jezero Colony' };
+export const THEME_NAMES = { colorado: 'Timberline Valley', desert: 'Tumbleweed Gulch', moon: 'Tranquility Base', mars: 'Jezero Colony' };
 export const themeFor = launches => THEMES[Math.min(launches, THEMES.length - 1)];
 
 // ---- formatting ----

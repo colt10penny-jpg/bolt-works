@@ -54,21 +54,23 @@ export const WORLD_ART = {
     landmark: `<rect x="44" y="43" width="6" height="4" fill="#c75b3e"/><rect x="48" y="38.5" width="1.6" height="5" fill="#8a4a33"/><circle cx="49.5" cy="36.5" r="1.4" fill="#fff" opacity=".8"/>`,
   }),
 
-  // the Mojave: golden sand with rippled dunes, red flat-topped mesas casting shadows,
-  // a white salt flat, cacti, and a hot glow on the air
+  // the Wild West: golden prairie with rippled dunes, red flat-topped mesas casting
+  // shadows, cacti, a railroad, and a little frontier town with a water tower
   desert: planet('de', {
     base: ['#ffe3a3', '#f2bc6a', '#c9853a'], rim: '#ffe7b8', glow: '#ffd39a',
     body: `${speckle(7, '#a8652a', 60, 0.3)}
       <path d="M0 26 Q12 20 24 25 T48 22 T64 24" stroke="#e5a75e" stroke-width="3" fill="none"/>
       <path d="M0 36 Q14 30 28 35 T56 33 T70 34" stroke="#d48c45" stroke-width="3" fill="none"/>
       <path d="M0 46 Q14 41 28 45 T58 44" stroke="#c97c3a" stroke-width="3" fill="none"/>
-      <ellipse cx="42" cy="44" rx="7" ry="3.4" fill="#f7efdc"/>
+      <path d="M2 52 L62 40" stroke="#6e4a2c" stroke-width="1.6"/><path d="M2 52 L62 40" stroke="#c9b48a" stroke-width=".5" stroke-dasharray="1 1.4"/>
       <path d="M12 21 L14 15 L24 15 L26 21 Z" fill="#c0603a"/><rect x="14" y="14" width="10" height="1.8" fill="#e08a55"/>
       <path d="M26 21 L33 23 L24 22 Z" fill="#7a3a22" opacity=".45"/>
       <path d="M36 31 L37.5 26 L45 26 L46.5 31 Z" fill="#b5532a"/><rect x="37.5" y="25.2" width="7.5" height="1.5" fill="#d9794a"/>
       <g fill="#3f7a35"><path d="M20 33 v-5 a1.2 1.2 0 0 1 2.4 0 v5 Z"/><path d="M19 31 h-1.4 a.7.7 0 0 1 -.7 -.7 v-1.6 a.6.6 0 0 1 1.2 0 v1 h.9 Z"/>
         <path d="M51 38 v-4.4 a1.1 1.1 0 0 1 2.2 0 v4.4 Z"/><path d="M28 47 v-3.6 a1 1 0 0 1 2 0 v3.6 Z"/></g>`,
-    landmark: `<rect x="31" y="38" width="5" height="3.4" fill="#eadbbd"/><rect x="32" y="36.6" width="3" height="1.6" fill="#d9b38c"/><rect x="31" y="37.6" width="5" height=".6" fill="#7a5230"/>`,
+    landmark: `<rect x="27" y="37" width="6" height="5" fill="#9a6b42"/><rect x="26.5" y="35" width="7" height="2.4" fill="#9a6b42"/><rect x="27.5" y="35.6" width="5" height="1" fill="#f1e6c8"/><rect x="26" y="40" width="8" height=".7" fill="#5e4630"/>
+      <rect x="34" y="38" width="5" height="4" fill="#a8322a"/><path d="M33.6 38 L36.5 35.8 L39.4 38 Z" fill="#6a6a68"/>
+      <rect x="40.2" y="35.5" width=".5" height="6" fill="#5e4630"/><rect x="42.6" y="35.5" width=".5" height="6" fill="#5e4630"/><rect x="39.6" y="32.5" width="4" height="3.4" rx=".6" fill="#9a6b42"/><path d="M39.4 32.6 L41.6 31 L43.8 32.6 Z" fill="#5e4c3c"/>`,
   }),
 
   // the Moon: soft grey with dark seas, craters lit on one side and shadowed on the

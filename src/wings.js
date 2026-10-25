@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { box, cyl, mat } from './models.js';
 import { styledWing } from './upgrades.js';
+import { falseFront, wWin, porch, balcony, barrel } from './buildings-west.js';
 import { TRIM, DARK, IRON, HAZ, GLASS, WARM, shade, mesh, at, onWall, win, door, sideDoor, hall, tank, railing } from './buildings.js';
 
 const W = 2.3, D = 2.2, FH = 0.8;
@@ -218,13 +219,36 @@ function marsWing(g, { color, tier, floors }) {
   return y + 0.3;
 }
 
+
+// ---- the Wild West: another false-front shop on the street, timber when young and
+// brick with a balcony when the town has grown rich ----
+const WEST_PAINT = [0x9a6b42, 0x8f8574, 0x6f8f5a, 0xa8643a, 0x5a6a7a, 0xc9b48a];
+function westWing(g, { color, tier, cx, cz, floors, i }) {
+  const fl = Math.min(3, 1 + Math.floor(floors / 2)), h = fl * 0.85 + 0.3;
+  const brick = tier >= 5, wall = brick ? (i % 2 ? 0xa4553a : 0x8a4a34) : WEST_PAINT[(i + Math.round(Math.abs(cx + cz))) % WEST_PAINT.length];
+  const top = falseFront(g, { x: 0, z: 0, w: W - 0.1, d: D - 0.2, h, fh: 0.7, color: wall, sign: color, letters: 4 + (i % 3) });
+  const dw = doorWall(cx, cz);
+  // windows on the two outer walls, a row per floor, and a door at the bottom
+  for (let f = 0; f < fl; f++) for (const a of [-0.55, 0.55]) {
+    const y = 0.5 + f * 0.85;
+    if (!(f === 0 && dw.axis === 'z' && Math.abs(a) < 0.6 && a > 0)) wWin(g, 'z', a, y, (D - 0.2) / 2, 0.38, 0.5, 0xeee4cc, tier >= 3 ? WARM : GLASS);
+    wWin(g, 'x', a * 0.9, y, (W - 0.1) / 2, 0.38, 0.5, 0xeee4cc, tier >= 3 ? WARM : GLASS);
+  }
+  g.add(onWall('z', 0.55, 0.25, (D - 0.2) / 2, 0.45, 0.9, 0.05, 0x3a2a1e));
+  if (fl >= 2) balcony(g, { axis: 'z', a: 0, f: (D - 0.2) / 2, len: W - 0.1, y: 1.0, depth: 0.45 });
+  else porch(g, { axis: 'z', a: 0, f: (D - 0.2) / 2, len: W - 0.1, depth: 0.5, h: 1.05, rail: false });
+  if (tier <= 2) barrel(g, -0.85, (D - 0.2) / 2 + 0.3, 0.15, 0.8);
+  return top;
+}
+
 export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
-  if (kind === 'yard') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
+  if (kind === 'yard' && theme !== 'desert') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
   const g = new THREE.Group();
   const floors = 2 + Math.floor(Math.min(9, tier) / 3) + (i === 0 ? 1 : 0) + (tier >= 8 ? 1 : 0);
   const o = { color, tier, cx, cz, floors, theme };
   let top;
-  if (theme === 'mars') top = marsWing(g, o);
+  if (theme === 'desert') top = westWing(g, { ...o, i });
+  else if (theme === 'mars') top = marsWing(g, o);
   else if (theme === 'moon') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
   else if (kind === 'silo') top = siloWing(g, o);
   else if (kind === 'sawtooth') top = sawWing(g, o);

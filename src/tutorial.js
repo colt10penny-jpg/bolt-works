@@ -30,7 +30,7 @@ const DICE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke
 const SIGN = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M4 5h13l3 3-3 3H4z"/><path d="M20 13H7l-3 3 3 3h13z"/></svg>';
 const NAMES = {
   colorado: ['Rivet Ridge', 'Bolton Springs', 'Copper Gulch', 'Iron Hollow', 'Gearwood', 'Sprocket Falls', 'Anvil Creek', 'Steelhaven'],
-  desert: ['Sunbolt', 'Dusty Gear', 'Mesa Forge', 'Cactus Coil', 'Sandspark', 'Mirage Mill'],
+  desert: ['Rattlesnake Ridge', 'Coyote Flats', 'Silver Spur', 'Dry Gulch', 'Sagebrush Bend', 'Lonesome Butte'],
   moon: ['Tranquility Works', 'Crater Point', 'Lunaburg', 'Moonbolt', 'Dustfall Base', 'New Bolton'],
   mars: ['Red Rivet', 'New Jezero', 'Rustwater', 'Olympus Gate', 'Bolton Prime', 'Dustdevil Flats'],
 };

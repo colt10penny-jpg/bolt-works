@@ -4,6 +4,7 @@
 // baked into a few big meshes so it stays fast on phones.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RANGE } from './buildings-west.js';
 import { ROAD_W, LANE, STOP_R, EDGE, NET, BLOCK, hasRoad, distToRoad, exitFar, segKey } from './traffic.js';
 
 export const SHARED = { time: { value: 0 }, cloudTex: { value: null }, cloudAmt: { value: 0.18 }, night: { value: 0 } };
@@ -610,6 +611,22 @@ export function buildLand(name, T, blocks) {
     place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180 });
     place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 1.3, blob: 0.7 });
     place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 7, blob: 0 });
+    // the frontier round the town: an oil field of wooden derricks off to the east, a
+    // chapel and homesteads with barns and windmills, split-rail fences, longhorns grazing,
+    // water towers and the odd abandoned wagon
+    const oilfield = (x, z) => Math.hypot(x - 70, z + 10) < 30;
+    const flat = (lim = 1.2) => (x, z) => Math.abs(H(x + 2, z) - H(x - 2, z)) + Math.abs(H(x, z + 2) - H(x, z - 2)) < lim;
+    const ok = (f, lim) => (x, z) => f(x, z) && flat(lim)(x, z) && Math.hypot(x - 66, z - 64) > 24;
+    place(14, RANGE.derrick, { pad: 6, span: 200, where: ok(oilfield, 1.2), maxH: 4, blob: 1 });
+    place(5, RANGE.derrick, { pad: 6, span: 180, where: ok((x, z) => townDist(x, z) > 10, 1.2), maxH: 4, blob: 1 });
+    place(2, RANGE.church, { pad: 6, span: 110, where: ok((x, z) => townDist(x, z) > 6 && townDist(x, z) < 22, 1), maxH: 3, blob: 1.2 });
+    place(6, RANGE.barn, { pad: 5, span: 170, where: ok((x, z) => townDist(x, z) > 8 && !oilfield(x, z), 1.2), maxH: 4, blob: 1.2 });
+    place(8, RANGE.cabin, { pad: 4, span: 170, where: ok((x, z) => townDist(x, z) > 6, 1.2), maxH: 4, blob: 1 });
+    place(16, RANGE.windpump, { pad: 3, span: 190, where: ok(() => true, 1.5), maxH: 5, blob: 0.8 });
+    place(7, RANGE.tower, { pad: 3, span: 170, where: ok(() => true, 1.5), maxH: 5, blob: 0.8 });
+    place(40, RANGE.fence, { pad: 4, span: 200, where: ok((x, z) => !oilfield(x, z), 2), maxH: 5, blob: 0 });
+    place(30, RANGE.cattle, { pad: 2, span: 200, where: ok((x, z) => townDist(x, z) > 5, 2.5), maxH: 6, blob: 0 });
+    place(8, RANGE.wreck, { pad: 2, span: 170, maxH: 5, blob: 0.6 });
   } else if (name === 'mars') {
     // black basalt boulders and wind-carved spires, rusty stones, frost-dusted rocks, and
     // the odd old lander left from the first missions
@@ -908,15 +925,17 @@ export function buildRoads(name, T, stateOf) {
   const tx = textures();
   const group = new THREE.Group();
   const road = new Batch();
-  const asphaltM = withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
+  const west = name === 'desert';   // the Wild West: packed dirt streets and plank boardwalks
+  const asphaltM = west ? withClouds(std(0xe0b583, { map: tx.asphalt, roughness: 1 })) : withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
+  const rutM = withClouds(std(0xc09668, { roughness: 1 })), seamM = std(0x4e3a26, { roughness: 1 });
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
   const wornM = withClouds(std(0xa9b25f, { roughness: 1 }));
   const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
-  const walkM = withClouds(std(T.walk, { roughness: 0.9 }));
-  const curbM = std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
+  const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
+  const curbM = west ? std(0x5e4630, { roughness: 0.95 }) : std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
   const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', moon = name === 'moon' || mars;   // Mars roads are lit like the Moon's, not painted
   const edgeM = mars ? new THREE.MeshStandardMaterial({ color: 0xffd7b0, emissive: 0xffa060, emissiveIntensity: 0.3, roughness: 0.4 })
@@ -1035,7 +1054,18 @@ export function buildRoads(name, T, stateOf) {
         road.add(curbM, boxAt(0.12, 0.16, a1 - a0, sp.line + side * (HW + 0.06), 0, (a0 + a1) / 2));
       }
     }
-    if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
+    if (west) {
+      // wagon-wheel ruts worn into the dirt, a hoofprint-scuffed middle, and the gaps
+      // between the boardwalk planks
+      for (const off of [-1.35, -0.45, 0.45, 1.35]) strip(rutM, { ...sp, line: sp.line + off }, a0 + 0.4, a1 - 0.4, 0.078 + Math.abs(off) * 0.0005, 0.2);
+      for (let i = a0 + 0.2; i < a1; i += 0.36) for (const side of [-1, 1])
+        road.add(seamM, sp.along === 'x' ? boxAt(0.035, 0.006, SW - 0.04, i, 0.14, sp.line + side * (HW + SW / 2)) : boxAt(SW - 0.04, 0.006, 0.035, sp.line + side * (HW + SW / 2), 0.14, i));
+      for (let i = a0 + 1; i < a1 - 1; i += 1.4 + r() * 2) {
+        const g = new THREE.IcosahedronGeometry(0.06 + r() * 0.08, 0); g.scale(1, 0.5, 1);
+        const off = (r() - 0.5) * (ROAD_W - 0.8);
+        g.translate(sp.along === 'x' ? i : sp.line + off, 0.08, sp.along === 'x' ? sp.line + off : i); road.add(rutM, g);
+      }
+    } else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
       road.add(edgeM, sp.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, sp.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, sp.line + sd * (HW - 0.12), 0.075, i));
     else for (let i = a0 + STOP_R - 1.4; i < a1 - STOP_R + 1.8; i += 2.4)
       road.add(paintM, sp.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.08, sp.line) : boxAt(0.14, 0.02, 1.1, sp.line, 0.08, i));
@@ -1067,6 +1097,7 @@ export function buildRoads(name, T, stateOf) {
       if (ways.length < 3) continue;   // a bend, not a junction: nobody stops here
       const ax = -hx, az = -hz;
       const cx = x - ax * STOP_R + (-az) * LANE, cz = z - az * STOP_R + ax * LANE;
+      if (west) continue;   // no paint on a dirt street
       road.add(paintM, ax ? boxAt(0.26, 0.022, HW - 0.15, cx, 0.08, cz) : boxAt(HW - 0.15, 0.022, 0.26, cx, 0.08, cz));
       const zc = STOP_R - 0.62;
       if (!moon) for (let k = -3; k <= 3; k++) {
@@ -1082,6 +1113,7 @@ export function buildRoads(name, T, stateOf) {
   const poles = new Batch();
   const poleM = std(0x3a3f48, { roughness: 0.45, metalness: 0.6 });
   const headM = std(0x2a2d33, { roughness: 0.5, metalness: 0.4 });
+  const woodM = std(0x6e4a2c, { roughness: 0.95 });
   const lampM = new THREE.MeshStandardMaterial({ color: 0xfff6e2, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.3 });
   const lights = [];
   const lamp = (x, z, ax, az) => {
@@ -1089,6 +1121,19 @@ export function buildRoads(name, T, stateOf) {
       poles.add(poleM, boxAt(0.18, 0.7, 0.18, x, 0.14, z));
       poles.add(edgeM, boxAt(0.26, 0.16, 0.26, x, 0.84, z));
       lights.push(new THREE.Vector3(x, 0.9, z));
+      return;
+    }
+    if (west) {
+      // an old street lamp: a wooden post with a little arm and a glass lantern hanging off it
+      const l = Math.hypot(ax, az), hx = x + ax / l * 0.45, hz = z + az / l * 0.45;
+      poles.add(woodM, boxAt(0.12, 2.4, 0.12, x, 0.14, z));
+      const arm = new THREE.BoxGeometry(0.5, 0.07, 0.07); arm.rotateY(-Math.atan2(az, ax)); arm.translate(x + ax / l * 0.22, 2.4, z + az / l * 0.22); poles.add(woodM, arm);
+      poles.add(headM, boxAt(0.02, 0.15, 0.02, hx, 2.2, hz));
+      poles.add(headM, boxAt(0.24, 0.05, 0.24, hx, 2.15, hz));
+      const cap = new THREE.ConeGeometry(0.17, 0.14, 4); cap.rotateY(Math.PI / 4); cap.translate(hx, 2.22, hz); poles.add(headM, cap);
+      poles.add(lampM, boxAt(0.17, 0.26, 0.17, hx, 1.89, hz));
+      poles.add(headM, boxAt(0.21, 0.04, 0.21, hx, 1.86, hz));
+      lights.push(new THREE.Vector3(hx, 1.95, hz));
       return;
     }
     const pole = new THREE.CylinderGeometry(0.05, 0.08, 3.0, 8); pole.translate(x, 0.14 + 1.5, z); poles.add(poleM, pole);

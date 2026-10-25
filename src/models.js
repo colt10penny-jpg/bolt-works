@@ -530,6 +530,91 @@ export function lunarHauler(color) {
   return mergeVehicle(g);
 }
 
+// ---- the Wild West: horse-drawn wagons, stagecoaches and riders, pointing +x ----
+// a spoked wooden wagon wheel with an iron tyre, standing on the ground
+function westWheel(g, x, z, r = 0.3, color = 0xb5532a) {
+  const t = new THREE.Mesh(new THREE.TorusGeometry(r - 0.03, 0.035, 5, 18), mat(0x3a3020));
+  t.position.set(x, r, z); g.add(t);
+  for (let k = 0; k < 6; k++) { const sp = flatBox(0.035, (r - 0.04) * 2, 0.03, color, x, r - (r - 0.04), z); sp.rotation.z = (k / 6) * Math.PI; sp.position.set(x, r, z); g.add(sp); }
+  g.add(cyl(0.06, 0.06, 0.08, 0x3a3020, x, r - 0.04, z, 8).rotateX(Math.PI / 2));
+}
+// a horse in harness at a trot, facing +x
+function harnessHorse(g, x, z, coat = 0x7a4a2a) {
+  const dark = new THREE.Color(coat).multiplyScalar(0.6).getHex();
+  g.add(box(0.62, 0.26, 0.22, coat, x, 0.5, z));
+  for (const [lx, lz, lean] of [[-0.22, -0.06, 0.25], [-0.22, 0.06, -0.2], [0.22, -0.06, -0.25], [0.22, 0.06, 0.2]]) { const l = box(0.06, 0.5, 0.06, lx > 0 ? coat : dark, x + lx, 0.02, z + lz); l.rotation.z = lean; g.add(l); }
+  const neck = box(0.13, 0.36, 0.15, coat, x + 0.3, 0.62, z); neck.rotation.z = -0.65; g.add(neck);
+  const head = box(0.28, 0.12, 0.13, coat, x + 0.5, 0.86, z); head.rotation.z = -0.4; g.add(head);
+  g.add(box(0.05, 0.26, 0.05, dark, x + 0.33, 0.74, z));
+  const tail = box(0.05, 0.3, 0.05, dark, x - 0.33, 0.38, z); tail.rotation.z = -0.4; g.add(tail);
+  g.add(box(0.16, 0.06, 0.25, 0x3a2418, x + 0.08, 0.74, z));   // the collar and harness
+}
+// a figure in a hat sitting at the reins
+function cowboy(g, x, y, z, shirt = 0x8a3a2a) {
+  g.add(box(0.18, 0.26, 0.2, shirt, x, y, z), box(0.13, 0.13, 0.13, 0xd8a77a, x, y + 0.27, z));
+  g.add(cyl(0.16, 0.16, 0.025, 0x5a3a22, x, y + 0.38, z, 12), cyl(0.07, 0.08, 0.1, 0x5a3a22, x, y + 0.4, z, 10));
+}
+// a freight wagon (flat = an open bed for the cargo you can see), or a covered prairie wagon
+export function freightWagon(color, flat = false) {
+  const g = new THREE.Group();
+  g.add(flatBox(1.2, 0.08, 0.7, 0x5a3e26, -0.6, 0.3, 0));                                   // running gear
+  g.add(box(1.25, 0.08, 0.86, 0x8a6a45, -0.6, 0.32, 0));                                    // bed: the deck top is at 0.4
+  for (const sd of [-1, 1]) g.add(box(1.25, 0.16, 0.05, color, -0.6, 0.4, sd * 0.43));
+  g.add(box(0.05, 0.16, 0.86, color, -1.22, 0.4, 0), box(0.05, 0.28, 0.86, color, 0.02, 0.4, 0));
+  if (!flat) {
+    // the canvas bonnet over hoops
+    const cover = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 1.3, 12, 1, true, 0, Math.PI), mat(0xf1e6c8, { side: THREE.DoubleSide }));
+    cover.rotation.z = Math.PI / 2; cover.position.set(-0.6, 0.56, 0); g.add(cover);
+    for (let k = 0; k < 4; k++) { const hp = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.02, 4, 12, Math.PI), mat(0xd8c49a)); hp.position.set(-1.2 + k * 0.4, 0.56, 0); hp.rotation.y = Math.PI / 2; g.add(hp); }
+  }
+  g.add(box(0.2, 0.06, 0.6, 0x6e4a2c, 0.05, 0.66, 0));                                       // the driver's bench
+  cowboy(g, 0.05, 0.7, 0.1);
+  westWheel(g, -1.0, -0.47, 0.32); westWheel(g, -1.0, 0.47, 0.32);
+  westWheel(g, -0.2, -0.47, 0.24); westWheel(g, -0.2, 0.47, 0.24);
+  g.add(flatBox(0.75, 0.04, 0.04, 0x5a3e26, 0.45, 0.42, 0));                                 // the tongue
+  harnessHorse(g, 0.65, -0.2, 0x7a4a2a); harnessHorse(g, 0.65, 0.2, 0x5a3a26);
+  g.add(flatBox(0.12, 0.12, 0.12, 0xfff1cf, 0.05, 0.85, -0.38, { emissive: 0xffc070, night: 2.4 }));   // a lantern
+  return mergeVehicle(g);
+}
+// a stagecoach: a rounded painted body on leather springs, a luggage rail on top, a
+// driver up front, four horses
+export function stagecoach(color) {
+  const g = new THREE.Group();
+  g.add(flatBox(1.3, 0.06, 0.6, 0x3a2a1e, -0.55, 0.32, 0));
+  g.add(box(0.9, 0.55, 0.72, color, -0.62, 0.42, 0));
+  g.add(box(0.96, 0.06, 0.78, 0xc9a24a, -0.62, 0.97, 0));                                    // the gilt roof edge
+  for (const sd of [-1, 1]) { g.add(flatBox(0.32, 0.24, 0.02, TINT, -0.62, 0.66, sd * 0.37)); g.add(flatBox(0.04, 0.5, 0.02, 0xc9a24a, -0.62, 0.44, sd * 0.375)); }
+  for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) g.add(flatBox(0.03, 0.12, 0.03, 0x3a2a1e, -0.95 + k * 0.22, 1.03, sd * 0.34));
+  g.add(box(0.5, 0.18, 0.5, 0x8a6a45, -0.75, 1.03, 0));                                       // luggage
+  g.add(box(0.25, 0.3, 0.62, shade(color, -0.25), -0.08, 0.5, 0));                            // the box seat
+  cowboy(g, -0.08, 0.8, 0.12, 0x2a3a5a);
+  westWheel(g, -0.95, -0.42, 0.33, 0xc9a24a); westWheel(g, -0.95, 0.42, 0.33, 0xc9a24a);
+  westWheel(g, -0.2, -0.42, 0.25, 0xc9a24a); westWheel(g, -0.2, 0.42, 0.25, 0xc9a24a);
+  harnessHorse(g, 0.4, -0.17, 0x2a2420); harnessHorse(g, 0.4, 0.17, 0x7a4a2a);
+  harnessHorse(g, 0.95, -0.17, 0xd8c8b0); harnessHorse(g, 0.95, 0.17, 0x7a4a2a);
+  g.scale.setScalar(0.9);
+  return mergeVehicle(g);
+}
+// a light buckboard wagon with one horse, or (rider) a cowboy on horseback
+export function buckboard(color, rider = false) {
+  const g = new THREE.Group();
+  if (rider) {
+    harnessHorse(g, 0, 0, color);
+    g.add(box(0.26, 0.06, 0.3, 0x5a2a1a, -0.02, 0.76, 0));
+    cowboy(g, -0.02, 0.8, 0, [0x8a3a2a, 0x2a3a5a, 0xc9a24a][Math.floor(Math.random() * 3)]);
+    return mergeVehicle(g);
+  }
+  g.add(box(0.85, 0.1, 0.62, 0x8a6a45, -0.45, 0.32, 0));
+  for (const sd of [-1, 1]) g.add(box(0.85, 0.12, 0.04, color, -0.45, 0.42, sd * 0.31));
+  g.add(box(0.2, 0.22, 0.56, 0x6e4a2c, -0.2, 0.42, 0));
+  cowboy(g, -0.25, 0.66, 0.1); cowboy(g, -0.25, 0.66, -0.14, 0xd85a8a);
+  g.add(box(0.3, 0.2, 0.3, 0xb88a5a, -0.7, 0.42, 0));
+  for (const sd of [-1, 1]) { westWheel(g, -0.7, sd * 0.36, 0.27); westWheel(g, -0.15, sd * 0.36, 0.27); }
+  g.add(flatBox(0.6, 0.03, 0.03, 0x5a3e26, 0.2, 0.42, 0.13), flatBox(0.6, 0.03, 0.03, 0x5a3e26, 0.2, 0.42, -0.13));
+  harnessHorse(g, 0.5, 0, 0x7a4a2a);
+  return mergeVehicle(g);
+}
+
 // a passenger car, pointing +x: sedans, hatchbacks, SUVs and pickups
 const BODY = ['sedan', 'sedan', 'hatch', 'suv', 'pickup'];
 let carN = 0;
