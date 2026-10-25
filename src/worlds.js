@@ -57,12 +57,12 @@ export const SKINS = {
 
 export const CUSTOMERS = {
   colorado: {
-    mine: ['Leadville Smelter', 'Pueblo Steel Mill', 'Front Range Foundry'],
-    furnace: ['Pueblo Rail Yard', 'Denver Bridge Crew', 'Golden Shipyard'],
-    press: ['Boulder Bike Works', 'Front Range Builders', 'Aurora Stadium'],
-    gear: ['Pueblo Wind Farm', 'Clock Tower Repair', 'Rocky Mountain Rail'],
-    engine: ['Mile High Motors', 'Vail Snowcat Co.', 'Fort Collins Tractors'],
-    turbine: ['Denver Airport Hangar', 'High Plains Power', 'Colorado Air Lines'],
+    mine: ['Ridgeline Smelter', 'Valley Steel Mill', 'Highland Foundry'],
+    furnace: ['Valley Rail Yard', 'River Bridge Crew', 'Lakeside Shipyard'],
+    press: ['Ridge Bike Works', 'Valley Builders', 'Riverside Stadium'],
+    gear: ['Hilltop Wind Farm', 'Clock Tower Repair', 'Mountain Rail Co.'],
+    engine: ['Summit Motors', 'Snowpeak Snowcat Co.', 'Valley Tractors'],
+    turbine: ['Regional Airport Hangar', 'High Plains Power', 'Timberline Air Lines'],
     rocket: ['Space Agency', 'Orbital Freight Co.', 'Lunar Mining Group'],
   },
   desert: {
