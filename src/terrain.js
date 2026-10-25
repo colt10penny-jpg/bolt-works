@@ -155,6 +155,9 @@ function bake(list, material, { cast = false, receive = true } = {}) {
   m.castShadow = cast; m.receiveShadow = receive;
   return m;
 }
+// a plain painted material: nothing about it but its colour that a merged one would lose
+const plainPaint = m => m.isMeshStandardMaterial && !m.map && !m.transparent && !m.vertexColors && !m.userData.night && !m.userData.glow &&
+  !(m.emissiveIntensity > 0 && m.emissive.getHex()) && (!Object.prototype.hasOwnProperty.call(m, 'onBeforeCompile') || m.userData.sway) && !m.normalMap;
 // collect pieces by material, then bake each material into one mesh
 class Batch {
   constructor() { this.parts = new Map(); }
@@ -181,6 +184,30 @@ class Batch {
     });
   }
   build(group, opts) {
+    // Plain painted materials that differ only in colour are drawn as one: the colour
+    // moves into the vertices (the shader multiplies them the same way), so the scenery
+    // takes a handful of draws instead of one per shade of green or rock.
+    const merged = new Map();
+    for (const [m, list] of this.parts) {
+      if (!plainPaint(m)) continue;
+      const key = [m.roughness, m.metalness, m.flatShading, m.side, !!m.userData.sway, m.fog, m.vertexColors].join('|');
+      let e = merged.get(key);
+      if (!e) {
+        const mm = m.clone(); mm.color.set(0xffffff); mm.vertexColors = true; mm.userData = { ...m.userData };
+        if (m.userData.sway) withSway(mm);
+        merged.set(key, e = { mat: mm, geos: [] });
+      }
+      const c = m.color;
+      for (const g of list) {
+        const n = g.attributes.position.count, col = g.attributes.color;
+        const arr = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) { const k = col ? col.getX(i) : 1, l = col ? col.getY(i) : 1, q = col ? col.getZ(i) : 1; arr[i * 3] = c.r * k; arr[i * 3 + 1] = c.g * l; arr[i * 3 + 2] = c.b * q; }
+        g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+        e.geos.push(g);
+      }
+      this.parts.delete(m);
+    }
+    for (const { mat, geos } of merged.values()) this.parts.set(mat, geos);
     for (const [m, list] of this.parts) { const mesh = bake(list, m, opts); if (mesh) group.add(mesh); }
   }
 }

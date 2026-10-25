@@ -21,6 +21,8 @@ import { plotsOf, boundsOf, startView } from './layout.js';
 import { STYLE, PROPS } from './upgrades.js';
 import { WEST_STYLE, westGear } from './west-upgrades.js';
 import { buildWing } from './wings.js';
+import { splitBig } from './chunks.js';
+import { Puff, PuffLayer } from './puffs.js';
 const LOT = 10;
 const CAM_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
 // where the rocket you arrived in stands, on open ground just below town
@@ -125,7 +127,57 @@ function bakeModel(m) {
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
   }
+  // Moving parts (a crane's jib, a turning wheel, the rocket) move as a whole, so the
+  // pieces inside each one can be merged too, in that part's own frame: same look, same
+  // motion, far fewer draws. (Rocket flames switch on and off, so they stay separate.)
+  const top = [...moving].filter(o => { for (let p = o.parent; p && p !== g; p = p.parent) if (moving.has(p)) return false; return !o.isMesh; });
+  for (const root of top) mergeWithin(root, moving);
 }
+function mergeWithin(root, moving) {
+  const skip = new Set();
+  root.traverse(o => { if (o !== root && (moving.has(o) || o.userData.flame || o === root.userData.flame)) o.traverse(c => skip.add(c)); });
+  if (root.userData.flame) root.userData.flame.traverse(c => skip.add(c));
+  const list = [];
+  root.traverse(o => {
+    if (!o.isMesh || skip.has(o) || o.morphTargetInfluences || Array.isArray(o.material) || o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) return;
+    for (let p = o; p && p !== root; p = p.parent) if (!p.visible) return;   // hidden pieces stay as they are
+    list.push(o);
+  });
+  if (list.length < 3) return;
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const groups = new Map();
+  for (const o of list) {
+    const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+    geo.morphAttributes = {};
+    if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    let target = o.material;
+    if (paintable(o.material)) {
+      const c = o.material.color, n = geo.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      target = paintMat(o.material);
+    }
+    const key = target.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '') + '|' + o.renderOrder;
+    if (!groups.has(key)) groups.set(key, { target, cast: o.castShadow, receive: o.receiveShadow, order: o.renderOrder, geos: [] });
+    groups.get(key).geos.push(geo);
+  }
+  for (const o of list) o.parent.remove(o);
+  for (const { target, cast, receive, order, geos } of groups.values()) {
+    const merged = mergeGeometries(geos, false);
+    geos.forEach(x => x.dispose());
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, target);
+    mesh.castShadow = cast; mesh.receiveShadow = receive; mesh.renderOrder = order;
+    root.add(mesh);
+  }
+}
+
+// the land, scenery and roads never move: work out their placement once instead of every frame
+const freezeStatic = root => { root.updateMatrixWorld(true); root.traverse(o => { if (o !== root) { o.matrixAutoUpdate = false; o.matrixWorldAutoUpdate = false; } }); };
+const freeGeometry = root => root.traverse(o => { if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose(); });
 
 function rng(seed) { return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; }
 
@@ -223,6 +275,7 @@ export class World {
     const fleet = name === 'mars' ? 'mars' : name === 'moon' ? 'moon' : name === 'desert' ? 'west' : 'earth';
     if (this.fleet !== fleet) {
       this.traffic.clear('manager');
+      for (const m of [...this.idleCars, ...this.truckPool, ...this.carPool]) freeGeometry(m);   // the old world's vehicles
       this.idleCars = []; this.truckPool = []; this.carPool = [];
       this.fleet = fleet;
       this.#makeFleet();
@@ -238,6 +291,8 @@ export class World {
     const land = buildLand(name, T, Object.values(this.P));
     for (const c of [...land.ground.children]) this.groundGroup.add(c);
     for (const c of [...land.scenery.children]) this.sceneryGroup.add(c);
+    splitBig(this.groundGroup); splitBig(this.sceneryGroup);   // drawn tile by tile, so off-screen parts are skipped
+    for (const g of [this.groundGroup, this.sceneryGroup]) freezeStatic(g);
     this.land = land.ground.userData;
     this.heightAt = land.height;
     this.#roads();
@@ -256,6 +311,7 @@ export class World {
   #roads() {
     if (this.roadGroup) { this.scene.remove(this.roadGroup); this.roadGroup.traverse(o => o.geometry?.dispose()); }
     const r = buildRoads(this.themeName, this.T, k => this.roadInfo().state(k));
+    splitBig(r.group); freezeStatic(r.group);
     this.roadGroup = r.group;
     this.scene.add(r.group);
     this.roadData = r;
@@ -500,8 +556,10 @@ export class World {
       L.sale.visible = false;
       L.bounce = 1;
     } else if (!built && L.model) {
-      L.group.remove(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = !!L.developed;
-      if (L.extras) { L.group.remove(L.extras); L.extras = null; }
+      // free the old building's geometry from the graphics memory (every building's parts
+      // are its own; materials are shared and stay)
+      L.group.remove(L.model); freeGeometry(L.model); L.model = null; L.anim = null; L.top = 2.4; L.smokeAt = []; L.sale.visible = !!L.developed;
+      if (L.extras) { L.group.remove(L.extras); freeGeometry(L.extras); L.extras = null; }
       L.rocket = null; L.scaffold = null;
       L.crates.children.forEach(c => { c.visible = false; });
     }
@@ -1324,7 +1382,7 @@ export class World {
   // the rocket you arrived in, standing on open ground outside town in every world
   // after the first. look = { model, color } of this world's rocket, or null for none.
   setLander(look) {
-    if (this.lander) { this.scene.remove(this.lander); this.lander = null; }
+    if (this.lander) { this.scene.remove(this.lander); freeGeometry(this.lander); this.lander = null; }
     this.landing = null;
     if (!look) return;
     const m = (BUILDERS[look.model] || BUILDERS.rocket)(look.color);
@@ -1445,6 +1503,7 @@ export class World {
   resize() {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (!w || !h) return;
+    this.cw = w; this.ch = h;   // kept, so labels don't have to ask the page for the size every frame
     this.look.resize();
     this.aspect = w / h;
     this.halfH = Math.max(17, 15.5 / this.aspect);
@@ -1490,9 +1549,9 @@ export class World {
       g.putImageData(img, 0, 0);
       this.puffTex = new THREE.CanvasTexture(c);
     }
-    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.puffTex, color, transparent: true, depthWrite: false, opacity: 0.9, rotation: Math.random() * 6.28, blending: hot ? THREE.AdditiveBlending : THREE.NormalBlending }));
-    m.scale.setScalar(size); m.userData.size = size;
-    return m;
+    // all puffs are drawn together (see puffs.js); each looks and behaves like a sprite
+    this.puffLayer ||= new PuffLayer(this.scene, this.puffTex);
+    return new Puff(this.puffLayer, color, hot, size);
   }
 
   #emitSmoke(L) {
@@ -1598,13 +1657,15 @@ export class World {
       const c = this.sun.shadow.camera;
       if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
     }
+    this.camera.updateMatrixWorld();
+    this.puffLayer?.update(this.camera);
     this.look.render();
     this.#labels(dt, labelFor);
   }
 
   #project(v) {
-    const p = v.clone().project(this.camera);
-    return { x: (p.x * 0.5 + 0.5) * this.canvas.clientWidth, y: (-p.y * 0.5 + 0.5) * this.canvas.clientHeight };
+    const p = (this._pv ||= new THREE.Vector3()).copy(v).project(this.camera);
+    return { x: (p.x * 0.5 + 0.5) * (this.cw || this.canvas.clientWidth), y: (-p.y * 0.5 + 0.5) * (this.ch || this.canvas.clientHeight) };
   }
 
   // where a lot's building appears on screen (in CSS pixels), at height y above the ground
@@ -1623,11 +1684,15 @@ export class World {
       const plus = info.cls?.includes('plus');
       const s = this.#project(new THREE.Vector3(L.group.position.x, plus ? 0.9 : L.top * L.grow + 0.15, L.group.position.z));
       if (L.label._html !== info.html) { L.label.innerHTML = info.html; L.label._html = info.html; L.bar = L.label.querySelector('.bar i'); L.label.hidden = !info.html; }
-      if (L.bar) L.bar.style.width = (info.progress * 100).toFixed(1) + '%';
+      if (L.bar) { const bw = (info.progress * 100).toFixed(1) + '%'; if (L.bar._w !== bw) { L.bar.style.width = bw; L.bar._w = bw; } }
       const cls = 'lot-label ' + info.cls + (this.selected === id ? ' sel' : '');
       if (L.label.className !== cls) L.label.className = cls;
-      L.label.setAttribute('aria-label', info.aria);
-      L.label.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) scale(${labelScale}) translate(-50%, -100%)`;
+      // (only touch the page when something changed: writing styles every frame is costly)
+      if (L.label._aria !== info.aria) { L.label.setAttribute('aria-label', info.aria); L.label._aria = info.aria; }
+      if (!L.label.hidden) {
+        const tf = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) scale(${labelScale}) translate(-50%, -100%)`;
+        if (L.label._tf !== tf) { L.label.style.transform = tf; L.label._tf = tf; }
+      } else L.label._tf = null;
     }
     for (let i = this.pops.length - 1; i >= 0; i--) {
       const p = this.pops[i];
@@ -1635,7 +1700,7 @@ export class World {
       const L = this.lots[p.id];
       const s = this.#project(new THREE.Vector3(L.group.position.x, L.top * L.grow + 0.15, L.group.position.z));
       const y = s.y - 30 - p.age * 46;
-      const off = y < 190 || y > this.canvas.clientHeight - 40 || s.x < 20 || s.x > this.canvas.clientWidth - 20;
+      const off = y < 190 || y > (this.ch || this.canvas.clientHeight) - 40 || s.x < 20 || s.x > (this.cw || this.canvas.clientWidth) - 20;
       p.el.style.transform = `translate(${s.x}px, ${y}px) translate(-50%, -100%)`;
       p.el.style.opacity = off ? '0' : String(Math.max(0, 1 - p.age / 1.2));
       if (p.age > 1.2) { p.el.remove(); this.pops.splice(i, 1); }

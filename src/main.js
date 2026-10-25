@@ -1138,6 +1138,9 @@ function perfCheck(now, dt) {
     track('graphics_auto', { fps: Math.round(fps), chose: game.s.settings.graphics });
   }
 }
+// write text into the page only when it changed (cheaper than rewriting it every frame)
+const shown = new Map();
+function setText(id, t) { if (shown.get(id) !== t) { shown.set(id, t); $(id).textContent = t; } }
 function loop(now) {
   // clamp: some browsers hand back an older frame time (e.g. after waking), never run time backwards
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
@@ -1148,8 +1151,8 @@ function loop(now) {
   world.frame(dt, labelFor);
   vaultTip();
   tutorial.frame(!!current);
-  $('cash').textContent = '$' + (game.cash < 1000 ? Math.floor(game.cash) : fmt(game.cash));
-  $('rate').textContent = `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`;
+  setText('cash', '$' + (game.cash < 1000 ? Math.floor(game.cash) : fmt(game.cash)));
+  setText('rate', `+$${fmt(game.rate())} per sec${game.boostLeft() > 0 ? ' · ×2' : ''}`);
   uiT -= dt;
   if (uiT <= 0) {
     uiT = 0.2;
