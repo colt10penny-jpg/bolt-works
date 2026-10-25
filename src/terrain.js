@@ -403,6 +403,13 @@ export function buildLand(name, T, blocks) {
       // dark lava seas, crater bowls in shadow-grey, bright rims and rays, pale highlands
       const mf = moonAt(x, z);
       c.lerp(c2.setHex(0x5c5d66), smooth(0.55, 0.7, fbm(x / 45, z / 45, 3, 29)) * 0.55);
+      // the small craters too: a darker floor and a bright, sharp rim
+      for (const [cx, cz, r] of MOON_CRATERS) {
+        const dd = Math.hypot(x - cx, z - cz) / r;
+        if (dd > 1.5) continue;
+        if (dd < 1) mf.bowl = Math.max(mf.bowl, 0.8 - dd * 0.5);
+        mf.rim = Math.max(mf.rim, Math.exp(-(((dd - 1) / 0.2) ** 2)) * 0.9);
+      }
       c.lerp(c2.setHex(0x6a6b74), mf.bowl * 0.5);
       c.lerp(c2.setHex(0xd8d8de), Math.max(mf.rim * 0.6, mf.ray * 0.55));
       c.lerp(c2.setHex(0xbab4aa), mf.high * 0.55 * (0.7 + 0.6 * n2));
@@ -428,7 +435,10 @@ export function buildLand(name, T, blocks) {
     const A = a * 1.45, B = b * 1.45, ex = Math.hypot(A * Math.cos(r), B * Math.sin(r)) + 2, ez = Math.hypot(A * Math.sin(r), B * Math.cos(r)) + 2;
     return { x0: cx - ex, x1: cx + ex, z0: cz - ez, z1: cz + ez };
   });
-  const underPatch = (x, z) => patchBox.some(q => x > q.x0 + 3.5 && x < q.x1 - 3.5 && z > q.z0 + 3.5 && z < q.z1 - 3.5);
+  // On the Moon the whole neighbourhood of the town gets fine ground too, so every small
+  // crater is round and soft rather than a few big facets.
+  const FINE = name === 'moon' ? { x0: -110, x1: 110, z0: -110, z1: 110 } : null;
+  const underPatch = (x, z) => patchBox.concat(FINE ? [FINE] : []).some(q => x > q.x0 + 3.5 && x < q.x1 - 3.5 && z > q.z0 + 3.5 && z < q.z1 - 3.5);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const h = H(x, z);
@@ -469,6 +479,23 @@ export function buildLand(name, T, blocks) {
       patch.receiveShadow = true;
       ground.add(patch);
     });
+  }
+  if (FINE) {
+    const w = FINE.x1 - FINE.x0, d = FINE.z1 - FINE.z0, cell = 0.9;
+    const fg = new THREE.PlaneGeometry(w, d, Math.ceil(w / cell), Math.ceil(d / cell));
+    fg.rotateX(-Math.PI / 2); fg.translate((FINE.x0 + FINE.x1) / 2, 0, (FINE.z0 + FINE.z1) / 2);
+    const fp = fg.attributes.position, fc = new Float32Array(fp.count * 3);
+    for (let i = 0; i < fp.count; i++) {
+      const x = fp.getX(i), z = fp.getZ(i), h = H(x, z);
+      fp.setY(i, h - 0.02);
+      shade(x, z, h);
+      fc[i * 3] = c.r; fc[i * 3 + 1] = c.g; fc[i * 3 + 2] = c.b;
+    }
+    fg.setAttribute('color', new THREE.BufferAttribute(fc, 3));
+    fg.computeVertexNormals();
+    const fine = new THREE.Mesh(fg, withClouds(std(0xffffff, { vertexColors: true, roughness: 0.95 })));
+    fine.receiveShadow = true;
+    ground.add(fine);
   }
   ground.userData.base = new THREE.Color(P.grass[0]);
 
