@@ -529,7 +529,12 @@ export class World {
       if (!same || placed.some(p => Math.hypot(p.x - x, p.z - z) < 1.5)) continue;
       placed.push(hit.point.clone());
       const unit = new THREE.Group();
-      if (this.themeName === 'desert') {
+      if (this.themeName === 'mars') {
+        // a heat radiator: a row of angled white blades on a gunmetal base
+        unit.add(box(0.9, 0.12, 0.6, 0x3a3d44, 0, 0, 0));
+        for (let k = 0; k < 5; k++) { const b = box(0.04, 0.45, 0.55, 0xeef0f2, -0.36 + k * 0.18, 0.12, 0); b.rotation.z = 0.35; unit.add(b); }
+        unit.add(box(0.12, 0.05, 0.12, 0xff8a3a, 0.4, 0.12, 0.25, { emissive: 0xff6a1a, emissiveIntensity: 1.2 }));
+      } else if (this.themeName === 'desert') {
         // a swamp cooler: a sun-faded box with louvred pads on its sides and a duct down
         unit.add(box(0.75, 0.6, 0.65, 0xe6dcc8, 0, 0, 0), box(0.8, 0.06, 0.7, 0xc8643c, 0, 0.6, 0));
         for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) unit.add(box(0.02, 0.06, 0.5, 0x9a8a70, sx * 0.385, 0.12 + k * 0.12, 0));
@@ -624,6 +629,16 @@ export class World {
       }
       const sandM = this.sandM ||= new THREE.MeshBasicMaterial({ color: 0xead6ab, transparent: true, opacity: 0.6, depthWrite: false });
       for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.6, 10), sandM); st.rotation.x = -Math.PI / 2; st.scale.set(1.8, 1, 0.8); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
+    } else if (tier <= 1 && this.themeName === 'mars') {
+      // an early colony yard: supply canisters off the last ship, striped cargo crates and
+      // a cracked spare wheel, with drifts of red dust
+      for (const [cx, cz] of corners.slice(wings, wings + 2)) {
+        for (let k = 0; k < 3; k++) { const can = cyl(0.24, 0.24, 0.9, k === 1 ? 0xff8a3a : 0xddd6c8, cx - 0.45 + 0.3 * k, 0.15 + 0.24 - 0.45, cz + 0.5 * (k % 2), 14).rotateZ(Math.PI / 2); ex.add(can); }
+        for (let k = 0; k < 3; k++) { ex.add(box(0.55, 0.45, 0.55, 0x666a72, cx + 0.5, 0.15 + (k === 2 ? 0.45 : 0), cz - 0.75 + (k === 1 ? 0.6 : 0))); ex.add(box(0.57, 0.08, 0.57, 0xff8a3a, cx + 0.5, 0.15 + (k === 2 ? 0.45 : 0) + 0.3, cz - 0.75 + (k === 1 ? 0.6 : 0))); }
+        const tyre = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.12, 6, 14), mat(0x2a2d33)); tyre.rotation.set(1.2, 0.3, 0); tyre.position.set(cx - 0.7, 0.3, cz - 0.8); ex.add(tyre);
+      }
+      const dustM = this.dustM ||= new THREE.MeshBasicMaterial({ color: 0xa8482a, transparent: true, opacity: 0.45, depthWrite: false });
+      for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.6, 10), dustM); st.rotation.x = -Math.PI / 2; st.scale.set(1.8, 1, 0.8); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
     } else if (tier <= 1) {
       // an old yard: rusty drums, a pile of tyres and oil stains
       for (const [cx, cz] of corners.slice(wings, wings + 2)) {
@@ -739,6 +754,27 @@ export class World {
     return g;
   }
 
+  // a Mars loading bay: a pressure door with its frame lit orange and a ribbed blast door
+  // rolled up, under a slim canopy, with guide lights on the ground
+  #airlockBay(side, color) {
+    const g = new THREE.Group();
+    const W = 2.1, H = 1.8, D = 1.6;
+    g.add(box(W + 0.4, H + 0.3, 0.14, 0x3a3d44, 0, 0, -D / 2 + 0.02));
+    g.add(box(W, H, 0.12, 0x14161a, 0, 0, -D / 2 + 0.1));
+    for (let k = 0; k < 4; k++) g.add(box(W - 0.1, 0.07, 0.06, 0x8a8f99, 0, H - 0.12 - k * 0.1, -D / 2 + 0.18));
+    for (const x of [-W / 2 - 0.05, W / 2 + 0.05]) g.add(box(0.07, H, 0.06, 0xff8a3a, x, 0, -D / 2 + 0.12, { emissive: 0xff6a1a, emissiveIntensity: 1, night: 2 }));
+    // a slim canopy cantilevered off the wall on two angled struts, lit along its edge
+    const canopy = box(W + 0.5, 0.06, D * 0.75, 0xddd6c8, 0, H + 0.12, -D / 2 + D * 0.375); canopy.rotation.x = -0.12; g.add(canopy);
+    g.add(box(W + 0.5, 0.05, 0.05, 0x6fe8ff, 0, H + 0.02, -D / 2 + D * 0.75, { emissive: 0x6fe8ff, night: 2.4 }));
+    for (const x of [-W / 2 - 0.1, W / 2 + 0.1]) { const st = box(0.06, 0.06, D * 0.8, 0x666a72, x, H - 0.45, -D / 2 + D * 0.38); st.rotation.x = 0.55; g.add(st); }
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
+    for (let k = 0; k < 3; k++) for (const x of [-W / 2 + 0.15, W / 2 - 0.15]) g.add(box(0.1, 0.02, 0.1, 0x6fe8ff, x, 0.01, D / 2 - 0.3 - k * 0.45, { emissive: 0x6fe8ff, night: 2.4 }));
+    const dist = 2.75, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    g.rotation.y = rot;
+    g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
+    return g;
+  }
+
   // which sides of a lot trucks drive in and out of: every side with good road
   #baySides(id) {
     const [lx, lz] = this.P[id];
@@ -755,6 +791,7 @@ export class World {
   // still shows.
   #bay(side, color) {
     if (this.themeName === 'desert') return this.#ramada(side, color);
+    if (this.themeName === 'mars') return this.#airlockBay(side, color);
     const g = new THREE.Group();
     const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
     const W = 2.1, H = 1.75, D = 1.7;

@@ -198,13 +198,34 @@ function moonWing(g, { color, tier, floors }) {
   return ty;
 }
 
+// Mars: a slender sci-fi tower of stacked rounded pods on a gunmetal core, each pod with a
+// band of glowing windows, a dome on top and a mast with a red light
+function marsWing(g, { color, tier, floors }) {
+  const H = 0xddd6c8, P = 0x666a72;
+  g.add(cyl(0.95, 1.05, 0.3, 0x2e2220, 0, 0, 0, 20));
+  const n = Math.max(2, Math.min(5, Math.round(floors * 0.8)));
+  g.add(cyl(0.28, 0.38, n * 0.75 + 0.3, P, 0, 0.3, 0, 12));
+  let y = 0.4;
+  for (let k = 0; k < n; k++) {
+    const r = 0.95 - k * 0.07;
+    const pod = mesh(new THREE.SphereGeometry(r, 24, 12), H); pod.scale.y = 0.38; pod.position.y = y + 0.32; g.add(pod);
+    const band = mesh(new THREE.CylinderGeometry(r * 0.97, r * 0.97, 0.1, 24), 0x9fdcff, { emissive: 0x6fc8ff, emissiveIntensity: 0.3, night: 1.8 }); band.position.y = y + 0.32; g.add(band);
+    if (k === Math.floor(n / 2)) { const ring = mesh(new THREE.TorusGeometry(r * 0.99, 0.035, 4, 28), tier >= 4 ? color : 0xff8a3a, { emissive: tier >= 4 ? color : 0xff8a3a, night: 2.2 }); ring.rotation.x = Math.PI / 2; ring.position.y = y + 0.2; g.add(ring); }
+    y += 0.75;
+  }
+  const cap = mesh(new THREE.SphereGeometry(0.45, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), H); cap.scale.y = 0.6; cap.position.y = y; g.add(cap);
+  g.add(box(0.05, 0.9, 0.05, 0xdddddd, 0, y + 0.2, 0), box(0.1, 0.1, 0.1, 0xff3b2f, 0, y + 1.1, 0, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
+  return y + 0.3;
+}
+
 export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
   if (kind === 'yard') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
   const g = new THREE.Group();
   const floors = 2 + Math.floor(Math.min(9, tier) / 3) + (i === 0 ? 1 : 0) + (tier >= 8 ? 1 : 0);
   const o = { color, tier, cx, cz, floors, theme };
   let top;
-  if (theme === 'moon' || theme === 'mars') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
+  if (theme === 'mars') top = marsWing(g, o);
+  else if (theme === 'moon') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
   else if (kind === 'silo') top = siloWing(g, o);
   else if (kind === 'sawtooth') top = sawWing(g, o);
   else if (kind === 'hangar') top = hangarWing(g, o);
