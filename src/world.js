@@ -1169,6 +1169,8 @@ export class World {
     // wait for the driveway to be clear before the next truck pulls out
     const start = new THREE.Vector3(C[0].x, 0.06, C[0].z);
     if (this.traffic.cars.some(c => c.pos.distanceTo(start) < 3.2)) return false;
+    // ...and for anyone on their way into this same bay to arrive first (one truck in a bay at a time)
+    if (this.traffic.cars.some(c => c.P.W[c.P.W.length - 1].distanceTo(start) < 0.5)) return false;
     this.traffic.add(C, mesh, { kind, speed, drive: true, data, onArrive });
     return true;
   }

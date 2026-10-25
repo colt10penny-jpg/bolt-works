@@ -218,6 +218,11 @@ function buildPath(C, { driveStart = false, driveEnd = false } = {}) {
     if (hout && (!hin || hin.x !== hout.x || hin.z !== hout.z)) { const r = right(hout); x += r.x * LANE; z += r.z * LANE; }
     W.push(new THREE.Vector3(x, 0.06, z));
   }
+  // in a lot, a truck parks in the middle of the loading bay, not off to one side in a
+  // road lane (which put it through the bay's posts and the building's wall); it swings
+  // into its lane as it crosses the yard
+  if (driveStart && n > 2) W[0].set(C[0].x, 0.06, C[0].z);
+  if (driveEnd && n > 2) W[n - 1].set(C[n - 1].x, 0.06, C[n - 1].z);
   const s = [0];
   for (let i = 1; i < n; i++) s.push(s[i - 1] + W[i].distanceTo(W[i - 1]));
   for (let i = 1; i < n - 1; i++) {
