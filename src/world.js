@@ -30,10 +30,10 @@ const LANDER_AT = [40, 40];
 let BOUNDS = { minX: -36, maxX: 36, minZ: -36, maxZ: 36 };
 
 const THEME = {
-  colorado: { ground: 0x92d968, sky: 0x92d968, hemiSky: 0xfff6e5, hemiGround: 0x84a768, sun: 2.2, hemi: 1.6, road: 0x7b9bb6, walk: 0xf7f6ef, pad: 0xe5edf7 },
-  desert:   { ground: 0xf1c481, sky: 0xf1c481, hemiSky: 0xfff3d9, hemiGround: 0xc5a775, sun: 2.4, hemi: 1.5, road: 0xb88f6a, walk: 0xf6dfa9, pad: 0xead7b6 },
-  mars:     { ground: 0xc96846, sky: 0xc96846, hemiSky: 0xffe5cf, hemiGround: 0x8b493b, sun: 2.4, hemi: 1.4, road: 0x645463, walk: 0xf2c5ac, pad: 0xf0dfd8 },
-  moon:     { ground: 0xd2d9e5, sky: 0xd2d9e5, hemiSky: 0xeef5ff, hemiGround: 0x747b91, sun: 2.6, hemi: 1.2, road: 0x617b9e, walk: 0xecf1fa, pad: 0xe7edf6 },
+  colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
+  desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0x9a7248, pad: 0xcaa67a },
+  mars:     { ground: 0x7a2e1c, sky: 0x7a2e1c, hemiSky: 0xffe0bc, hemiGround: 0x6a2a1a, sun: 2.4, hemi: 1.4, road: 0x3b2a28, walk: 0xb98a74, pad: 0xd8c2b6 },
+  moon:     { ground: 0x9c9ca2, sky: 0x9c9ca2, hemiSky: 0xdfe6ff, hemiGround: 0x3a3d48, sun: 2.6, hemi: 1.2, road: 0x4b4e57, walk: 0xb4b4ba, pad: 0xc9c9cf },
 };
 
 // Bake lots of small static meshes into one mesh per material, so a big landscape
@@ -192,7 +192,7 @@ export class World {
 
     this.scene = new THREE.Scene();
     this.target = new THREE.Vector3(14, 0, 17);
-    this.zoom = 1.52; // Larger hero buildings at startup; gesture zoom remains usable.
+    this.zoom = 1;
     this.shake = 0;
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
 
@@ -246,7 +246,7 @@ export class World {
     c.left = -45; c.right = 45; c.top = 45; c.bottom = -45; c.near = 1; c.far = 120;
     sun.shadow.bias = -0.0005;
     sun.shadow.normalBias = 0.035;
-    sun.shadow.radius = 4;
+    sun.shadow.radius = 3;
     this.sun = sun;
     this.scene.add(sun, sun.target);
   }
@@ -341,7 +341,7 @@ export class World {
     const g = new THREE.Group();
     let seed = (L.group.position.x * 73 + L.group.position.z * 19 + 1000) | 0 || 1;
     const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 7; i++) {
       const x = (r() - 0.5) * 8, z = (r() - 0.5) * 8;
       if (Math.abs(x - 2.6) < 1.3 && Math.abs(z + 2.6) < 1.3) continue;
       let o;
@@ -354,7 +354,7 @@ export class World {
     }
     // grass clumps and stones over the whole plot, merged into one piece each
     const blades = [], stones = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 22; i++) {
       const cx = (r() - 0.5) * 9.5, cz = (r() - 0.5) * 9.5, n = 3 + Math.floor(r() * 4);
       for (let k = 0; k < n; k++) {
         const h = 0.3 + r() * 0.35, b = new THREE.ConeGeometry(0.06, h, 3);
@@ -362,7 +362,7 @@ export class World {
         b.translate(cx + (r() - 0.5) * 0.35, h / 2, cz + (r() - 0.5) * 0.35); blades.push(b);
       }
     }
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 9; i++) {
       const sz = 0.12 + r() * 0.2, st = new THREE.IcosahedronGeometry(sz, 0);
       st.scale(1, 0.55, 1); st.translate((r() - 0.5) * 9, sz * 0.3, (r() - 0.5) * 9); stones.push(st);
     }
@@ -393,11 +393,11 @@ export class World {
     if (this.padTex) return this.padTex;
     const c = document.createElement('canvas'); c.width = c.height = 256;
     const g = c.getContext('2d');
-    g.fillStyle = '#f6f8fc'; g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 380; i++) { const v = 235 + Math.random() * 18; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
-    g.fillStyle = 'rgba(62,130,191,0.11)';
+    g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2500; i++) { const v = 215 + Math.random() * 40; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+    g.fillStyle = 'rgba(0,0,0,0.13)';
     for (let k = 1; k < 4; k++) { g.fillRect(k * 64 - 1, 0, 2, 256); g.fillRect(0, k * 64 - 1, 256, 2); }
-    g.strokeStyle = 'rgba(42,115,178,0.17)'; g.lineWidth = 3; g.strokeRect(2, 2, 252, 252);
+    g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 4; g.strokeRect(2, 2, 252, 252);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     return (this.padTex = t);
   }
@@ -488,11 +488,11 @@ export class World {
     const [x, z] = this.P[def.id];
     const group = new THREE.Group();
     group.position.set(x, 0, z);
-    const pad = box(LOT - 0.6, 0.2, LOT - 0.6, 0xe5edf7, 0, 0, 0); // Raised clean icon-style factory foundation
+    const pad = box(LOT - 0.6, 0.15, LOT - 0.6, 0xd9d4c7, 0, 0, 0);
     pad.castShadow = false;
     group.add(pad);
     const ring = new THREE.Group();
-    const rc = 0xffc33b;
+    const rc = 0xffd23f;
     ring.add(box(LOT, 0.17, 0.35, rc, 0, 0, -LOT / 2), box(LOT, 0.17, 0.35, rc, 0, 0, LOT / 2),
              box(0.35, 0.17, LOT, rc, -LOT / 2, 0, 0), box(0.35, 0.17, LOT, rc, LOT / 2, 0, 0));
     ring.visible = false;
@@ -500,8 +500,8 @@ export class World {
     const sale = new THREE.Group();
     for (let i = -4; i <= 3; i++) {
       const p = i * 1.1 + 0.25;
-      sale.add(box(0.6, 0.11, 0.14, 0xeaf8ec, p, 0.12, -3.9), box(0.6, 0.11, 0.14, 0xeaf8ec, p, 0.12, 3.9),
-               box(0.14, 0.11, 0.6, 0xeaf8ec, -3.9, 0.12, p), box(0.14, 0.11, 0.6, 0xeaf8ec, 3.9, 0.12, p));
+      sale.add(box(0.6, 0.18, 0.14, 0x1f8a5b, p, 0.15, -3.9), box(0.6, 0.18, 0.14, 0x1f8a5b, p, 0.15, 3.9),
+               box(0.14, 0.18, 0.6, 0x1f8a5b, -3.9, 0.15, p), box(0.14, 0.18, 0.6, 0x1f8a5b, 3.9, 0.15, p));
     }
     // signs stand on the corner with no streetlight next to it
     sale.add(box(0.15, 1.6, 0.15, 0x7a5230, 2.6, 0.15, -2.6));
@@ -577,8 +577,7 @@ export class World {
     const ray = new THREE.Raycaster(); const down = new THREE.Vector3(0, -1, 0);
     const topAt = (x, z) => { ray.set(new THREE.Vector3(x, 80, z), down); return ray.intersectObjects(meshes, false)[0] || null; };
     const placed = [];
-    // Restrained rooftop kit: two carefully supported units rather than clutter.
-    for (let i = 0; i < 30 && placed.length < 2; i++) {
+    if (!this.themeName?.startsWith('moon') || true) for (let i = 0; i < 24 && placed.length < 3; i++) {
       const x = bb.min.x + 0.7 + rnd() * Math.max(0, bb.max.x - bb.min.x - 1.4), z = bb.min.z + 0.7 + rnd() * Math.max(0, bb.max.z - bb.min.z - 1.4);
       const hit = topAt(x, z);
       if (!hit || hit.point.y < 1.8 || !hit.face) continue;
@@ -769,7 +768,7 @@ export class World {
         const a = vc.array, c = new THREE.Color();
         for (let i = 0; i < a.length; i += 3) {
           c.setRGB(a[i], a[i + 1], a[i + 2]);
-          if (age) c.lerp(dirt, 0.08 * age).multiplyScalar(1 - 0.035 * age);
+          if (age) c.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
           else { c.getHSL(hsl); c.setHSL(hsl.h, Math.min(1, hsl.s * (1 + 0.35 * modern)), Math.min(0.92, hsl.l + 0.05 * modern)); }
           a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b;
         }
@@ -785,7 +784,7 @@ export class World {
           m.roughness = age ? Math.min(1, m.roughness + 0.25 * age) : m.roughness + (0.3 - m.roughness) * modern * 0.85;
           m.metalness = age ? m.metalness * (1 - age) : Math.max(m.metalness, 0.22 * modern);
         } else if (age) {
-          m.color.lerp(dirt, 0.08 * age).multiplyScalar(1 - 0.035 * age);
+          m.color.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
           m.roughness = Math.min(1, m.roughness + 0.25 * age); m.metalness *= 1 - age;
         } else {
           m.color.getHSL(hsl);
@@ -807,8 +806,8 @@ export class World {
     if (!this.padLooks.has(key)) {
       const m = base.clone(); m.userData = { ...base.userData };
       if (base.onBeforeCompile) m.onBeforeCompile = base.onBeforeCompile;
-      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.05); m.roughness = 0.7; }
-      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.05);
+      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.45); m.roughness = 1; }
+      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.2);
       else if (tier >= 7) { m.color.lerp(new THREE.Color(0xffffff), 0.35); m.roughness = 0.6; }
       this.padLooks.set(key, m);
     }
@@ -882,28 +881,20 @@ export class World {
     if (this.themeName === 'desert') return this.#ramada(side, color);
     if (this.themeName === 'mars') return this.#airlockBay(side, color);
     const g = new THREE.Group();
-    const wall = 0xe7f0fa; // Shared cobalt-and-porcelain icon design language
+    const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
     const W = 2.1, H = 1.75, D = 1.7;
-    g.add(box(W + 0.24, H + 0.16, 0.1, 0x2378bc, 0, 0, -D / 2 + 0.02));   // door frame
+    g.add(box(W + 0.24, H + 0.16, 0.1, new THREE.Color(wall).multiplyScalar(0.7).getHex(), 0, 0, -D / 2 + 0.02));   // door frame
     g.add(box(W, H, 0.12, 0x1e2126, 0, 0, -D / 2 + 0.08));                                // the open door
-    g.add(box(W - 0.1, 0.36, 0.08, 0xe5edf6, 0, H - 0.38, -D / 2 + 0.16));                  // rolled-up door
-    const roof = box(W + 0.55, 0.16, D + 0.22, 0x258ee3, 0, H + 0.1, 0.05);
+    g.add(box(W - 0.1, 0.36, 0.08, 0x9aa0a8, 0, H - 0.38, -D / 2 + 0.16));                  // rolled-up door
+    const roof = box(W + 0.4, 0.1, D + 0.15, new THREE.Color(wall).multiplyScalar(0.8).getHex(), 0, H + 0.1, 0.05);
     roof.rotation.x = 0.06; g.add(roof);
     for (let k = 0; k < 6; k++) g.add(box(0.4, 0.1, 0.05, k % 2 ? 0x2a2a2e : 0xffc23d, -1.0 + k * 0.4, H + 0.06, D / 2 + 0.11));   // hazard fascia
-    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.14, H + 0.1, 0.14, 0x2a75b4, x, 0, D / 2 + 0.02));                      // posts
+    for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.09, H + 0.1, 0.09, 0x5b5f66, x, 0, D / 2 + 0.02));                      // posts
     for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.1, 0.5, 0.1, 0xffc23d, x, 0, D / 2 + 0.02));                                // post guards
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
     g.add(box(0.26, 0.08, 0.2, 0xfff1cf, 0, H, 0, { emissive: 0xffd28a, night: 2.5 }));   // a lamp under the canopy
-    // A clear level driveway that visually connects the blue roofed loading dock
-    // to the real truck stop at ±5.55 from the factory's center.
-    const entry = box(2.38, 0.015, 1.68, 0xc6d7e8, 0, 0.015, D / 2 + 0.85);
-    entry.castShadow = false; g.add(entry);
-    for (const sx of [-1.1, 1.1]) {
-      const guide = box(0.055, 0.014, 1.75, 0xffd16c, sx, 0.038, D / 2 + 0.85);
-      guide.castShadow = false; g.add(guide);
-    }
     // the open front faces the driveway
-    const dist = 3.12;
+    const dist = 2.75;
     const rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);

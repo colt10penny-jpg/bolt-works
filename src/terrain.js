@@ -385,11 +385,11 @@ export function makeHeight(name) {
 }
 
 const PAL = {
-  colorado: { grass: [0x9ee476, 0x83d45b, 0xb2ea8b, 0x8fdc69], rock: 0xada8a2, snow: 0xf7fbff, dirt: 0xd8c5a1 },
-  desert: { grass: [0xf2cb90, 0xeab97e, 0xffda9b, 0xf4c17a], rock: 0xdf8962, snow: 0xffca8d, dirt: 0xe5a878 },
+  colorado: { grass: [0x86c25a, 0x6eaf49, 0x9ccf68, 0xb4c463], rock: 0x8d8a82, snow: 0xf4f6fa, dirt: 0xa98a62 },
+  desert: { grass: [0xe2c58f, 0xd9b77d, 0xebd3a3, 0xd2a46e], rock: 0xc06c45, snow: 0xd88a5a, dirt: 0xc9a06b },
   // rust and maroon dust over dark basalt, with frost on the heights and in craters
-  mars: { grass: [0xc46447, 0xb75338, 0xe07a53, 0x9c492f], rock: 0x7d4848, snow: 0xffdbc4, dirt: 0xe18c60 },
-  moon: { grass: [0xc7d3e3, 0xaabbd0, 0xe3eaf4, 0xb9c9da], rock: 0x8c9aaa, snow: 0xf6f9ff, dirt: 0xa8b7c8 },
+  mars: { grass: [0x8e3820, 0x6e2a18, 0xa8482a, 0x4e1e14], rock: 0x2e1e1c, snow: 0xf3ece8, dirt: 0x9c4a2e },
+  moon: { grass: [0x9a9aa0, 0x77777f, 0xaeaeb4, 0x5f6068], rock: 0x86868d, snow: 0xc4c4ca, dirt: 0x8f8f96 },
 };
 
 export function buildLand(name, T, blocks) {
@@ -603,27 +603,25 @@ export function buildLand(name, T, blocks) {
   if (name === 'colorado') {
     // groves: aspens like to cluster, pines take the slopes
     const grove = (x, z) => fbm(x / 22, z / 22, 2, 31) > 0.52;
-    place(750, S.tree, { where: (x, z) => !grove(x, z) && townDist(x, z) > 12 });
-    place(570, S.aspen, { where: (x, z) => grove(x, z) && townDist(x, z) > 12, maxH: 14 });
-    place(680, S.pine, { minH: 2, maxH: 24, where: (x, z) => townDist(x, z) > 12 });
-    place(210, S.pine, { maxH: 2, where: (x, z) => townDist(x, z) > 12 });
-    place(390, S.bush, { pad: 0.9, blob: 0.6, where: (x, z) => townDist(x, z) > 8 });
-    place(310, S.flowers, { pad: 0.6, blob: 0, maxH: 6 });
+    place(900, S.tree, { where: (x, z) => !grove(x, z) });
+    place(700, S.aspen, { where: grove, maxH: 14 });
+    place(900, S.pine, { minH: 2, maxH: 24 });
+    place(260, S.pine, { maxH: 2 });
+    place(500, S.bush, { pad: 0.9, blob: 0.6 });
+    place(420, S.flowers, { pad: 0.6, blob: 0, maxH: 6 });
     place(160, S.rock, { pad: 1.3, blob: 0.7 });
     // little touches so open ground doesn't look like a putting green
-    place(900, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10, where: (x, z) => townDist(x, z) > 7 });
-    place(290, S.pebbles, { pad: 0.1, blob: 0, span: 180, where: (x, z) => townDist(x, z) > 7 });
+    place(1500, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10 });
+    place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180 });
     place(40, S.boulder, { minH: 4, pad: 7, blob: 0 });
     // farm fields near the lake side
     const fields = FIELDS;
     // a dense evergreen forest closing in round the town: thin at the town's edge, thick
     // further out (not on the fields or in the lake)
     const inField = (x, z) => fields.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
-    // Intentional diorama composition: open, curated lawn around the factories,
-    // then saturated low-poly forest as a distant frame rather than a visual wall.
-    const woods = (x, z) => { const d = townDist(x, z); return d > 27 && !inField(x, z) && r() < Math.min(0.85, (d - 27) / 22) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
-    place(1650, S.fir, { where: woods, span: 230, maxH: 30, pad: 0.4, blob: 0.9 });
-    place(420, S.pine, { where: woods, span: 230, maxH: 30, pad: 0.3, blob: 0.8 });
+    const woods = (x, z) => { const d = townDist(x, z); return d > 13 && !inField(x, z) && r() < Math.min(0.95, (d - 13) / 16) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
+    place(2400, S.fir, { where: woods, span: 230, maxH: 30, pad: 0.4, blob: 0.9 });
+    place(700, S.pine, { where: woods, span: 230, maxH: 30, pad: 0.3, blob: 0.8 });
     const fieldM = new Map();
     for (const [fx, fz, w, d, color] of fields) {
       if (!fieldM.has(color)) fieldM.set(color, withClouds(std(color, { map: tx.rows, roughness: 0.95 })));
@@ -746,8 +744,8 @@ function sceneryKit() {
     return M.get(k);
   };
   const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); return o; };
-  const greens = [0x55b879, 0x6ccf83, 0x3aab65, 0x81d989, 0x8ed26d];
-  const golds = [0xffc744, 0xffac3e, 0xffdf77, 0xf2a54a, 0xd9ed65];
+  const greens = [0x3f8f4a, 0x4fa152, 0x357d40, 0x5bb05a, 0x6aa84a];
+  const golds = [0xf2c230, 0xe8a91e, 0xf5d34a, 0xd98c1c, 0xb6c43c];
   return {
     tree(r) {
       const g = new THREE.Group(), s = 0.8 + r() * 0.7, col = greens[Math.floor(r() * greens.length)];
@@ -769,7 +767,7 @@ function sceneryKit() {
       return g;
     },
     pine(r) {
-      const g = new THREE.Group(), s = 0.8 + r() * 0.8, col = r() < 0.5 ? 0x218d6b : 0x37a875;
+      const g = new THREE.Group(), s = 0.8 + r() * 0.8, col = r() < 0.5 ? 0x2f6f3e : 0x285f37;
       g.add(mesh(new THREE.CylinderGeometry(0.12 * s, 0.17 * s, 0.7 * s, 6), m(0x6b4a2b), 0, 0.35 * s, 0));
       const lm = m(col, {}, 1.0 * s);
       for (let i = 0; i < 3; i++) g.add(mesh(new THREE.ConeGeometry((1.0 - i * 0.25) * s, 1.25 * s, 7), lm, 0, (1.05 + i * 0.62) * s, 0));
@@ -812,7 +810,7 @@ function sceneryKit() {
     },
     // a tall forest fir: four tiers, dark and dense, for the woods round town
     fir(r) {
-      const g = new THREE.Group(), s = 1.0 + r() * 0.9, col = [0x228463, 0x2a9d70, 0x176a57][Math.floor(r() * 3)];
+      const g = new THREE.Group(), s = 1.0 + r() * 0.9, col = [0x245c33, 0x2b6a3a, 0x1f5230][Math.floor(r() * 3)];
       g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.6 * s, 5), m(0x5a3d24), 0, 0.3 * s, 0));
       const lm = m(col, {}, 1.0 * s);
       for (let i = 0; i < 4; i++) g.add(mesh(new THREE.ConeGeometry((1.05 - i * 0.22) * s, 1.15 * s, 7), lm, 0, (0.95 + i * 0.55) * s, 0));
@@ -959,8 +957,8 @@ export function buildRoads(name, T, stateOf) {
   const rutM = withClouds(std(0xc09668, { roughness: 1 })), seamM = std(0x4e3a26, { roughness: 1 });
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
-  const wornM = withClouds(std(0xc6d69d, { roughness: 1 }));
-  const tarM = withClouds(std(0x92a7b0, { map: tx.asphalt, roughness: 0.98 }));
+  const wornM = withClouds(std(0xa9b25f, { roughness: 1 }));
+  const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
   const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
