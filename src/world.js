@@ -850,9 +850,9 @@ export class World {
     }
     for (const x of [-0.95, 0.95]) {
       // Bollards stay *beside* the lane and are supported by their ground pads.
-      g.add(box(0.3, 0.08, 0.3, 0x373e4b, x * 1.43, 0, 0.45));
-      g.add(box(0.14, 0.68, 0.14, marker, x * 1.43, 0.08, 0.45));
-      g.add(box(0.17, 0.13, 0.17, 0x323947, x * 1.43, 0.57, 0.45));
+      g.add(box(0.3, 0.08, 0.3, 0x373e4b, x * 1.95, 0, 0.45));
+      g.add(box(0.14, 0.68, 0.14, marker, x * 1.95, 0.08, 0.45));
+      g.add(box(0.17, 0.13, 0.17, 0x323947, x * 1.95, 0.57, 0.45));
     }
   }
 
