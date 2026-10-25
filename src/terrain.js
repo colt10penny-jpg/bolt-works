@@ -579,13 +579,13 @@ export function buildLand(name, T, blocks) {
     place(700, S.aspen, { where: grove, maxH: 14 });
     place(900, S.pine, { minH: 2, maxH: 24 });
     place(260, S.pine, { maxH: 2 });
-    place(500, S.bush, { pad: 0.3, blob: 0.6 });
-    place(420, S.flowers, { pad: 0.2, blob: 0, maxH: 6 });
-    place(160, S.rock, { pad: 0.3, blob: 0.7 });
+    place(500, S.bush, { pad: 0.9, blob: 0.6 });
+    place(420, S.flowers, { pad: 0.6, blob: 0, maxH: 6 });
+    place(160, S.rock, { pad: 1.3, blob: 0.7 });
     // little touches so open ground doesn't look like a putting green
     place(1500, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10 });
     place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180 });
-    place(40, S.boulder, { minH: 4, pad: 3.5, blob: 0 });
+    place(40, S.boulder, { minH: 4, pad: 7, blob: 0 });
     // farm fields near the lake side
     const fields = FIELDS;
     // a dense evergreen forest closing in round the town: thin at the town's edge, thick
@@ -603,26 +603,26 @@ export function buildLand(name, T, blocks) {
 
   } else if (name === 'desert') {
     place(420, S.saguaro, { pad: 0.5 });
-    place(260, S.joshua, { pad: 0.5 });
+    place(260, S.joshua, { pad: 1.2 });
     place(600, S.shrub, { pad: 0.3, blob: 0.5 });
     place(220, S.barrel, { pad: 0.2, blob: 0.4 });
     place(1100, (r, h) => S.tuft(r, h, [0xc9b06a, 0xb59a52, 0xa8a45c, 0xd6c07c]), { pad: 0.1, blob: 0, span: 180 });
     place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180 });
-    place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 0.3, blob: 0.7 });
-    place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 3.5, blob: 0 });
+    place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 1.3, blob: 0.7 });
+    place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 7, blob: 0 });
   } else if (name === 'mars') {
     // black basalt boulders and wind-carved spires, rusty stones, frost-dusted rocks, and
     // the odd old lander left from the first missions
-    place(700, r => S.rock(r, 0, r() < 0.55 ? 0x3a2420 : 0x8a3a22), { pad: 0.3, blob: 0.8 });
+    place(700, r => S.rock(r, 0, r() < 0.55 ? 0x3a2420 : 0x8a3a22), { pad: 1.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x5a2c22), { pad: 0.1, blob: 0, span: 180 });
-    place(120, (r, h) => S.boulder(r, h, 0x2e1e1c), { pad: 3.5, blob: 0.6 });
+    place(120, (r, h) => S.boulder(r, h, 0x2e1e1c), { pad: 7, blob: 0.6 });
     place(160, S.spire, { pad: 1, blob: 0.7 });
     place(90, S.frostRock, { pad: 0.6, blob: 0.5 });
     place(6, S.lander, { pad: 3, span: 150, blob: 0.8 });
   } else {
-    place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 0.3, blob: 0.8 });
+    place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 1.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180 });
-    place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 3.5, blob: 0.6 });
+    place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 7, blob: 0.6 });
     place(40, S.antenna, { pad: 1, span: 160, blob: 0.6 });
     place(24, S.solarArray, { pad: 2, span: 180, blob: 0 });
   }
@@ -635,7 +635,7 @@ export function buildLand(name, T, blocks) {
       for (let i = 0; i < 260 && n < 26; i++) {
         const x = cx + (r() - 0.5) * (a + b) * 3, z = cz + (r() - 0.5) * (a + b) * 3;
         const m = mesaAt(name, x, z), onTop = m.h > m.top * 0.97, foot = m.h > 0.05 && m.h < m.top * 0.2;
-        if (!(foot || (onTop && r() < 0.25)) || roadDist(x, z) < HW + SW + 1 || townDist(x, z) < 2) continue;
+        if (!(foot || (onTop && r() < 0.25)) || roadDist(x, z) < HW + SW + 3 || townDist(x, z) < 3) continue;
         const h = H(x, z), s = foot ? 0.5 + r() * 1.3 : 0.4 + r() * 0.6;
         const o = new THREE.Mesh(rockGeo(r, s > 1 ? 2 : 1), rm[Math.floor(r() * 3)]);
         o.scale.set(s * (0.8 + r() * 0.5), s * (0.5 + r() * 0.4), s * (0.8 + r() * 0.5)); o.rotation.set((r() - 0.5) * 0.5, r() * 6.3, (r() - 0.5) * 0.5);
