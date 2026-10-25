@@ -10,8 +10,8 @@ import * as THREE from 'three';
 import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl, mat } from './models.js';
 
-const TRIM = 0xf1ece0, DARK = 0x2b2f36, STEEL = 0x8a8f99, IRON = 0x5b5f66, HAZ = 0xffc23d, GLASS = 0x9fd6ff, WARM = 0xffb347;
-const PLINTH = 0x9c968a, ROOF = 0x6d7076, RED = 0xd9482b, WHITE = 0xf3efe6;
+const TRIM = 0xf2f3ed, DARK = 0x2b2f36, STEEL = 0x8a8f99, IRON = 0x5b5f66, HAZ = 0xffc23d, GLASS = 0x9fd6ff, WARM = 0xffb347;
+const PLINTH = 0x9fa7ac, ROOF = 0x586579, RED = 0xd9482b, WHITE = 0xf3efe6;
 const shade = (hex, f) => {
   const c = new THREE.Color(hex);
   return f > 0 ? c.lerp(new THREE.Color(0xffffff), f).getHex() : c.multiplyScalar(1 + f).getHex();
@@ -122,6 +122,8 @@ function hall(g, { x = 0, z = 0, w, d, h, color, piers = 1.25, parapet = true, r
   if (belt) g.add(box(w + 0.2, 0.14, d + 0.2, shade(color, -0.32), x, top - 0.55, z));
   if (parapet) {
     g.add(box(w - 0.1, 0.06, d - 0.1, roof, x, top, z));
+    // A pale center panel catches the sun, giving each factory a readable miniature roof.
+    g.add(box(w - 0.32, 0.035, d - 0.32, shade(roof, 0.14), x, top + 0.06, z));
     for (const [pw, pd, px, pz] of [[w + 0.12, 0.2, x, z + d / 2 - 0.04], [w + 0.12, 0.2, x, z - d / 2 + 0.04], [0.2, d, x + w / 2 - 0.04, z], [0.2, d, x - w / 2 + 0.04, z]]) {
       g.add(box(pw, 0.36, pd, color, px, top, pz));
       g.add(box(pw + 0.06, 0.07, pd + 0.06, TRIM, px, top + 0.36, pz));

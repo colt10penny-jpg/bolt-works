@@ -42,12 +42,12 @@ const porthole = (r, y, a, size = 0.11) => {
 // engine flames: a hot white core in a long orange plume, hidden until lift-off
 function flames(spots, len = 3) {
   const g = new THREE.Group();
-  const outer = new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
-  const inner = new THREE.MeshBasicMaterial({ color: 0xfff1c0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  const outer = new THREE.MeshBasicMaterial({ color: 0xff9c37, transparent: true, opacity: 0.86, blending: THREE.AdditiveBlending, depthWrite: false });
+  const inner = new THREE.MeshBasicMaterial({ color: 0xfff8db, transparent: true, opacity: 0.96, blending: THREE.AdditiveBlending, depthWrite: false });
   for (const [x, z, r] of spots) {
     const o = new THREE.Mesh(new THREE.ConeGeometry(r, len, 14, 1, true), outer); o.rotation.x = Math.PI; o.position.set(x, -len / 2, z);
     const c = new THREE.Mesh(new THREE.ConeGeometry(r * 0.55, len * 0.55, 12, 1, true), inner); c.rotation.x = Math.PI; c.position.set(x, -len * 0.275, z);
-    g.add(o, c);
+    g.add(o, c); // the brighter inner flame reads clearly against any world palette
   }
   g.visible = false;
   return g;
@@ -70,6 +70,8 @@ const STYLES = {
     // the capsule and its escape tower
     r.add(lathe([[0.56, 4.97], [0.48, 5.2], [0.3, 5.7], [0.12, 5.85], [0.001, 5.9]], SIL, metal));
     for (let k = 0; k < 3; k++) r.add(porthole(0.42, 5.32, k * 2.1 + 0.4, 0.06));
+    // One bright blue viewport gives the classic launcher the icon's friendly look.
+    r.add(porthole(0.575, 4.48, Math.PI / 4, 0.13));
     for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; const rod = cyl(0.025, 0.025, 0.75, RED, Math.cos(a) * 0.1, 5.82, Math.sin(a) * 0.1, 6); rod.rotation.z = Math.cos(a) * 0.12; rod.rotation.x = -Math.sin(a) * 0.12; r.add(rod); }
     r.add(cyl(0.07, 0.07, 0.35, RED, 0, 6.5, 0, 10)); r.add(ogive(0.07, 6.85, 0.35, RED));
     // four red fins and the engines

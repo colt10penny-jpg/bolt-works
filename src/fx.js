@@ -113,11 +113,11 @@ export class Look {
   constructor(renderer, scene, camera) {
     this.r = renderer; this.scene = scene; this.camera = camera;
     renderer.toneMapping = THREE.NeutralToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 1.08; // brighten miniature-style colors without clipping highlights
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const pm = new THREE.PMREMGenerator(renderer);
     scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environmentIntensity = 0.45;
+    scene.environmentIntensity = 0.55;
     pm.dispose();
     this.quality = 'high';
     this.cycle = true;
@@ -126,7 +126,7 @@ export class Look {
     this.kind = 'earth';
     this.haze = new THREE.Color(0xd6e7f2);
     scene.fog = new THREE.Fog(0xd6e7f2, 165, 430);
-    this.sunScale = 0.85; this.skyScale = 0.5; this.envScale = 0.5;
+    this.sunScale = 0.95; this.skyScale = 0.68; this.envScale = 0.65; // gentler shadows and clearer details
     this.tmp = { sun: new THREE.Color(), sky: new THREE.Color(), gnd: new THREE.Color(), haze: new THREE.Color() };
   }
 
@@ -212,20 +212,20 @@ export class Look {
     }
     if (this.hemi) { this.hemi.color.copy(T.sky); this.hemi.groundColor.copy(T.gnd); this.hemi.intensity = skyI * this.skyScale; }
     // haze matches the ground colour by day, and the sky by night
-    if (this.groundBase) this.scene.fog.color.copy(this.groundBase).lerp(T.haze, 0.45 + this._night * 0.4);
+    if (this.groundBase) this.scene.fog.color.copy(this.groundBase).lerp(T.haze, (this.worldName === 'colorado' ? 0.62 : this.worldName === 'desert' ? 0.58 : 0.45) + this._night * 0.3);
     this.scene.background = this.scene.fog.color;
-    this.scene.environmentIntensity = (0.4 + 0.1 * (1 - this._night)) * this.envScale;
+    this.scene.environmentIntensity = (0.5 + 0.12 * (1 - this._night)) * this.envScale;
     const n = this._night;
     for (const m of GLOW.glass) m.emissiveIntensity = n * m.userData.glow;
     for (const m of GLOW.lit) m.emissiveIntensity = (m.userData.baseGlow ?? 1) * (1 + n * 1.2);
-    if (this.bloom) { this.bloom.strength = 0.25 + n * 0.5; this.bloom.threshold = 1.15 - n * 0.35; }
+    if (this.bloom) { this.bloom.strength = 0.2 + n * 0.45; this.bloom.threshold = 1.15 - n * 0.35; }
     if (this.grade) {
-      this.grade.uniforms.vignette.value = 0.28;
+      this.grade.uniforms.vignette.value = 0.14; // keep the edges bright and inviting
       // night: a cool moonlit cast and a little less colour, without making anything darker
       // (Mars keeps its warmth at night: only a light cool cast)
       const cool = this.kind === 'mars' ? 0.35 : 1;
       this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17 * cool, 1 - n * 0.07 * cool, 1 + n * 0.12 * cool);
-      this.grade.uniforms.sat.value = 1.22 - n * 0.2;   // rich colour in every look
+      this.grade.uniforms.sat.value = 1.17 - n * 0.15; // vibrant but less harsh color
     }
   }
 
