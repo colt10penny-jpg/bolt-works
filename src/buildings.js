@@ -262,22 +262,34 @@ Object.assign(BUILDERS, {
     const g = new THREE.Group();
     // hoist house with a pitched metal roof
     const hw = 3.0, hd = 2.3, hx = 1.1, hz = -1.35;
-    const wallTop = hall(g, { x: hx, z: hz, w: hw, d: hd, h: 1.9, color, parapet: false, piers: 1.0 });
-    gableRoof(g, { x: hx, z: hz, w: hw, d: hd, y: wallTop, rise: 0.9, color: 0x4f5560, along: 'x' });
+    const wallTop = hall(g, { x: hx, z: hz, w: hw, d: hd, h: 1.9, color: ICON.wall, pierColor: ICON.deep, parapet: false, piers: 1.0 });
+    gableRoof(g, { x: hx, z: hz, w: hw, d: hd, y: wallTop, rise: 0.9, color: ICON.blue, along: 'x' });
+    // Thick cornice, proud bright-blue rain awning and an amber-lit maker's badge.
+    g.add(box(hw + 0.25, 0.14, 0.18, ICON.trim, hx, wallTop - 0.16, hz + hd / 2 + 0.10));
+    g.add(box(1.7, 0.15, 0.70, ICON.blue, hx, 2.14, hz + hd / 2 + 0.27));
+    for (const dx of [-0.66, 0.66]) {
+      rod(g, [hx + dx, 1.96, hz + hd / 2 + 0.10], [hx + dx, 2.15, hz + hd / 2 + 0.48], 0.055, ICON.deep);
+    }
+    signBoard(g, 'z', hx, 1.40, hz + hd / 2, 1.7, ICON.gold, 4);
     winRow(g, 'z', hx + 0.5, 0.95, hz + hd / 2, 2, 1.0, 0.6, 0.6);
     sideDoor(g, 'z', hx - 0.95, hz + hd / 2);
     door(g, 'x', hz, hx + hw / 2, 1.2, 1.4, 0x8d7a64);
     // the headframe: four legs, cross-braced, with a deck and two sheave wheels on top
     const fx = -1.55, fz = -1.15, s = 0.6, H = 5.4;
-    lattice(g, fx - s, fz + s, fx + s, fz + s, 0.3, H, IRON, 0.9);
-    lattice(g, fx + s, fz - s, fx + s, fz + s, 0.3, H, IRON, 0.9);
-    lattice(g, fx - s, fz - s, fx - s, fz + s, 0.3, H, IRON, 0.9);
-    lattice(g, fx - s, fz - s, fx + s, fz - s, 0.3, H, IRON, 0.9);
-    g.add(box(1.7, 0.16, 1.7, DARK, fx, H + 0.3, fz));
+    lattice(g, fx - s, fz + s, fx + s, fz + s, 0.3, H, ICON.gold, 0.9);
+    lattice(g, fx + s, fz - s, fx + s, fz + s, 0.3, H, ICON.gold, 0.9);
+    lattice(g, fx - s, fz - s, fx - s, fz + s, 0.3, H, ICON.gold, 0.9);
+    lattice(g, fx - s, fz - s, fx + s, fz - s, 0.3, H, ICON.gold, 0.9);
+    // Bright column shoes attach the golden headframe to concrete foundations.
+    for (const dx of [-s, s]) for (const dz of [-s, s]) {
+      g.add(box(0.34, 0.24, 0.34, ICON.deep, fx + dx, 0.12, fz + dz));
+    }
+    g.add(box(1.7, 0.16, 1.7, ICON.deep, fx, H + 0.3, fz));
+    g.add(box(1.86, 0.09, 1.86, ICON.gold, fx, H + 0.46, fz));
     railing(g, fx - 0.8, fz + 0.8, fx + 0.8, fz + 0.8, H + 0.46);
     const wheels = [];
     for (const dz of [-0.35, 0.35]) {
-      const w = spokeWheel(0.62, RED, 6, 0.08); w.position.set(fx, H + 1.0, fz + dz); g.add(w); wheels.push(w);
+      const w = spokeWheel(0.62, ICON.gold, 6, 0.08); w.position.set(fx, H + 1.0, fz + dz); g.add(w); wheels.push(w);
       g.add(box(0.1, 0.55, 0.1, DARK, fx - 0.3, H + 0.46, fz + dz), box(0.1, 0.55, 0.1, DARK, fx + 0.3, H + 0.46, fz + dz));
     }
     // cables from the top of the wheels down into the hoist house
@@ -287,19 +299,30 @@ Object.assign(BUILDERS, {
     // ore bin on legs, fed by an inclined conveyor
     const bx = 2.2, bz = 1.2;
     for (const [dx, dz] of [[-0.55, -0.5], [0.55, -0.5], [-0.55, 0.5], [0.55, 0.5]]) g.add(box(0.14, 1.6, 0.14, IRON, bx + dx, 0.15, bz + dz));
-    g.add(box(1.5, 1.1, 1.3, shade(color, 0.12), bx, 1.7, bz), box(1.6, 0.12, 1.4, TRIM, bx, 2.8, bz));
-    const hop = mesh(new THREE.ConeGeometry(0.85, 0.7, 4), shade(color, -0.1)); hop.rotation.set(Math.PI, Math.PI / 4, 0); hop.position.set(bx, 1.35, bz); g.add(hop);
+    g.add(box(1.5, 1.1, 1.3, ICON.blue, bx, 1.7, bz), box(1.6, 0.12, 1.4, ICON.trim, bx, 2.8, bz));
+    // Supported hopper with gold reinforcing corners and a readable front badge.
+    for (const dx of [-0.6, 0.6]) {
+      g.add(box(0.13, 1.15, 0.14, ICON.gold, bx + dx, 1.7, bz + 0.68));
+    }
+    for (const dx of [-0.55, 0.55]) {
+      rod(g, [bx + dx, 0.24, bz - 0.44], [bx + dx, 1.62, bz + 0.38], 0.05, IRON);
+    }
+    const hop = mesh(new THREE.ConeGeometry(0.85, 0.7, 4), ICON.gold); hop.rotation.set(Math.PI, Math.PI / 4, 0); hop.position.set(bx, 1.35, bz); g.add(hop);
     for (let k = 0; k < 4; k++) g.add(onWall('z', bx - 0.5 + k * 0.33, 1.9, bz + 0.65, 0.18, 0.7, 0.03, HAZ));
     const cx0 = fx + 0.9, cy0 = 0.6, cx1 = bx - 0.6, cy1 = 2.85, clen = Math.hypot(cx1 - cx0, cy1 - cy0), cang = Math.atan2(cy1 - cy0, cx1 - cx0);
-    const belt = new THREE.Group();
+    const belt = new THREE.Group(); // physical conveyor links tower to supported hopper
     belt.add(mesh(new THREE.BoxGeometry(clen, 0.12, 0.6), DARK));
     belt.add(at(mesh(new THREE.BoxGeometry(clen, 0.05, 0.5), 0x3a3f48), 0, 0.08, 0));
-    for (const e of [-0.32, 0.32]) belt.add(at(mesh(new THREE.BoxGeometry(clen, 0.2, 0.05), HAZ), 0, 0.12, e));
+    for (const e of [-0.32, 0.32]) belt.add(at(mesh(new THREE.BoxGeometry(clen, 0.2, 0.05), ICON.gold), 0, 0.12, e));
     belt.position.set((cx0 + cx1) / 2, (cy0 + cy1) / 2, bz); belt.rotation.z = cang; g.add(belt);
     for (const t of [0.3, 0.65]) g.add(box(0.12, cy0 + (cy1 - cy0) * t - 0.1, 0.12, IRON, cx0 + (cx1 - cx0) * t, 0.15, bz));
     g.add(box(0.8, 0.5, 0.8, shade(color, -0.2), cx0 - 0.2, 0.15, bz));   // the loading hopper at the bottom
     const lumps = [];
     for (let i = 0; i < 5; i++) { const l = mesh(new THREE.DodecahedronGeometry(0.14, 0), 0x8a5a3c, { flatShading: true }); g.add(l); lumps.push(l); }
+    // Neat pallet and utility piping group at ground level, connected to the hopper.
+    pipe(g, [[bx - 0.5, 0.6, bz - 0.5], [bx - 0.5, 0.6, bz - 1.1], [hx + 0.55, 0.6, bz - 1.1]], 0.085, ICON.blue);
+    g.add(box(0.75, 0.16, 0.58, ICON.steel, 2.0, 0.15, 2.85));
+    for (const px of [1.8, 2.1]) g.add(box(0.24, 0.35, 0.23, ICON.gold, px, 0.31, 2.85));
     // ore piles and rails with a cart
     const pile = (x, z, r, h, c) => { const m = mesh(new THREE.ConeGeometry(r, h, 10), c, { flatShading: true }); m.position.set(x, h / 2 + 0.15, z); g.add(m); };
     pile(-2.45, 1.25, 0.95, 1.0, 0x8a5a3c); pile(-1.75, 1.75, 0.6, 0.6, 0x9b6a48);
