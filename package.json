@@ -25,6 +25,6 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/ios": "^8.5.3",
-    "vite": "^8.3.4"
+    "vite": "^7.3.7"
   }
 }
