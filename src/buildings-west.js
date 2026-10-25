@@ -12,6 +12,11 @@ import { DARK, IRON, GLASS, WARM, shade, mesh, at, rod, onWall } from './buildin
 
 const WOOD = 0x9a6b42, WOOD_D = 0x6e4a2c, WOOD_L = 0xc29a66, GREY = 0x8f8574, TRIM = 0xeee4cc, SHINGLE = 0x5e4c3c, TIN = 0x9aa0a8, HAY = 0xd9b45a, BRICK = 0xa4553a, CREAM = 0xf1e6c8;
 
+// The main building of each lot is built at this scale (in a group of its own) so it fills
+// the lot; the barrels, horses and poles round the corners stay life size.
+const S = 1.3;
+function core(g) { const c = new THREE.Group(); c.scale.setScalar(S); g.add(c); return c; }
+
 // ---- frontier parts ----
 // vertical boards (battens) on the front (+z) and right (+x) faces of a w x h x d box
 function battens(g, x, z, w, d, y0, h, color) {
@@ -144,166 +149,167 @@ Object.assign(BUILDERS, {
   // ---- Gold Mine: a tall timber headframe with a turning sheave wheel over the shaft, a
   // false-front hoist house, ore carts rolling out on rails to a tailings heap
   goldmine(color) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), c = core(g);
     // the headframe over the shaft
     const hx = -1.35, hz = -1.2, H = 4.6;
-    g.add(box(1.5, 0.2, 1.5, 0x5a4632, hx, 0.05, hz));
-    g.add(box(0.9, 0.04, 0.9, 0x1a1410, hx, 0.25, hz));
-    timberTower(g, hx, hz, 0.75, 0.32, H, WOOD, 4);
-    rod(g, [hx + 1.6, 0.15, hz], [hx + 0.2, H - 0.2, hz], 0.07, WOOD);   // the back leg bracing toward the hoist
-    g.add(box(0.8, 0.12, 0.8, WOOD_D, hx, H, hz));
+    c.add(box(1.5, 0.2, 1.5, 0x5a4632, hx, 0.05, hz));
+    c.add(box(0.9, 0.04, 0.9, 0x1a1410, hx, 0.25, hz));
+    timberTower(c, hx, hz, 0.75, 0.32, H, WOOD, 4);
+    rod(c, [hx + 1.6, 0.15, hz], [hx + 0.2, H - 0.2, hz], 0.07, WOOD);   // the back leg bracing toward the hoist
+    c.add(box(0.8, 0.12, 0.8, WOOD_D, hx, H, hz));
     const sheave = new THREE.Group();
     sheave.add(mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 20), 0x3a3f48));
     for (let k = 0; k < 6; k++) { const sp = box(0.04, 0.84, 0.04, 0x5a5f66, 0, -0.42, 0); sp.rotation.z = k * Math.PI / 3; sheave.add(sp); }
-    sheave.position.set(hx, H + 0.55, hz); sheave.rotation.y = Math.PI / 2; g.add(sheave);
-    rod(g, [hx, H + 0.55, hz + 0.42], [hx + 2.5, 1.4, hz + 0.42], 0.02, 0x2a2d33);           // the cable to the hoist
+    sheave.position.set(hx, H + 0.55, hz); sheave.rotation.y = Math.PI / 2; c.add(sheave);
+    rod(c, [hx, H + 0.55, hz + 0.42], [hx + 2.5, 1.4, hz + 0.42], 0.02, 0x2a2d33);           // the cable to the hoist
     // the hoist house: a false front with "MINE" sign
-    falseFront(g, { x: 1.85, z: -1.4, w: 2.1, d: 1.7, h: 1.5, fh: 0.8, color: GREY, sign: color, letters: 4 });
-    wWin(g, 'x', -1.4, 0.75, 2.9, 0.5, 0.55);
-    const stack = [[2.5, -2.2]]; for (const [sx, sz] of stack) { g.add(cyl(0.12, 0.14, 1.4, 0x3a3f48, sx, 2.1, sz, 10)); }
+    falseFront(c, { x: 1.85, z: -1.4, w: 2.1, d: 1.7, h: 1.5, fh: 0.8, color: GREY, sign: color, letters: 4 });
+    wWin(c, 'x', -1.4, 0.75, 2.9, 0.5, 0.55);
+    const stack = [[2.5, -2.2]]; for (const [sx, sz] of stack) { c.add(cyl(0.12, 0.14, 1.4, 0x3a3f48, sx, 2.1, sz, 10)); }
     // rails from the shaft out to the tailings, with a cart that rolls along them
-    for (const dz of [-0.22, 0.22]) g.add(box(3.6, 0.05, 0.05, 0x5a5f66, 0.2, 0.17, 1.6 + dz));
-    for (let k = 0; k < 12; k++) g.add(box(0.12, 0.04, 0.62, 0x6e5232, -1.55 + k * 0.32, 0.14, 1.6));
+    for (const dz of [-0.22, 0.22]) c.add(box(3.6, 0.05, 0.05, 0x5a5f66, 0.2, 0.17, 1.6 + dz));
+    for (let k = 0; k < 12; k++) c.add(box(0.12, 0.04, 0.62, 0x6e5232, -1.55 + k * 0.32, 0.14, 1.6));
     const cart = new THREE.Group();
     cart.add(box(0.6, 0.32, 0.42, 0x6a4a32, 0, 0.12, 0), box(0.62, 0.05, 0.44, 0x3a3f48, 0, 0.42, 0));
     const ore = mesh(new THREE.DodecahedronGeometry(0.22, 0), 0xc9a24a, { flatShading: true, metalness: 0.4, roughness: 0.4 }); ore.scale.y = 0.5; ore.position.set(0, 0.47, 0); cart.add(ore);
     for (const [wx, wz] of [[-0.2, -0.22], [0.2, -0.22], [-0.2, 0.22], [0.2, 0.22]]) cart.add(cyl(0.08, 0.08, 0.04, 0x2a2d33, wx, 0.08, wz, 10).rotateX(Math.PI / 2));
-    cart.position.set(0, 0.15, 1.6); g.add(cart);
+    cart.position.set(0, 0.15, 1.6); c.add(cart);
     const heap = mesh(new THREE.ConeGeometry(1.0, 0.9, 9), 0xa88a62, { flatShading: true }); heap.position.set(2.55, 0.6, 1.9); g.add(heap);
     barrel(g, -2.8, 2.6); barrel(g, -2.4, 2.8); crate(g, -2.7, 2.1);
-    for (const [px, pz] of [[-0.3, -2.6], [0.4, -2.6]]) { g.add(box(0.12, 0.12, 1.2, WOOD_L, px, 0.15, pz)); g.add(box(0.12, 0.12, 1.2, WOOD_L, px + 0.14, 0.27, pz)); }   // pit props
-    return { group: g, top: H + 1.2, anim(t) { sheave.rotation.z = t * 1.6; cart.position.x = -1.2 + ((Math.sin(t * 0.45) + 1) / 2) * 3.0; } };
+    for (const [px, pz] of [[0.2, -3.5], [0.9, -3.5]]) { g.add(box(1.2, 0.12, 0.12, WOOD_L, px, 0.15, pz)); g.add(box(1.2, 0.12, 0.12, WOOD_L, px, 0.27, pz + 0.14)); }   // pit props
+    return { group: g, top: (H + 1.2) * S, anim(t) { sheave.rotation.z = t * 1.6; cart.position.x = -1.2 + ((Math.sin(t * 0.45) + 1) / 2) * 3.0; } };
   },
 
   // ---- Stamp Mill: a tall stepped timber mill on stilts, its row of iron stamps thumping
   // up and down, a brick smokestack, and a wooden water flume on a trestle
   stampmill(color) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), c = core(g);
     // three stepped sheds, tallest at the back
     for (const [x, z, w, d, h] of [[-0.8, -1.5, 3.6, 1.3, 3.6], [-0.6, -0.4, 3.2, 1.1, 2.6], [-0.4, 0.6, 2.8, 1.0, 1.7]]) {
-      g.add(box(w, h, d, GREY, x, 0.15, z)); battens(g, x, z, w, d, 0.15, h, GREY);
-      const r = box(w + 0.2, 0.08, d + 0.3, color, x, 0.15 + h, z - 0.05); r.rotation.x = -0.18; g.add(r);
-      wWin(g, 'z', x - w / 3, h - 0.75, z + d / 2, 0.42, 0.42, TRIM, WARM); wWin(g, 'z', x + w / 3, h - 0.75, z + d / 2, 0.42, 0.42, TRIM, WARM);
+      c.add(box(w, h, d, GREY, x, 0.15, z)); battens(c, x, z, w, d, 0.15, h, GREY);
+      const r = box(w + 0.2, 0.08, d + 0.3, color, x, 0.15 + h, z - 0.05); r.rotation.x = -0.18; c.add(r);
+      wWin(c, 'z', x - w / 3, h - 0.75, z + d / 2, 0.42, 0.42, TRIM, WARM); wWin(c, 'z', x + w / 3, h - 0.75, z + d / 2, 0.42, 0.42, TRIM, WARM);
     }
     // the stamp battery out front: a frame, a camshaft, and five stamps rising and falling
     const bx = -0.4, bz = 1.45;
-    g.add(box(2.4, 0.4, 0.6, 0x5a4632, bx, 0.15, bz));
-    for (const e of [-1.15, 1.15]) g.add(box(0.14, 2.2, 0.14, WOOD_D, bx + e, 0.15, bz));
-    g.add(box(2.5, 0.16, 0.16, WOOD_D, bx, 2.3, bz));
-    g.add(cyl(0.06, 0.06, 2.3, 0x3a3f48, bx, 1.75 - 1.15, bz + 0.2, 8).rotateZ(Math.PI / 2));
+    c.add(box(2.4, 0.4, 0.6, 0x5a4632, bx, 0.15, bz));
+    for (const e of [-1.15, 1.15]) c.add(box(0.14, 2.2, 0.14, WOOD_D, bx + e, 0.15, bz));
+    c.add(box(2.5, 0.16, 0.16, WOOD_D, bx, 2.3, bz));
+    c.add(cyl(0.06, 0.06, 2.3, 0x3a3f48, bx, 1.75 - 1.15, bz + 0.2, 8).rotateZ(Math.PI / 2));
     const stamps = [];
     for (let k = 0; k < 5; k++) {
       const s = new THREE.Group();
       s.add(box(0.07, 1.6, 0.07, 0x5a5f66, 0, 0, 0), box(0.2, 0.22, 0.2, 0x3a3f48, 0, -0.05, 0), box(0.16, 0.08, 0.16, 0x6a6e76, 0, 1.2, 0));
-      s.position.set(bx - 0.8 + k * 0.4, 0.55, bz); g.add(s); stamps.push(s);
+      s.position.set(bx - 0.8 + k * 0.4, 0.55, bz); c.add(s); stamps.push(s);
     }
     // the smokestack and the flume bringing water in on a trestle
     const smoke = [];
-    g.add(box(0.6, 0.5, 0.6, BRICK, 2.3, 0.15, -2.2)); g.add(cyl(0.22, 0.28, 4.6, BRICK, 2.3, 0.65, -2.2, 12)); g.add(cyl(0.3, 0.3, 0.16, 0x3a3f48, 2.3, 5.2, -2.2, 12));
+    c.add(box(0.6, 0.5, 0.6, BRICK, 2.3, 0.15, -2.2)); c.add(cyl(0.22, 0.28, 4.6, BRICK, 2.3, 0.65, -2.2, 12)); c.add(cyl(0.3, 0.3, 0.16, 0x3a3f48, 2.3, 5.2, -2.2, 12));
     smoke.push(new THREE.Vector3(2.3, 5.4, -2.2));
-    for (let k = 0; k < 4; k++) { const x = 2.6, z = 2.4 - k * 1.0, y = 1.3 + k * 0.45; g.add(box(0.08, y, 0.08, WOOD_D, x - 0.2, 0.15, z), box(0.08, y, 0.08, WOOD_D, x + 0.2, 0.15, z)); }
-    const flume = box(0.35, 0.22, 4.0, WOOD_L, 2.6, 2.4, 0.9); flume.rotation.x = -0.23; g.add(flume);
-    const water = box(0.25, 0.02, 4.0, 0x4a8ac8, 2.6, 2.58, 0.9, { emissive: 0x2a5a8a, emissiveIntensity: 0.2 }); water.rotation.x = -0.23; g.add(water);
+    for (let k = 0; k < 4; k++) { const x = 2.6, z = 2.4 - k * 1.0, y = 1.3 + k * 0.45; c.add(box(0.08, y, 0.08, WOOD_D, x - 0.2, 0.15, z), box(0.08, y, 0.08, WOOD_D, x + 0.2, 0.15, z)); }
+    const flume = box(0.35, 0.22, 4.0, WOOD_L, 2.6, 2.4, 0.9); flume.rotation.x = -0.23; c.add(flume);
+    const water = box(0.25, 0.02, 4.0, 0x4a8ac8, 2.6, 2.58, 0.9, { emissive: 0x2a5a8a, emissiveIntensity: 0.2 }); water.rotation.x = -0.23; c.add(water);
     hay(g, -2.6, 2.6, 0.15, 0.3); barrel(g, 1.3, 2.7); barrel(g, 0.9, 2.85);
-    return { group: g, top: 5.6, smoke, anim(t) { stamps.forEach((s, i) => { const p = (t * 1.4 + i * 0.37) % 1; s.position.y = 0.55 + (p < 0.75 ? p / 0.75 : 1 - (p - 0.75) / 0.25) * 0.4; }); } };
+    smoke.forEach(v => v.multiplyScalar(S));
+    return { group: g, top: 5.6 * S, smoke, anim(t) { stamps.forEach((s, i) => { const p = (t * 1.4 + i * 0.37) % 1; s.position.y = 0.55 + (p < 0.75 ? p / 0.75 : 1 - (p - 0.75) / 0.25) * 0.4; }); } };
   },
 
   // ---- Frontier Bank: a solid two-storey bank painted slate blue, with a corner entrance,
   // white columns and trim, a gilded BANK sign, barred windows and a balcony
   bank(color) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), c = core(g);
     const x = -0.3, z = -0.3, w = 3.8, d = 3.0, h = 2.9;
-    g.add(box(w + 0.24, 0.3, d + 0.24, 0x8a7a65, x, 0, z));
-    g.add(box(w, h, d, color, x, 0.3, z));
+    c.add(box(w + 0.24, 0.3, d + 0.24, 0x8a7a65, x, 0, z));
+    c.add(box(w, h, d, color, x, 0.3, z));
     // horizontal clapboards on the visible faces
-    for (let y = 0.45; y < h + 0.2; y += 0.2) { g.add(onWall('z', x, y, z + d / 2, w, 0.025, 0.02, shade(color, -0.2))); g.add(onWall('x', z, y, x + w / 2, d, 0.025, 0.02, shade(color, -0.2))); }
+    for (let y = 0.45; y < h + 0.2; y += 0.2) { c.add(onWall('z', x, y, z + d / 2, w, 0.025, 0.02, shade(color, -0.2))); c.add(onWall('x', z, y, x + w / 2, d, 0.025, 0.02, shade(color, -0.2))); }
     // a stepped false front with a big gilded sign
-    g.add(box(w + 0.1, 0.9, 0.16, color, x, 0.3 + h, z + d / 2 - 0.05), box(w * 0.45, 0.35, 0.16, color, x, 1.2 + h, z + d / 2 - 0.05));
-    g.add(box(w + 0.3, 0.12, 0.3, TRIM, x, 1.15 + h, z + d / 2), box(w * 0.45 + 0.2, 0.1, 0.28, TRIM, x, 1.53 + h, z + d / 2));
-    wSign(g, 'z', x, h + 0.42, z + d / 2 + 0.02, 2.0, 0.55, 0x2a2d33, 4, 0xe8c46a);
+    c.add(box(w + 0.1, 0.9, 0.16, color, x, 0.3 + h, z + d / 2 - 0.05), box(w * 0.45, 0.35, 0.16, color, x, 1.2 + h, z + d / 2 - 0.05));
+    c.add(box(w + 0.3, 0.12, 0.3, TRIM, x, 1.15 + h, z + d / 2), box(w * 0.45 + 0.2, 0.1, 0.28, TRIM, x, 1.53 + h, z + d / 2));
+    wSign(c, 'z', x, h + 0.42, z + d / 2 + 0.02, 2.0, 0.55, 0x2a2d33, 4, 0xe8c46a);
     // windows with bars, two floors, front and side
-    for (const a of [-1.2, 0.6]) for (const y of [0.85, 2.15]) { wWin(g, 'z', x + a, y, z + d / 2, 0.55, 0.7); if (y < 1) for (let k = 0; k < 4; k++) g.add(onWall('z', x + a - 0.2 + k * 0.13, y, z + d / 2 + 0.07, 0.03, 0.7, 0.03, 0x2a2d33)); }
-    for (const a of [-0.8, 0.5]) for (const y of [0.85, 2.15]) wWin(g, 'x', z + a, y, x + w / 2, 0.55, 0.7);
+    for (const a of [-1.2, 0.6]) for (const y of [0.85, 2.15]) { wWin(c, 'z', x + a, y, z + d / 2, 0.55, 0.7); if (y < 1) for (let k = 0; k < 4; k++) c.add(onWall('z', x + a - 0.2 + k * 0.13, y, z + d / 2 + 0.07, 0.03, 0.7, 0.03, 0x2a2d33)); }
+    for (const a of [-0.8, 0.5]) for (const y of [0.85, 2.15]) wWin(c, 'x', z + a, y, x + w / 2, 0.55, 0.7);
     // the entrance: a cut corner with double doors under a little pediment and columns
-    g.add(onWall('z', x + 1.55, 0.3, z + d / 2, 0.8, 1.4, 0.06, 0x3a2a1e));
-    g.add(onWall('z', x + 1.55, 0.3, z + d / 2 + 0.04, 0.03, 1.4, 0.04, 0xc9a24a));
-    for (const e of [-0.55, 0.55]) g.add(cyl(0.08, 0.09, 1.5, TRIM, x + 1.55 + e, 0.3, z + d / 2 + 0.25, 10));
-    g.add(box(1.4, 0.12, 0.45, TRIM, x + 1.55, 1.8, z + d / 2 + 0.15));
-    g.add(box(1.0, 0.14, 0.5, 0x8a7a65, x + 1.55, 0.15, z + d / 2 + 0.3), box(1.0, 0.14, 0.3, 0x8a7a65, x + 1.55, 0.29, z + d / 2 + 0.2));
-    balcony(g, { axis: 'x', a: z - 0.15, f: x + w / 2, len: 2.2, y: 1.75 });
+    c.add(onWall('z', x + 1.55, 0.3, z + d / 2, 0.8, 1.4, 0.06, 0x3a2a1e));
+    c.add(onWall('z', x + 1.55, 0.3, z + d / 2 + 0.04, 0.03, 1.4, 0.04, 0xc9a24a));
+    for (const e of [-0.55, 0.55]) c.add(cyl(0.08, 0.09, 1.5, TRIM, x + 1.55 + e, 0.3, z + d / 2 + 0.25, 10));
+    c.add(box(1.4, 0.12, 0.45, TRIM, x + 1.55, 1.8, z + d / 2 + 0.15));
+    c.add(box(1.0, 0.14, 0.5, 0x8a7a65, x + 1.55, 0.15, z + d / 2 + 0.3), box(1.0, 0.14, 0.3, 0x8a7a65, x + 1.55, 0.29, z + d / 2 + 0.2));
+    balcony(c, { axis: 'x', a: z - 0.15, f: x + w / 2, len: 2.2, y: 1.75 });
     // a lamp by the door, a hitching rail and a strongbox wagon waiting out front
-    g.add(box(0.12, 0.2, 0.12, 0xfff1cf, x + 0.75, 1.75, z + d / 2 + 0.05, { emissive: 0xffd28a, night: 2.4 }));
+    c.add(box(0.12, 0.2, 0.12, 0xfff1cf, x + 0.75, 1.75, z + d / 2 + 0.05, { emissive: 0xffd28a, night: 2.4 }));
     hitchRail(g, -2.5, 2.4, 1.2); horse(g, -2.6, 2.05, 0.1, 0x3a2a1e);
     barrel(g, 2.5, -2.5); crate(g, 2.75, -2.1);
-    return { group: g, top: h + 2.2 };
+    return { group: g, top: (h + 2.2) * S };
   },
 
   // ---- General Store: a green false front with DRY GOODS signs, a deep porch stacked
   // with barrels, sacks and crates, a ramp, and a wagon wheel leaning by the steps
   genstore(color) {
-    const g = new THREE.Group();
-    const top = falseFront(g, { x: -0.35, z: -0.6, w: 3.6, d: 2.6, h: 2.0, fh: 1.0, color, sign: 0x2a3a2a, letters: 7 });
-    for (const a of [-1.2, 0.5]) wWin(g, 'z', -0.35 + a, 0.85, 0.7, 0.7, 0.9, TRIM, WARM);
-    g.add(onWall('z', -0.05 + 0.6, 0.25, 0.7, 0.75, 1.45, 0.05, 0x3a2a1e));
-    wSign(g, 'z', -1.25, 1.95, 0.7, 1.0, 0.28, 0xb5532a, 4);
-    wSign(g, 'z', 0.55, 1.95, 0.7, 1.0, 0.28, 0x2a2d33, 4);
-    wWin(g, 'x', -0.9, 0.85, 1.45, 0.55, 0.7); wWin(g, 'x', 0.2, 0.85, 1.45, 0.55, 0.7);
-    porch(g, { axis: 'z', a: -0.35, f: 0.7, len: 3.6, depth: 1.0, h: 1.75, color: TRIM });
-    for (const [bx, bz] of [[-1.9, 1.35], [-1.55, 1.45], [1.15, 1.4]]) barrel(g, bx, bz, 0.25);
-    for (const [cx, cz] of [[-1.1, 1.45]]) { crate(g, cx, cz, 0.25); crate(g, cx, cz, 0.65, 0.34); }
-    for (let k = 0; k < 3; k++) { const s = mesh(new THREE.SphereGeometry(0.17, 8, 6), 0xd8c49a); s.scale.set(1, 0.75, 0.8); s.position.set(0.95 + k * 0.08, 0.38 + (k === 2 ? 0.2 : 0), 1.25 + (k % 2) * 0.12); g.add(s); }
-    const ramp = box(0.9, 0.06, 1.1, 0x8a6a45, 2.1, 0.2, 0.0); ramp.rotation.z = -0.12; g.add(ramp);
-    wheel(g, 1.7, 0.53, 1.75, 0.38, 0.4);
+    const g = new THREE.Group(), c = core(g);
+    const top = falseFront(c, { x: -0.35, z: -0.6, w: 3.6, d: 2.6, h: 2.0, fh: 1.0, color, sign: 0x2a3a2a, letters: 7 });
+    for (const a of [-1.2, 0.5]) wWin(c, 'z', -0.35 + a, 0.85, 0.7, 0.7, 0.9, TRIM, WARM);
+    c.add(onWall('z', -0.05 + 0.6, 0.25, 0.7, 0.75, 1.45, 0.05, 0x3a2a1e));
+    wSign(c, 'z', -1.25, 1.95, 0.7, 1.0, 0.28, 0xb5532a, 4);
+    wSign(c, 'z', 0.55, 1.95, 0.7, 1.0, 0.28, 0x2a2d33, 4);
+    wWin(c, 'x', -0.9, 0.85, 1.45, 0.55, 0.7); wWin(c, 'x', 0.2, 0.85, 1.45, 0.55, 0.7);
+    porch(c, { axis: 'z', a: -0.35, f: 0.7, len: 3.6, depth: 1.0, h: 1.75, color: TRIM });
+    for (const [bx, bz] of [[-1.9, 1.35], [-1.55, 1.45], [1.15, 1.4]]) barrel(c, bx, bz, 0.25);
+    for (const [cx, cz] of [[-1.1, 1.45]]) { crate(c, cx, cz, 0.25); crate(c, cx, cz, 0.65, 0.34); }
+    for (let k = 0; k < 3; k++) { const s = mesh(new THREE.SphereGeometry(0.17, 8, 6), 0xd8c49a); s.scale.set(1, 0.75, 0.8); s.position.set(0.95 + k * 0.08, 0.38 + (k === 2 ? 0.2 : 0), 1.25 + (k % 2) * 0.12); c.add(s); }
+    const ramp = box(0.9, 0.06, 1.1, 0x8a6a45, 2.1, 0.2, 0.0); ramp.rotation.z = -0.12; c.add(ramp);
+    wheel(c, 1.7, 0.53, 1.75, 0.38, 0.4);
     // a delivery wagon out back and a woodpile
     for (let k = 0; k < 4; k++) g.add(cyl(0.09, 0.09, 1.0, 0x8a6a45, 2.6, 0.24 + Math.floor(k / 2) * 0.17 - 0.5, -2.0 + (k % 2) * 0.2, 7).rotateZ(Math.PI / 2));
     hay(g, 2.6, -2.7, 0.15, 0.2); barrel(g, -2.75, -2.6);
-    return { group: g, top: top + 0.6 };
+    return { group: g, top: (top + 0.6) * S };
   },
 
   // ---- Livery Stable: a big barn-fronted stable with tall double doors, a hay loft with a
   // pulley beam, a split-rail corral with horses, hay bales and a water trough
   livery(color) {
-    const g = new THREE.Group();
-    const top = falseFront(g, { x: -0.6, z: -0.9, w: 3.6, d: 2.8, h: 2.5, fh: 1.1, color, sign: 0xb5532a, letters: 7 });
+    const g = new THREE.Group(), c = core(g);
+    const top = falseFront(c, { x: -0.6, z: -0.9, w: 3.6, d: 2.8, h: 2.5, fh: 1.1, color, sign: 0xb5532a, letters: 7 });
     // big double doors with Z-braces, and the loft door above with a hay-hoist beam
-    for (const e of [-0.45, 0.45]) { g.add(onWall('z', -0.6 + e, 0.25, 0.5, 0.86, 1.75, 0.06, shade(color, -0.12))); const zb = onWall('z', -0.6 + e, 1.0, 0.56, 0.08, 1.6, 0.03, TRIM); zb.rotation.z = e > 0 ? 0.45 : -0.45; g.add(zb); g.add(onWall('z', -0.6 + e, 0.35, 0.56, 0.8, 0.07, 0.03, TRIM), onWall('z', -0.6 + e, 1.9, 0.56, 0.8, 0.07, 0.03, TRIM)); }
-    g.add(onWall('z', -0.6, 2.15, 0.5, 0.7, 0.55, 0.06, 0x3a2a1e));
-    g.add(box(0.12, 0.12, 0.8, WOOD_D, -0.6, 2.85, 0.75)); rod(g, [-0.6, 2.85, 1.12], [-0.6, 1.9, 1.12], 0.015, 0x3a3020);
-    hay(g, -0.6, 1.0, 1.75, 0);
-    wWin(g, 'x', -1.6, 1.1, 1.2, 0.5, 0.5); wWin(g, 'x', -0.2, 1.1, 1.2, 0.5, 0.5);
+    for (const e of [-0.45, 0.45]) { c.add(onWall('z', -0.6 + e, 0.25, 0.5, 0.86, 1.75, 0.06, shade(color, -0.12))); const zb = onWall('z', -0.6 + e, 1.0, 0.56, 0.08, 1.6, 0.03, TRIM); zb.rotation.z = e > 0 ? 0.45 : -0.45; c.add(zb); c.add(onWall('z', -0.6 + e, 0.35, 0.56, 0.8, 0.07, 0.03, TRIM), onWall('z', -0.6 + e, 1.9, 0.56, 0.8, 0.07, 0.03, TRIM)); }
+    c.add(onWall('z', -0.6, 2.15, 0.5, 0.7, 0.55, 0.06, 0x3a2a1e));
+    c.add(box(0.12, 0.12, 0.8, WOOD_D, -0.6, 2.85, 0.75)); rod(c, [-0.6, 2.85, 1.12], [-0.6, 1.9, 1.12], 0.015, 0x3a3020);
+    hay(c, -0.6, 1.0, 1.75, 0);
+    wWin(c, 'x', -1.6, 1.1, 1.2, 0.5, 0.5); wWin(c, 'x', -0.2, 1.1, 1.2, 0.5, 0.5);
     // the corral: split rails round the front-right corner with two horses
-    const cx0 = 0.9, cx1 = 3.2, cz0 = 0.9, cz1 = 3.2;
+    const cx0 = 1.75, cx1 = 3.6, cz0 = 1.2, cz1 = 3.6;
     for (const [x0, z0, x1, z1] of [[cx0, cz1, cx1, cz1], [cx1, cz0, cx1, cz1], [cx0, cz0, cx0, cz1]]) {
       const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 0.75);
       for (let k = 0; k <= n; k++) g.add(box(0.08, 0.8, 0.08, WOOD_D, x0 + (x1 - x0) * k / n, 0.15, z0 + (z1 - z0) * k / n));
       for (const y of [0.45, 0.78]) g.add(x0 === x1 ? box(0.06, 0.06, len, 0x8a6a45, x0, y, (z0 + z1) / 2) : box(len, 0.06, 0.06, 0x8a6a45, (x0 + x1) / 2, y, z0));
     }
-    const h1 = horse(g, 1.7, 2.1, 0.6, 0x7a4a2a), h2 = horse(g, 2.6, 1.5, 2.3, 0xd8c8b0);
-    hitchRail(g, 2.2, 2.75, 0.9);
-    hay(g, -2.6, 2.0, 0.15, 0.4); hay(g, -2.5, 2.6, 0.15, 0.1); hay(g, -2.55, 2.3, 0.51, 0.25);
+    const h1 = horse(g, 2.3, 2.6, 0.6, 0x7a4a2a), h2 = horse(g, 3.0, 1.8, 2.3, 0xd8c8b0);
+    hitchRail(g, 2.7, 3.15, 0.9);
+    hay(g, -3.2, 2.9, 0.15, 0.4); hay(g, -3.1, 3.5, 0.15, 0.1); hay(g, -3.15, 3.2, 0.51, 0.25);
     barrel(g, 2.7, -2.6); wheel(g, 2.75, 0.53, -1.9, 0.38, 0);
-    return { group: g, top: top + 0.6, anim(t) { h1.rotation.y = 0.6 + Math.sin(t * 0.3) * 0.25; h2.position.x = 2.6 + Math.sin(t * 0.25) * 0.25; } };
+    return { group: g, top: (top + 0.6) * S, anim(t) { h1.rotation.y = 0.6 + Math.sin(t * 0.3) * 0.25; h2.position.x = 3.0 + Math.sin(t * 0.25) * 0.25; } };
   },
 
   // ---- Railroad Depot: a long station under a wide bracketed roof, a plank platform, a
   // track with a little steam locomotive shuffling back and forth, and a water tower
   depot(color) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), c = core(g);
     const x = -0.5, z = -1.5, w = 4.0, d = 1.7, h = 1.8;
-    g.add(box(w + 0.2, 0.25, d + 0.2, 0x7a6a55, x, 0, z));
-    g.add(box(w, h, d, color, x, 0.25, z)); battens(g, x, z, w, d, 0.25, h, color);
-    g.add(box(w, 0.12, d, CREAM, x, 0.25 + h * 0.45, z));
+    c.add(box(w + 0.2, 0.25, d + 0.2, 0x7a6a55, x, 0, z));
+    c.add(box(w, h, d, color, x, 0.25, z)); battens(c, x, z, w, d, 0.25, h, color);
+    c.add(box(w, 0.12, d, CREAM, x, 0.25 + h * 0.45, z));
     // a wide hipped roof hanging well out over the platform, on brackets
-    const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), SHINGLE); roof.rotation.y = Math.PI / 4; roof.scale.set((w + 1.4) / 1.41, 0.9, (d + 2.0) / 1.41); roof.position.set(x, 0.25 + h + 0.45, z + 0.25); g.add(roof);
-    for (const a of [-1.6, -0.5, 0.6, 1.7]) { const br = box(0.08, 0.08, 0.7, WOOD_D, x + a, 0.25 + h - 0.15, z + d / 2 + 0.3); br.rotation.x = 0.6; g.add(br); }
-    for (const a of [-1.3, 0.3, 1.4]) wWin(g, 'z', x + a, 0.75, z + d / 2, 0.5, 0.8, TRIM, WARM);
-    g.add(onWall('z', x - 0.5, 0.25, z + d / 2, 0.6, 1.3, 0.05, 0x3a2a1e));
-    wSign(g, 'z', x + 0.85, h - 0.15, z + d / 2 + 0.02, 1.2, 0.3, 0x2a2d33, 5);
+    const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), SHINGLE); roof.rotation.y = Math.PI / 4; roof.scale.set((w + 0.9) / 1.41, 0.8, (d + 1.3) / 1.41); roof.position.set(x, 0.25 + h + 0.4, z + 0.15); c.add(roof);
+    for (const a of [-1.6, -0.5, 0.6, 1.7]) { const br = box(0.08, 0.08, 0.7, WOOD_D, x + a, 0.25 + h - 0.15, z + d / 2 + 0.3); br.rotation.x = 0.6; c.add(br); }
+    for (const a of [-1.3, 0.3, 1.4]) wWin(c, 'z', x + a, 0.75, z + d / 2, 0.5, 0.8, TRIM, WARM);
+    c.add(onWall('z', x - 0.5, 0.25, z + d / 2, 0.6, 1.3, 0.05, 0x3a2a1e));
+    wSign(c, 'z', x + 0.85, h - 0.15, z + d / 2 + 0.02, 1.2, 0.3, 0x2a2d33, 5);
     // the platform and the track running past it
-    g.add(box(w + 0.6, 0.18, 0.9, 0x8a6a45, x, 0.15, z + d / 2 + 0.45));
+    c.add(box(w + 0.6, 0.18, 0.9, 0x8a6a45, x, 0.15, z + d / 2 + 0.45));
     const tz = 0.75;
-    for (let k = 0; k < 22; k++) g.add(box(0.14, 0.06, 0.7, 0x5a4632, -3.2 + k * 0.31, 0.14, tz));
-    for (const e of [-0.22, 0.22]) g.add(box(6.6, 0.06, 0.05, 0x8a8f99, 0, 0.2, tz + e));
+    for (let k = 0; k < 22; k++) c.add(box(0.14, 0.06, 0.7, 0x5a4632, -3.2 + k * 0.31, 0.14, tz));
+    for (const e of [-0.22, 0.22]) c.add(box(6.6, 0.06, 0.05, 0x8a8f99, 0, 0.2, tz + e));
     // the locomotive: boiler, smokestack, cab, cowcatcher, wheels
     const loco = new THREE.Group();
     loco.add(box(1.7, 0.12, 0.6, 0x2a2d33, 0, 0.32, 0));
@@ -316,73 +322,73 @@ Object.assign(BUILDERS, {
     const cc = box(0.25, 0.25, 0.55, 0xb5532a, 0.95, 0.15, 0); cc.rotation.z = 0.5; loco.add(cc);
     loco.add(box(0.12, 0.12, 0.12, 0xfff1cf, 0.88, 0.75, 0, { emissive: 0xffd28a, night: 3 }));
     for (const wx of [-0.6, -0.1, 0.35, 0.75]) for (const e of [-0.28, 0.28]) loco.add(cyl(wx < 0 ? 0.2 : 0.14, wx < 0 ? 0.2 : 0.14, 0.05, 0xb5532a, wx, wx < 0 ? 0.2 : 0.14, e, 12).rotateX(Math.PI / 2));
-    loco.position.set(0, 0.17, tz); g.add(loco);
+    loco.position.set(0, 0.17, tz); c.add(loco);
     // a water tower for the engines and a baggage cart
     waterTower(g, 2.6, -2.5, 2.2, 0.55);
     const cart = [[-2.6, 2.4]]; for (const [cx, cz] of cart) { g.add(box(0.8, 0.08, 0.5, 0x8a6a45, cx, 0.4, cz)); crate(g, cx - 0.15, cz, 0.48, 0.3); barrel(g, cx + 0.2, cz, 0.48, 0.8); for (const e of [-0.3, 0.3]) g.add(cyl(0.16, 0.16, 0.05, 0x5a3e26, cx + e, 0.16 + 0.16, cz + 0.27, 10).rotateX(Math.PI / 2)); }
-    return { group: g, top: 4.2, smoke: [new THREE.Vector3(0.6, 1.4, tz)], anim(t) { loco.position.x = Math.sin(t * 0.25) * 1.2; } };
+    return { group: g, top: 4.2 * S, smoke: [new THREE.Vector3(0.6, 1.4, tz).multiplyScalar(S)], anim(t) { loco.position.x = Math.sin(t * 0.25) * 1.2; } };
   },
 
   // ---- Rocket Ranch: a red barn with white X doors where the rocket is built, a wooden
   // launch tower like an oil derrick, a brass-banded rocket on the pad, and a windmill
   rocketranch(color) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), c = core(g);
     // the barn (back left): red boards, a gambrel roof, white X-braced doors
     const bx = -1.7, bz = -1.6, bw = 2.2, bd = 2.0, bh = 1.5;
-    g.add(box(bw, bh, bd, 0xa8322a, bx, 0.15, bz)); battens(g, bx, bz, bw, bd, 0.15, bh, 0xa8322a);
+    c.add(box(bw, bh, bd, 0xa8322a, bx, 0.15, bz)); battens(c, bx, bz, bw, bd, 0.15, bh, 0xa8322a);
     const gs = new THREE.Shape(); gs.moveTo(-bw / 2 - 0.1, 0); gs.lineTo(bw / 2 + 0.1, 0); gs.lineTo(bw / 2 - 0.15, 0.55); gs.lineTo(0, 0.95); gs.lineTo(-bw / 2 + 0.15, 0.55); gs.closePath();
     const gg = new THREE.ExtrudeGeometry(gs, { depth: bd + 0.2, bevelEnabled: false }); gg.translate(0, 0, -(bd + 0.2) / 2);
-    const gr = mesh(gg, 0xb9b4a8); gr.position.set(bx, 0.15 + bh, bz); g.add(gr);
-    g.add(onWall('z', bx, 0.15, bz + bd / 2, 1.2, 1.2, 0.05, 0xa8322a));
-    for (const e of [-1, 1]) { const x1 = onWall('z', bx, 0.75, bz + bd / 2 + 0.03, 1.55, 0.08, 0.03, TRIM); x1.rotation.z = e * 0.78; g.add(x1); }
-    g.add(onWall('z', bx, 0.15, bz + bd / 2 + 0.03, 1.25, 0.08, 0.03, TRIM), onWall('z', bx, 1.35, bz + bd / 2 + 0.03, 1.25, 0.08, 0.03, TRIM));
-    const tri = mesh(new THREE.CircleGeometry(0.28, 3), TRIM); tri.position.set(bx, bh + 0.5, bz + bd / 2 + 0.12); tri.rotation.z = Math.PI / 2; g.add(tri);
+    const gr = mesh(gg, 0xb9b4a8); gr.position.set(bx, 0.15 + bh, bz); c.add(gr);
+    c.add(onWall('z', bx, 0.15, bz + bd / 2, 1.2, 1.2, 0.05, 0xa8322a));
+    for (const e of [-1, 1]) { const x1 = onWall('z', bx, 0.75, bz + bd / 2 + 0.03, 1.55, 0.08, 0.03, TRIM); x1.rotation.z = e * 0.78; c.add(x1); }
+    c.add(onWall('z', bx, 0.15, bz + bd / 2 + 0.03, 1.25, 0.08, 0.03, TRIM), onWall('z', bx, 1.35, bz + bd / 2 + 0.03, 1.25, 0.08, 0.03, TRIM));
+    const tri = mesh(new THREE.CircleGeometry(0.28, 3), TRIM); tri.position.set(bx, bh + 0.5, bz + bd / 2 + 0.12); tri.rotation.z = Math.PI / 2; c.add(tri);
     // the launch tower, a timber derrick beside the pad
     const px = 0.7, pz = 0.4;
-    g.add(cyl(1.25, 1.35, 0.3, 0x8a7a65, px, 0.15, pz, 20));
-    g.add(cyl(1.1, 1.1, 0.03, 0x3a3020, px, 0.45, pz, 20));
-    timberTower(g, px - 1.45, pz - 0.2, 0.42, 0.2, 6.6, WOOD, 6);
-    for (const y of [2.4, 4.0, 5.6]) { g.add(box(1.05, 0.1, 0.12, WOOD_D, px - 0.95, y, pz - 0.2)); }
-    g.add(box(0.12, 0.12, 0.12, 0xff3b2f, px - 1.45, 6.8, pz - 0.2, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
+    c.add(cyl(1.25, 1.35, 0.3, 0x8a7a65, px, 0.15, pz, 20));
+    c.add(cyl(1.1, 1.1, 0.03, 0x3a3020, px, 0.45, pz, 20));
+    timberTower(c, px - 1.45, pz - 0.2, 0.42, 0.2, 6.6, WOOD, 6);
+    for (const y of [2.4, 4.0, 5.6]) { c.add(box(1.05, 0.1, 0.12, WOOD_D, px - 0.95, y, pz - 0.2)); }
+    c.add(box(0.12, 0.12, 0.12, 0xff3b2f, px - 1.45, 6.8, pz - 0.2, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
     const rocket = buildRocket('retro', color);
-    rocket.position.set(px, 0.45, pz); g.add(rocket);
+    rocket.position.set(px, 0.45, pz); c.add(rocket);
     const scaffold = new THREE.Group();
     for (let i = 0; i < 5; i++) scaffold.add(box(1.5, 0.1, 1.5, 0x8a6a45, px, 0.9 + i * 1.25, pz));
     for (const [dx, dz] of [[-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7]]) scaffold.add(box(0.1, 6.0, 0.1, WOOD_D, px + dx, 0.45, pz + dz));
-    g.add(scaffold);
+    c.add(scaffold);
     // a windmill pumping water and barrels of rocket fuel
     const rotor = windmill(g, 2.6, -2.4, 3.6, 0.6);
     for (const [x, z] of [[2.4, 2.5], [2.8, 2.3], [2.6, 2.85]]) barrel(g, x, z, 0.15, 1.1);
-    return { group: g, top: 8.6, rocket, scaffold, anim(t, dt) { rotor.rotation.x += dt * 2.2; } };
+    return { group: g, top: 8.6 * S, rocket, scaffold, anim(t, dt) { rotor.rotation.x += dt * 2.2; } };
   },
 
   // ---- Windmill Farm: farm windmills on lattice towers turning in the prairie wind, a
   // wooden water tank, and a dynamo shed with its lamp lit
   windmills(color) {
-    const g = new THREE.Group();
-    const rotors = [windmill(g, -2.1, -2.0, 5.0, 0.95, color), windmill(g, 1.6, -2.3, 4.2, 0.8, color), windmill(g, -1.9, 1.9, 3.6, 0.7, color), windmill(g, 2.3, 1.2, 3.2, 0.6, color)];
-    waterTower(g, -0.2, -0.2, 1.4, 0.7);
+    const g = new THREE.Group(), c = core(g);
+    const rotors = [windmill(c, -2.1, -2.0, 5.0, 0.95, color), windmill(c, 1.6, -2.3, 4.2, 0.8, color), windmill(c, -1.9, 1.9, 3.6, 0.7, color), windmill(c, 2.3, 1.2, 3.2, 0.6, color)];
+    waterTower(c, -0.2, -0.2, 1.4, 0.7);
     // the dynamo shed
-    g.add(box(1.4, 1.1, 1.0, GREY, 0.6, 0.15, 2.4)); battens(g, 0.6, 2.4, 1.4, 1.0, 0.15, 1.1, GREY);
-    const r = box(1.6, 0.06, 1.3, TIN, 0.6, 1.3, 2.4); r.rotation.x = 0.2; g.add(r);
-    g.add(onWall('z', 0.4, 0.15, 2.9, 0.45, 0.9, 0.04, 0x3a2a1e));
-    g.add(box(0.14, 0.14, 0.14, 0xfff1cf, 0.95, 1.0, 2.95, { emissive: 0xffd28a, night: 2.6 }));
-    for (const [x, z] of [[-0.5, 2.3], [-0.9, 2.6]]) { g.add(box(0.06, 1.8, 0.06, WOOD_D, x, 0.15, z)); }
-    return { group: g, top: 6.0, anim(t, dt) { rotors.forEach((r, i) => { r.rotation.x += dt * (2.4 + i * 0.4); }); } };
+    c.add(box(1.4, 1.1, 1.0, GREY, 0.6, 0.15, 2.4)); battens(c, 0.6, 2.4, 1.4, 1.0, 0.15, 1.1, GREY);
+    const r = box(1.6, 0.06, 1.3, TIN, 0.6, 1.3, 2.4); r.rotation.x = 0.2; c.add(r);
+    c.add(onWall('z', 0.4, 0.15, 2.9, 0.45, 0.9, 0.04, 0x3a2a1e));
+    c.add(box(0.14, 0.14, 0.14, 0xfff1cf, 0.95, 1.0, 2.95, { emissive: 0xffd28a, night: 2.6 }));
+    for (const [x, z] of [[-0.5, 2.3], [-0.9, 2.6]]) { c.add(box(0.06, 1.8, 0.06, WOOD_D, x, 0.15, z)); }
+    return { group: g, top: 6.0 * S, anim(t, dt) { rotors.forEach((r, i) => { r.rotation.x += dt * (2.4 + i * 0.4); }); } };
   },
 
   // ---- Telegraph Office: a little false-front office with a bay window, telegraph poles
   // marching off with wires on glass insulators, and a key light blinking in Morse
   telegraph(color) {
-    const g = new THREE.Group();
-    const top = falseFront(g, { x: -0.5, z: -0.7, w: 3.0, d: 2.4, h: 1.8, fh: 0.85, color: CREAM, sign: color, letters: 9 });
+    const g = new THREE.Group(), c = core(g);
+    const top = falseFront(c, { x: -0.5, z: -0.7, w: 3.0, d: 2.4, h: 1.8, fh: 0.85, color: CREAM, sign: color, letters: 9 });
     // a bay window on the front and a door
-    g.add(box(1.1, 1.0, 0.35, CREAM, -1.2, 0.4, 0.65));
-    for (const a of [-1.55, -1.2, -0.85]) g.add(onWall('z', a, 0.55, 0.82, 0.28, 0.7, 0.03, WARM, { emissive: 0xff9a3a, emissiveIntensity: 0.5 }));
-    g.add(box(1.2, 0.08, 0.45, TRIM, -1.2, 1.4, 0.65));
-    g.add(onWall('z', 0.3, 0.25, 0.5, 0.6, 1.3, 0.05, 0x3a2a1e));
-    wWin(g, 'x', -1.3, 0.8, 1.0, 0.5, 0.6); wWin(g, 'x', -0.1, 0.8, 1.0, 0.5, 0.6);
-    porch(g, { axis: 'x', a: -0.7, f: 1.0, len: 2.2, depth: 0.8, h: 1.5, color: TRIM });
+    c.add(box(1.1, 1.0, 0.35, CREAM, -1.2, 0.4, 0.65));
+    for (const a of [-1.55, -1.2, -0.85]) c.add(onWall('z', a, 0.55, 0.82, 0.28, 0.7, 0.03, WARM, { emissive: 0xff9a3a, emissiveIntensity: 0.5 }));
+    c.add(box(1.2, 0.08, 0.45, TRIM, -1.2, 1.4, 0.65));
+    c.add(onWall('z', 0.3, 0.25, 0.5, 0.6, 1.3, 0.05, 0x3a2a1e));
+    wWin(c, 'x', -1.3, 0.8, 1.0, 0.5, 0.6); wWin(c, 'x', -0.1, 0.8, 1.0, 0.5, 0.6);
+    porch(c, { axis: 'x', a: -0.7, f: 1.0, len: 2.2, depth: 0.8, h: 1.5, color: TRIM });
     // the poles: a line of them heading off, each with a crossarm and glass insulators
     const poles = [[-2.7, -2.6], [-1.0, -2.75], [0.8, -2.75], [2.6, -2.6], [2.75, -0.8]];
     const tops = [];
@@ -392,47 +398,47 @@ Object.assign(BUILDERS, {
       for (const e of [-0.35, -0.12, 0.12, 0.35]) { g.add(cyl(0.035, 0.03, 0.1, 0x6fd3c0, px + e, 3.38, pz, 6, { transparent: true, opacity: 0.85 })); tops.push([px + e, 3.46, pz]); }
     }
     for (let i = 0; i < poles.length - 1; i++) for (const k of [0, 1, 2, 3]) rod(g, tops[i * 4 + k], tops[(i + 1) * 4 + k], 0.008, 0x2a2d33);
-    rod(g, [-2.7 + 0.12, 3.46, -2.6], [-0.9, top - 0.4, -1.6], 0.01, 0x2a2d33);
+    rod(g, [-2.7 + 0.12, 3.46, -2.6], [-0.9 * S, (top - 0.4) * S, -1.6 * S], 0.01, 0x2a2d33);
     // the key light, blinking messages
-    const key = box(0.16, 0.16, 0.16, 0xffe08a, -0.5, top - 0.1, -0.3, { emissive: 0xffc23d, emissiveIntensity: 1 }); key.material = key.material.clone(); g.add(key);
+    const key = box(0.16, 0.16, 0.16, 0xffe08a, -0.5, top - 0.1, -0.3, { emissive: 0xffc23d, emissiveIntensity: 1 }); key.material = key.material.clone(); c.add(key);
     barrel(g, 2.6, 2.6); crate(g, 2.3, 2.75);
     const code = [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0];
-    return { group: g, top: top + 0.5, anim(t) { key.material.emissiveIntensity = code[Math.floor(t * 5) % code.length] ? 1.8 : 0.1; } };
+    return { group: g, top: (top + 0.5) * S, anim(t) { key.material.emissiveIntensity = code[Math.floor(t * 5) % code.length] ? 1.8 : 0.1; } };
   },
 
   // ---- The Saloon: a two-storey corner saloon with a wraparound balcony on turned posts,
   // swinging batwing doors, a big SALOON sign, horses at the rail and barrels by the door
   saloon(color) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), c = core(g);
     const x = -0.35, z = -0.45, w = 3.6, d = 3.0, h = 3.0;
-    g.add(box(w + 0.24, 0.25, d + 0.24, 0x7a6a55, x, 0, z));
-    g.add(box(w, h, d, color, x, 0.25, z)); battens(g, x, z, w, d, 0.25, h, color);
+    c.add(box(w + 0.24, 0.25, d + 0.24, 0x7a6a55, x, 0, z));
+    c.add(box(w, h, d, color, x, 0.25, z)); battens(c, x, z, w, d, 0.25, h, color);
     // a stepped, scalloped false front with the sign
-    g.add(box(w + 0.1, 0.8, 0.16, color, x, 0.25 + h, z + d / 2 - 0.05));
-    for (const [e, hh] of [[-1, 0.3], [0, 0.55], [1, 0.3]]) g.add(box(w * 0.3, hh, 0.16, color, x + e * w * 0.33, 1.05 + h, z + d / 2 - 0.05));
-    g.add(box(w + 0.3, 0.1, 0.3, TRIM, x, 1.0 + h, z + d / 2));
-    wSign(g, 'z', x, h + 0.3, z + d / 2 + 0.02, 2.2, 0.55, 0x2a2d33, 6, 0xe8c46a);
+    c.add(box(w + 0.1, 0.8, 0.16, color, x, 0.25 + h, z + d / 2 - 0.05));
+    for (const [e, hh] of [[-1, 0.3], [0, 0.55], [1, 0.3]]) c.add(box(w * 0.3, hh, 0.16, color, x + e * w * 0.33, 1.05 + h, z + d / 2 - 0.05));
+    c.add(box(w + 0.3, 0.1, 0.3, TRIM, x, 1.0 + h, z + d / 2));
+    wSign(c, 'z', x, h + 0.3, z + d / 2 + 0.02, 2.2, 0.55, 0x2a2d33, 6, 0xe8c46a);
     // upstairs windows and the wraparound balcony on turned posts
-    for (const a of [-1.2, 0, 1.2]) wWin(g, 'z', x + a, 2.0, z + d / 2, 0.5, 0.75, TRIM, WARM);
-    for (const a of [-0.8, 0.5]) wWin(g, 'x', z + a, 2.0, x + w / 2, 0.5, 0.75, TRIM, WARM);
-    balcony(g, { axis: 'z', a: x, f: z + d / 2, len: w + 0.4, y: 1.7, depth: 0.85 });
-    balcony(g, { axis: 'x', a: z + 0.2, f: x + w / 2, len: d + 0.4, y: 1.7, depth: 0.85 });
-    for (const a of [-1.75, -0.6, 0.6, 1.75]) g.add(cyl(0.06, 0.07, 1.5, TRIM, x + a, 0.25, z + d / 2 + 0.8, 8));
-    for (const a of [-1.3, 0, 1.3]) g.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.8, 0.25, z + a, 8));
-    g.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.8, 0.25, z + d / 2 + 0.8, 8));
-    g.add(box(w + 0.6, 0.12, 0.95, 0x8a6a45, x + 0.2, 0.12, z + d / 2 + 0.45));                     // the boardwalk
-    g.add(box(0.95, 0.12, d + 0.6, 0x8a6a45, x + w / 2 + 0.45, 0.12, z + 0.2));
+    for (const a of [-1.2, 0, 1.2]) wWin(c, 'z', x + a, 2.0, z + d / 2, 0.5, 0.75, TRIM, WARM);
+    for (const a of [-0.8, 0.5]) wWin(c, 'x', z + a, 2.0, x + w / 2, 0.5, 0.75, TRIM, WARM);
+    balcony(c, { axis: 'z', a: x, f: z + d / 2, len: w + 0.4, y: 1.7, depth: 0.85 });
+    balcony(c, { axis: 'x', a: z + 0.2, f: x + w / 2, len: d + 0.4, y: 1.7, depth: 0.85 });
+    for (const a of [-1.75, -0.6, 0.6, 1.75]) c.add(cyl(0.06, 0.07, 1.5, TRIM, x + a, 0.25, z + d / 2 + 0.8, 8));
+    for (const a of [-1.3, 0, 1.3]) c.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.8, 0.25, z + a, 8));
+    c.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.8, 0.25, z + d / 2 + 0.8, 8));
+    c.add(box(w + 0.6, 0.12, 0.95, 0x8a6a45, x + 0.2, 0.12, z + d / 2 + 0.45));                     // the boardwalk
+    c.add(box(0.95, 0.12, d + 0.6, 0x8a6a45, x + w / 2 + 0.45, 0.12, z + 0.2));
     // downstairs: big windows, and the batwing doors under a lamp
-    for (const a of [-1.3, 1.0]) wWin(g, 'z', x + a, 0.65, z + d / 2, 0.8, 0.85, TRIM, WARM);
-    g.add(onWall('z', x - 0.15, 0.25, z + d / 2, 0.9, 1.5, 0.04, 0x1a1410));
-    for (const e of [-0.21, 0.21]) g.add(onWall('z', x - 0.15 + e, 0.65, z + d / 2 + 0.06, 0.38, 0.7, 0.04, 0xc29a66));
-    g.add(box(0.14, 0.2, 0.14, 0xfff1cf, x - 0.15, 1.6, z + d / 2 + 0.1, { emissive: 0xffd28a, night: 2.6 }));
-    for (const a of [-0.3, 0.6]) wWin(g, 'x', z + a, 0.65, x + w / 2, 0.6, 0.8, TRIM, WARM);
+    for (const a of [-1.3, 1.0]) wWin(c, 'z', x + a, 0.65, z + d / 2, 0.8, 0.85, TRIM, WARM);
+    c.add(onWall('z', x - 0.15, 0.25, z + d / 2, 0.9, 1.5, 0.04, 0x1a1410));
+    for (const e of [-0.21, 0.21]) c.add(onWall('z', x - 0.15 + e, 0.65, z + d / 2 + 0.06, 0.38, 0.7, 0.04, 0xc29a66));
+    c.add(box(0.14, 0.2, 0.14, 0xfff1cf, x - 0.15, 1.6, z + d / 2 + 0.1, { emissive: 0xffd28a, night: 2.6 }));
+    for (const a of [-0.3, 0.6]) wWin(c, 'x', z + a, 0.65, x + w / 2, 0.6, 0.8, TRIM, WARM);
     // horses at the rail, barrels and a bench
-    hitchRail(g, -2.55, 2.55, 1.3); horse(g, -2.8, 2.2, 0.15, 0x7a4a2a); horse(g, -2.2, 2.25, -0.1, 0x2a2420);
+    hitchRail(g, -2.9, 3.6, 1.3); horse(g, -3.15, 3.25, 0.15, 0x7a4a2a); horse(g, -2.55, 3.3, -0.1, 0x2a2420);
     barrel(g, 2.75, -2.4); barrel(g, 2.45, -2.75); barrel(g, 2.75, -2.85, 0.15, 0.9);
-    g.add(box(1.0, 0.08, 0.3, 0x8a6a45, x + 1.3, 0.55, z + d / 2 + 0.25), box(0.06, 0.3, 0.3, 0x6e5232, x + 0.85, 0.25, z + d / 2 + 0.25), box(0.06, 0.3, 0.3, 0x6e5232, x + 1.75, 0.25, z + d / 2 + 0.25));
-    return { group: g, top: h + 2.4 };
+    c.add(box(1.0, 0.08, 0.3, 0x8a6a45, x + 1.3, 0.55, z + d / 2 + 0.25), box(0.06, 0.3, 0.3, 0x6e5232, x + 0.85, 0.25, z + d / 2 + 0.25), box(0.06, 0.3, 0.3, 0x6e5232, x + 1.75, 0.25, z + d / 2 + 0.25));
+    return { group: g, top: (h + 2.4) * S };
   },
 });
 

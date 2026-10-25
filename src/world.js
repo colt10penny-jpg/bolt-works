@@ -755,7 +755,8 @@ export class World {
     for (const x of [-W / 2 + 0.05, W / 2 - 0.05]) { const br = box(0.06, 0.06, 0.5, DK, x, H - 0.12, -D / 2 + 0.28); br.rotation.x = 0.7; g.add(br); }
     g.add(box(0.16, 0.22, 0.16, 0xffd9a0, W / 2 + 0.25, H - 0.35, -D / 2 + 0.2, { emissive: 0xffc070, night: 2.5 }));   // a lantern
     wCrate(g, W / 2 - 0.15, -D / 2 + 0.45, 0.3, 0.38); wBarrel(g, -W / 2 + 0.3, -D / 2 + 0.45, 0.3, 0.8);
-    const dist = 2.75, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    // further out than elsewhere: the frontier buildings are bigger
+    const dist = 3.2, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
     return g;
