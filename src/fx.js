@@ -113,7 +113,7 @@ export class Look {
   constructor(renderer, scene, camera) {
     this.r = renderer; this.scene = scene; this.camera = camera;
     renderer.toneMapping = THREE.NeutralToneMapping;
-    renderer.toneMappingExposure = 1.08; // brighten miniature-style colors without clipping highlights
+    renderer.toneMappingExposure = 1.12; // bright tabletop miniature without clipped highlights
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const pm = new THREE.PMREMGenerator(renderer);
     scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -220,12 +220,12 @@ export class Look {
     for (const m of GLOW.lit) m.emissiveIntensity = (m.userData.baseGlow ?? 1) * (1 + n * 1.2);
     if (this.bloom) { this.bloom.strength = 0.2 + n * 0.45; this.bloom.threshold = 1.15 - n * 0.35; }
     if (this.grade) {
-      this.grade.uniforms.vignette.value = 0.14; // keep the edges bright and inviting
+      this.grade.uniforms.vignette.value = 0.09; // avoid darkening the more detailed town edges
       // night: a cool moonlit cast and a little less colour, without making anything darker
       // (Mars keeps its warmth at night: only a light cool cast)
       const cool = this.kind === 'mars' ? 0.35 : 1;
       this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17 * cool, 1 - n * 0.07 * cool, 1 + n * 0.12 * cool);
-      this.grade.uniforms.sat.value = 1.17 - n * 0.15; // vibrant but less harsh color
+      this.grade.uniforms.sat.value = 1.21 - n * 0.15; // cheerful illustrated palette
     }
   }
 

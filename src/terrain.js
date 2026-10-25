@@ -603,10 +603,10 @@ export function buildLand(name, T, blocks) {
   if (name === 'colorado') {
     // groves: aspens like to cluster, pines take the slopes
     const grove = (x, z) => fbm(x / 22, z / 22, 2, 31) > 0.52;
-    place(900, S.tree, { where: (x, z) => !grove(x, z) });
-    place(700, S.aspen, { where: grove, maxH: 14 });
-    place(900, S.pine, { minH: 2, maxH: 24 });
-    place(260, S.pine, { maxH: 2 });
+    place(900, S.tree, { where: (x, z) => !grove(x, z) && townDist(x, z) > 10 });
+    place(700, S.aspen, { where: (x, z) => grove(x, z) && townDist(x, z) > 10, maxH: 14 });
+    place(900, S.pine, { minH: 2, maxH: 24, where: (x, z) => townDist(x, z) > 10 });
+    place(260, S.pine, { maxH: 2, where: (x, z) => townDist(x, z) > 10 });
     place(500, S.bush, { pad: 0.9, blob: 0.6 });
     place(420, S.flowers, { pad: 0.6, blob: 0, maxH: 6 });
     place(160, S.rock, { pad: 1.3, blob: 0.7 });
@@ -619,7 +619,7 @@ export function buildLand(name, T, blocks) {
     // a dense evergreen forest closing in round the town: thin at the town's edge, thick
     // further out (not on the fields or in the lake)
     const inField = (x, z) => fields.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
-    const woods = (x, z) => { const d = townDist(x, z); return d > 13 && !inField(x, z) && r() < Math.min(0.95, (d - 13) / 16) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
+    const woods = (x, z) => { const d = townDist(x, z); return d > 23 && !inField(x, z) && r() < Math.min(0.95, (d - 23) / 18) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); }; // dense trees frame, not hide, the playable town
     place(2400, S.fir, { where: woods, span: 230, maxH: 30, pad: 0.4, blob: 0.9 });
     place(700, S.pine, { where: woods, span: 230, maxH: 30, pad: 0.3, blob: 0.8 });
     const fieldM = new Map();
@@ -957,8 +957,8 @@ export function buildRoads(name, T, stateOf) {
   const rutM = withClouds(std(0xc09668, { roughness: 1 })), seamM = std(0x4e3a26, { roughness: 1 });
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
-  const wornM = withClouds(std(0xa9b25f, { roughness: 1 }));
-  const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
+  const wornM = withClouds(std(0xc5bd86, { roughness: 1 }));
+  const tarM = withClouds(std(0x858d89, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
   const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
