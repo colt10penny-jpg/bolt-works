@@ -169,14 +169,14 @@ function gableRoof(g, { x = 0, z = 0, w, d, y, rise = 1, color, along = 'x', eav
   const L = len + eave * 2;
   for (let i = -3; i <= 3; i++) for (const sd of [-1, 1]) {
     const c = (L / 2) * (i / 3.6), off = sd * (span / 2 + eave) / 2;
-    // Seams lie flush on the actual slope rather than floating above the roof.
-    const seamX = x + c, seamZ = z + c;
+    // Exactly one supported seam per roof panel: follow each sloped half, not
+    // through the center of the roof where duplicate rails would overlap.
     if (along === 'x') {
-      const rib = box(0.05, 0.045, half * 2, ICON.deep, seamX, y + rise / 2 + 0.025, z);
-      rib.rotation.x = slope; g.add(rib);
+      const rib = box(0.05, 0.045, half, ICON.deep, x + c, y + rise / 2 + 0.025, z + off);
+      rib.rotation.x = sd * slope; g.add(rib);
     } else {
-      const rib = box(half * 2, 0.045, 0.05, ICON.deep, x, y + rise / 2 + 0.025, seamZ);
-      rib.rotation.z = -slope; g.add(rib);
+      const rib = box(half, 0.045, 0.05, ICON.deep, x + off, y + rise / 2 + 0.025, z + c);
+      rib.rotation.z = -sd * slope; g.add(rib);
     }
   }
   // a ridge cap
