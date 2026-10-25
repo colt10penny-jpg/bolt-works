@@ -54,7 +54,14 @@ function door(g, axis, a, f, w = 1.6, h = 1.8, color = 0x9aa0a8) {
   g.add(onWall(axis, a, 0, f, w + 0.3, h + 0.18, 0.08, DARK));
   g.add(onWall(axis, a, 0, f + s * 0.04, w, h, 0.05, color));
   for (let k = 1; k < 7; k++) g.add(onWall(axis, a, h * k / 7, f + s * 0.09, w, 0.035, 0.02, shade(color, -0.3)));
-  for (const e of [-1, 1]) g.add(onWall(axis, a + e * (w / 2 + 0.08), 0, f + s * 0.1, 0.12, 0.7, 0.12, HAZ));
+  // Full-height bolted jambs, hazard feet and a broad supported lintel instead
+  // of a flat decal sitting on the outside of a factory wall.
+  for (const e of [-1, 1]) {
+    g.add(onWall(axis, a + e * (w / 2 + 0.10), 0, f + s * 0.08, 0.14, h + 0.12, 0.12, DARK));
+    g.add(onWall(axis, a + e * (w / 2 + 0.10), 0, f + s * 0.16, 0.18, 0.60, 0.05, HAZ));
+    for (const yy of [0.22, h - 0.16]) g.add(onWall(axis, a + e * (w / 2 + 0.10), yy, f + s * 0.19, 0.045, 0.045, 0.02, TRIM));
+  }
+  g.add(onWall(axis, a, h + 0.09, f + s * 0.10, w + 0.37, 0.18, 0.13, shade(color, -0.35)));
   g.add(onWall(axis, a, h + 0.3, f, 0.3, 0.12, 0.25, DARK));
   g.add(onWall(axis, a, h + 0.24, f + s * 0.12, 0.22, 0.06, 0.1, 0xfff2c8, { emissive: 0xffd27a, night: 2.4 }));
 }
@@ -163,8 +170,14 @@ function chimney(g, x, z, y0, h, r, color, bands = true) {
   if (bands) for (const [k, c] of [[0.78, WHITE], [0.86, RED], [0.94, WHITE]]) g.add(cyl(r * 0.92, r * 0.92, h * 0.08, c, x, y0 + h * k - h * 0.04, z, 18));
   g.add(cyl(r * 0.98, r * 0.98, 0.14, DARK, x, y0 + h - 0.1, z, 18));
   // platform ring near the top
-  const ring = mesh(new THREE.TorusGeometry(r * 1.35, 0.04, 6, 22), IRON); ring.rotation.x = Math.PI / 2; ring.position.set(x, y0 + h * 0.7 + 0.45, z); g.add(ring);
-  const deck = mesh(new THREE.CylinderGeometry(r * 1.38, r * 1.38, 0.06, 22), IRON); deck.position.set(x, y0 + h * 0.7, z); g.add(deck);
+  const deckY = y0 + h * 0.7;
+  const ring = mesh(new THREE.TorusGeometry(r * 1.35, 0.04, 6, 22), IRON); ring.rotation.x = Math.PI / 2; ring.position.set(x, deckY + 0.45, z); g.add(ring);
+  const deck = mesh(new THREE.CylinderGeometry(r * 1.38, r * 1.38, 0.06, 22), IRON); deck.position.set(x, deckY, z); g.add(deck);
+  // Guardrail posts physically attach the safety ring to its platform.
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    g.add(cyl(0.035, 0.035, 0.44, HAZ, x + Math.cos(a) * r * 1.35, deckY + 0.035, z + Math.sin(a) * r * 1.35, 6));
+  }
   // ladder up the side facing the camera
   const lx = x + r * 0.72, lz = z + r * 0.72;
   for (const e of [-0.14, 0.14]) g.add(box(0.04, h * 0.95, 0.04, IRON, lx + e * 0.7, y0 + 0.2, lz - e * 0.7));
@@ -181,8 +194,14 @@ function tank(g, x, z, r, h, color, y0 = 0) {
   const lx = x + r * 0.71 + 0.05, lz = z + r * 0.71 + 0.05;
   for (const e of [-0.13, 0.13]) g.add(box(0.04, h + 0.2, 0.04, IRON, lx + e * 0.7, y0 + 0.3, lz - e * 0.7));
   for (let y = y0 + 0.5; y < y0 + h + 0.3; y += 0.3) { const rung = box(0.28, 0.025, 0.03, IRON, lx, y, lz); rung.rotation.y = -Math.PI / 4; g.add(rung); }
-  const rail = mesh(new THREE.TorusGeometry(r * 0.6, 0.03, 5, 18), HAZ); rail.rotation.x = Math.PI / 2; rail.position.set(x, y0 + 0.3 + h + r * 0.35 + 0.4, z); g.add(rail);
-  return y0 + 0.3 + h + r * 0.35;
+  const railBase = y0 + 0.3 + h + r * 0.35;
+  const rail = mesh(new THREE.TorusGeometry(r * 0.6, 0.03, 5, 18), HAZ); rail.rotation.x = Math.PI / 2; rail.position.set(x, railBase + 0.4, z); g.add(rail);
+  // Raised tank guardrails need posts; otherwise their rings visibly float.
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    g.add(cyl(0.03, 0.03, 0.45, IRON, x + Math.cos(a) * r * 0.6, railBase, z + Math.sin(a) * r * 0.6, 6));
+  }
+  return railBase;
 }
 // a steel lattice: two posts with cross-bracing between them, in the plane facing `axis`
 function lattice(g, x0, z0, x1, z1, y0, h, color = IRON, step = 1.1) {
@@ -234,6 +253,12 @@ Object.assign(BUILDERS, {
     winRow(g, 'z', hx + 0.5, 0.95, hz + hd / 2, 2, 1.0, 0.6, 0.6);
     sideDoor(g, 'z', hx - 0.95, hz + hd / 2);
     door(g, 'x', hz, hx + hw / 2, 1.2, 1.4, 0x8d7a64);
+    // Loading-side canopy, pitched roof gutters and three robust support plates.
+    g.add(box(3.0, 0.11, 0.30, 0xe6ae43, hx, wallTop - 0.22, hz + hd / 2 + 0.18));
+    for (const sx of [-0.95, 0, 0.95]) {
+      g.add(box(0.18, 0.18, 0.36, 0x415e83, hx + sx, wallTop - 0.40, hz + hd / 2 + 0.10));
+      g.add(box(0.08, 0.08, 0.08, 0xf3f0e8, hx + sx, wallTop - 0.30, hz + hd / 2 + 0.29));
+    }
     // the headframe: four legs, cross-braced, with a deck and two sheave wheels on top
     const fx = -1.55, fz = -1.15, s = 0.6, H = 5.4;
     lattice(g, fx - s, fz + s, fx + s, fz + s, 0.3, H, IRON, 0.9);
@@ -241,6 +266,11 @@ Object.assign(BUILDERS, {
     lattice(g, fx - s, fz - s, fx - s, fz + s, 0.3, H, IRON, 0.9);
     lattice(g, fx - s, fz - s, fx + s, fz - s, 0.3, H, IRON, 0.9);
     g.add(box(1.7, 0.16, 1.7, 0xffc23d, fx, H + 0.3, fz));
+    // Extra transverse braces keep the headframe visually supported at its base.
+    for (const zz of [fz - s, fz + s]) {
+      rod(g, [fx - s, 0.35, zz], [fx + s, H * 0.52, zz], 0.055, 0x7699b7);
+      rod(g, [fx + s, 0.35, zz], [fx - s, H * 0.52, zz], 0.055, 0x7699b7);
+    }
     railing(g, fx - 0.8, fz + 0.8, fx + 0.8, fz + 0.8, H + 0.46);
     const wheels = [];
     for (const dz of [-0.35, 0.35]) {
@@ -255,6 +285,10 @@ Object.assign(BUILDERS, {
     const bx = 2.2, bz = 1.2;
     for (const [dx, dz] of [[-0.55, -0.5], [0.55, -0.5], [-0.55, 0.5], [0.55, 0.5]]) g.add(box(0.14, 1.6, 0.14, IRON, bx + dx, 0.15, bz + dz));
     g.add(box(1.5, 1.1, 1.3, 0xe6ae43, bx, 1.7, bz), box(1.6, 0.12, 1.4, 0xf4eee0, bx, 2.8, bz));
+    // A diagonal bracing pair ties the ore hopper to its legs instead of hovering.
+    for (const dx of [-0.55, 0.55]) {
+      rod(g, [bx + dx, 0.28, bz - 0.5], [bx + dx, 1.72, bz + 0.5], 0.05, IRON);
+    }
     const hop = mesh(new THREE.ConeGeometry(0.85, 0.7, 4), shade(color, -0.1)); hop.rotation.set(Math.PI, Math.PI / 4, 0); hop.position.set(bx, 1.35, bz); g.add(hop);
     for (let k = 0; k < 4; k++) g.add(onWall('z', bx - 0.5 + k * 0.33, 1.9, bz + 0.65, 0.18, 0.7, 0.03, HAZ));
     const cx0 = fx + 0.9, cy0 = 0.6, cx1 = bx - 0.6, cy1 = 2.85, clen = Math.hypot(cx1 - cx0, cy1 - cy0), cang = Math.atan2(cy1 - cy0, cx1 - cx0);
