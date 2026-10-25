@@ -385,11 +385,11 @@ export function makeHeight(name) {
 }
 
 const PAL = {
-  colorado: { grass: [0x89cb5c, 0x6cb949, 0xa8d96c, 0xc0cb71], rock: 0x8d8a82, snow: 0xf4f6fa, dirt: 0xa98a62 },
-  desert: { grass: [0xe7c98b, 0xdbb577, 0xf2d9a3, 0xcfa069], rock: 0xc06c45, snow: 0xd88a5a, dirt: 0xc9a06b },
+  colorado: { grass: [0x86c25a, 0x6eaf49, 0x9ccf68, 0xb4c463], rock: 0x8d8a82, snow: 0xf4f6fa, dirt: 0xa98a62 },
+  desert: { grass: [0xe2c58f, 0xd9b77d, 0xebd3a3, 0xd2a46e], rock: 0xc06c45, snow: 0xd88a5a, dirt: 0xc9a06b },
   // rust and maroon dust over dark basalt, with frost on the heights and in craters
-  mars: { grass: [0xa7472a, 0x85321f, 0xc15b34, 0x5b231b], rock: 0x2e1e1c, snow: 0xf3ece8, dirt: 0x9c4a2e },
-  moon: { grass: [0xa4a6b0, 0x777e8b, 0xc2c2c7, 0x595d68], rock: 0x86868d, snow: 0xc4c4ca, dirt: 0x8f8f96 },
+  mars: { grass: [0x8e3820, 0x6e2a18, 0xa8482a, 0x4e1e14], rock: 0x2e1e1c, snow: 0xf3ece8, dirt: 0x9c4a2e },
+  moon: { grass: [0x9a9aa0, 0x77777f, 0xaeaeb4, 0x5f6068], rock: 0x86868d, snow: 0xc4c4ca, dirt: 0x8f8f96 },
 };
 
 export function buildLand(name, T, blocks) {
@@ -603,10 +603,10 @@ export function buildLand(name, T, blocks) {
   if (name === 'colorado') {
     // groves: aspens like to cluster, pines take the slopes
     const grove = (x, z) => fbm(x / 22, z / 22, 2, 31) > 0.52;
-    place(900, S.tree, { where: (x, z) => !grove(x, z) && townDist(x, z) > 10 });
-    place(700, S.aspen, { where: (x, z) => grove(x, z) && townDist(x, z) > 10, maxH: 14 });
-    place(900, S.pine, { minH: 2, maxH: 24, where: (x, z) => townDist(x, z) > 10 });
-    place(260, S.pine, { maxH: 2, where: (x, z) => townDist(x, z) > 10 });
+    place(900, S.tree, { where: (x, z) => !grove(x, z) });
+    place(700, S.aspen, { where: grove, maxH: 14 });
+    place(900, S.pine, { minH: 2, maxH: 24 });
+    place(260, S.pine, { maxH: 2 });
     place(500, S.bush, { pad: 0.9, blob: 0.6 });
     place(420, S.flowers, { pad: 0.6, blob: 0, maxH: 6 });
     place(160, S.rock, { pad: 1.3, blob: 0.7 });
@@ -619,7 +619,7 @@ export function buildLand(name, T, blocks) {
     // a dense evergreen forest closing in round the town: thin at the town's edge, thick
     // further out (not on the fields or in the lake)
     const inField = (x, z) => fields.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
-    const woods = (x, z) => { const d = townDist(x, z); return d > 23 && !inField(x, z) && r() < Math.min(0.95, (d - 23) / 18) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); }; // dense trees frame, not hide, the playable town
+    const woods = (x, z) => { const d = townDist(x, z); return d > 13 && !inField(x, z) && r() < Math.min(0.95, (d - 13) / 16) * (0.75 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
     place(2400, S.fir, { where: woods, span: 230, maxH: 30, pad: 0.4, blob: 0.9 });
     place(700, S.pine, { where: woods, span: 230, maxH: 30, pad: 0.3, blob: 0.8 });
     const fieldM = new Map();
@@ -696,7 +696,7 @@ export function buildLand(name, T, blocks) {
   // soft dark patches under things, so they sit on the ground
   if (blobs.length) {
     const bm = new THREE.MeshBasicMaterial({ map: tx.blob, transparent: true, opacity: name === 'moon' ? 0.55 : 0.38, depthWrite: false, color: 0x000000 });
-    bm.color.set(name === 'moon' ? 0x151826 : name === 'mars' ? 0x361e20 : name === 'desert' ? 0x493729 : 0x1d2a14); // shadows belong to each biome
+    bm.color.set(0x1d2a14);
     const geos = blobs.map(([x, h, z, s]) => { const g = new THREE.PlaneGeometry(2.6 * s, 2.6 * s); g.rotateX(-Math.PI / 2); g.translate(x, h + 0.04, z); return g; });
     const bmesh = new THREE.Mesh(mergeGeometries(geos), bm);
     bmesh.renderOrder = 1;
@@ -744,7 +744,7 @@ function sceneryKit() {
     return M.get(k);
   };
   const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); return o; };
-  const greens = [0x3b9b4c, 0x55b65c, 0x328747, 0x65bc62, 0x78ad4a];
+  const greens = [0x3f8f4a, 0x4fa152, 0x357d40, 0x5bb05a, 0x6aa84a];
   const golds = [0xf2c230, 0xe8a91e, 0xf5d34a, 0xd98c1c, 0xb6c43c];
   return {
     tree(r) {
@@ -767,7 +767,7 @@ function sceneryKit() {
       return g;
     },
     pine(r) {
-      const g = new THREE.Group(), s = 0.8 + r() * 0.8, col = r() < 0.5 ? 0x287c45 : 0x1e663b;
+      const g = new THREE.Group(), s = 0.8 + r() * 0.8, col = r() < 0.5 ? 0x2f6f3e : 0x285f37;
       g.add(mesh(new THREE.CylinderGeometry(0.12 * s, 0.17 * s, 0.7 * s, 6), m(0x6b4a2b), 0, 0.35 * s, 0));
       const lm = m(col, {}, 1.0 * s);
       for (let i = 0; i < 3; i++) g.add(mesh(new THREE.ConeGeometry((1.0 - i * 0.25) * s, 1.25 * s, 7), lm, 0, (1.05 + i * 0.62) * s, 0));
@@ -810,7 +810,7 @@ function sceneryKit() {
     },
     // a tall forest fir: four tiers, dark and dense, for the woods round town
     fir(r) {
-      const g = new THREE.Group(), s = 1.0 + r() * 0.9, col = [0x216e3b, 0x297747, 0x1b5d36][Math.floor(r() * 3)];
+      const g = new THREE.Group(), s = 1.0 + r() * 0.9, col = [0x245c33, 0x2b6a3a, 0x1f5230][Math.floor(r() * 3)];
       g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.6 * s, 5), m(0x5a3d24), 0, 0.3 * s, 0));
       const lm = m(col, {}, 1.0 * s);
       for (let i = 0; i < 4; i++) g.add(mesh(new THREE.ConeGeometry((1.05 - i * 0.22) * s, 1.15 * s, 7), lm, 0, (0.95 + i * 0.55) * s, 0));
@@ -957,8 +957,8 @@ export function buildRoads(name, T, stateOf) {
   const rutM = withClouds(std(0xc09668, { roughness: 1 })), seamM = std(0x4e3a26, { roughness: 1 });
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
-  const wornM = withClouds(std(0xc5bd86, { roughness: 1 }));
-  const tarM = withClouds(std(0x858d89, { map: tx.asphalt, roughness: 0.98 }));
+  const wornM = withClouds(std(0xa9b25f, { roughness: 1 }));
+  const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
   const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
