@@ -590,7 +590,8 @@ export class World {
     const ray = new THREE.Raycaster(); const down = new THREE.Vector3(0, -1, 0);
     const topAt = (x, z) => { ray.set(new THREE.Vector3(x, 80, z), down); return ray.intersectObjects(meshes, false)[0] || null; };
     const placed = [];
-    if (!this.themeName?.startsWith('moon') || true) for (let i = 0; i < 24 && placed.length < 3; i++) {
+    // The roof must be flat and wide enough for the full unit footprint.
+    for (let i = 0; i < 24 && placed.length < 3; i++) {
       const x = bb.min.x + 0.7 + rnd() * Math.max(0, bb.max.x - bb.min.x - 1.4), z = bb.min.z + 0.7 + rnd() * Math.max(0, bb.max.z - bb.min.z - 1.4);
       const hit = topAt(x, z);
       if (!hit || hit.point.y < 1.8 || !hit.face) continue;
@@ -641,7 +642,7 @@ export class World {
     const style = STYLE[this.typeOf?.(id)] || STYLE.default;
     // the Wild West has its own additions and gear for every kind of building
     const west = this.themeName === 'desert' ? (WEST_STYLE[this.typeOf?.(id)] || WEST_STYLE.default) : null;
-    const later = [], ground = [];   // no room on the main roof: onto a wing, or into the yard
+    const later = [], ground = [];   // equipment without a valid roof anchor must use a supported wing or free yard
     [2, 4, 6, 7, 9].forEach((need, k) => {
       if (tier < need) return;
       const name = k < 4 ? (west ? west.props[k] : style.props[k]) : 'beacon';
@@ -769,6 +770,8 @@ export class World {
     const age = Math.max(0, Math.min(1, (3 - tier) / 3)), modern = Math.max(0, Math.min(1, (tier - 5) / 4));
     if (!age && !modern) return;
     this.ageCache ||= new Map();
+    // Early factories should still look like painted, carefully assembled machines.
+    // The previous aging pass buried new geometry under heavy brown-gray darkening.
     const dirt = new THREE.Color(0x857866), hsl = {};
     group.traverse(o => {
       if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
@@ -781,7 +784,7 @@ export class World {
         const a = vc.array, c = new THREE.Color();
         for (let i = 0; i < a.length; i += 3) {
           c.setRGB(a[i], a[i + 1], a[i + 2]);
-          if (age) c.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          if (age) c.lerp(dirt, 0.16 * age).multiplyScalar(1 - 0.06 * age);
           else { c.getHSL(hsl); c.setHSL(hsl.h, Math.min(1, hsl.s * (1 + 0.35 * modern)), Math.min(0.92, hsl.l + 0.05 * modern)); }
           a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b;
         }
@@ -797,7 +800,7 @@ export class World {
           m.roughness = age ? Math.min(1, m.roughness + 0.25 * age) : m.roughness + (0.3 - m.roughness) * modern * 0.85;
           m.metalness = age ? m.metalness * (1 - age) : Math.max(m.metalness, 0.22 * modern);
         } else if (age) {
-          m.color.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          m.color.lerp(dirt, 0.16 * age).multiplyScalar(1 - 0.06 * age);
           m.roughness = Math.min(1, m.roughness + 0.25 * age); m.metalness *= 1 - age;
         } else {
           m.color.getHSL(hsl);
@@ -819,12 +822,40 @@ export class World {
     if (!this.padLooks.has(key)) {
       const m = base.clone(); m.userData = { ...base.userData };
       if (base.onBeforeCompile) m.onBeforeCompile = base.onBeforeCompile;
-      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.45); m.roughness = 1; }
-      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.2);
+      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.16); m.roughness = 0.91; }
+      else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.12);
       else if (tier >= 7) { m.color.lerp(new THREE.Color(0xffffff), 0.35); m.roughness = 0.6; }
       this.padLooks.set(key, m);
     }
     L.pad.material = this.padLooks.get(key);
+  }
+
+  // Every factory loading bay gets a solid-looking, marked approach lane. The truck
+  // stops at DOCK_STOP_OFFSET from the lot center, OUTSIDE the building and posts.
+  // Decorative markings are low-profile so vehicles never drive through solid props.
+  #dockApproach(g) {
+    const west = this.themeName === 'desert', space = this.themeName === 'mars' || this.themeName === 'moon';
+    const pavement = west ? 0xb58d61 : space ? 0x686c78 : 0x8a969e;
+    const marker = west ? 0xf2db98 : space ? 0x9be7ff : 0xf8dc81;
+    // From the existing canopy apron toward the road: a seamless driveway rather
+    // than a door painted on a factory wall with a vehicle disappearing through it.
+    const apron = box(2.34, 0.025, 2.8, pavement, 0, 0.004, 1.83);
+    apron.castShadow = false; g.add(apron);
+    for (const x of [-1.13, 1.13]) {
+      const stripe = box(0.07, 0.009, 2.65, marker, x, 0.034, 1.85);
+      stripe.castShadow = false; g.add(stripe);
+    }
+    // A pair of horizontal stop lines makes the safe halt position readable.
+    for (const x of [-0.65, 0.65]) {
+      const guide = box(0.4, 0.012, 0.08, marker, x, 0.035, 2.81);
+      guide.castShadow = false; g.add(guide);
+    }
+    for (const x of [-0.95, 0.95]) {
+      // Bollards stay *beside* the lane and are supported by their ground pads.
+      g.add(box(0.3, 0.08, 0.3, 0x373e4b, x * 1.95, 0, 0.45));
+      g.add(box(0.14, 0.68, 0.14, marker, x * 1.95, 0.08, 0.45));
+      g.add(box(0.17, 0.13, 0.17, 0x323947, x * 1.95, 0.57, 0.45));
+    }
   }
 
   // a frontier freight dock: a raised plank dock with its edge on posts, a big barn door
@@ -848,6 +879,12 @@ export class World {
     for (const x of [-W / 2 + 0.05, W / 2 - 0.05]) { const br = box(0.06, 0.06, 0.5, DK, x, H - 0.12, -D / 2 + 0.28); br.rotation.x = 0.7; g.add(br); }
     g.add(box(0.16, 0.22, 0.16, 0xffd9a0, W / 2 + 0.25, H - 0.35, -D / 2 + 0.2, { emissive: 0xffc070, night: 2.5 }));   // a lantern
     wCrate(g, W / 2 - 0.15, -D / 2 + 0.45, 0.3, 0.38); wBarrel(g, -W / 2 + 0.3, -D / 2 + 0.45, 0.3, 0.8);
+    // Structural porch uprights support the roof rather than leaving a floating fascia.
+    for (const x of [-W / 2 + 0.14, W / 2 - 0.14]) {
+      g.add(box(0.13, H + 0.10, 0.13, DK, x, 0, D / 2 - 0.16));
+      g.add(box(0.22, 0.12, 0.22, PL, x, H + 0.10, D / 2 - 0.16));
+    }
+    this.#dockApproach(g);
     // further out than elsewhere: the frontier buildings are bigger
     const dist = 3.2, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
@@ -870,6 +907,12 @@ export class World {
     for (const x of [-W / 2 - 0.1, W / 2 + 0.1]) { const st = box(0.06, 0.06, D * 0.8, 0x666a72, x, H - 0.45, -D / 2 + D * 0.38); st.rotation.x = 0.55; g.add(st); }
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
     for (let k = 0; k < 3; k++) for (const x of [-W / 2 + 0.15, W / 2 - 0.15]) g.add(box(0.1, 0.02, 0.1, 0x6fe8ff, x, 0.01, D / 2 - 0.3 - k * 0.45, { emissive: 0x6fe8ff, night: 2.4 }));
+    // Bolted upright frames physically connect the roof canopy to the concrete slab.
+    for (const x of [-W / 2 - 0.10, W / 2 + 0.10]) {
+      g.add(box(0.12, H + 0.10, 0.12, 0x737d88, x, 0, D / 2 - 0.20));
+      g.add(box(0.18, 0.18, 0.18, 0xffa154, x, 0, D / 2 - 0.20));
+    }
+    this.#dockApproach(g);
     const dist = 2.75, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
@@ -906,6 +949,7 @@ export class World {
     for (const x of [-W / 2 - 0.08, W / 2 + 0.08]) g.add(box(0.1, 0.5, 0.1, 0xffc23d, x, 0, D / 2 + 0.02));                                // post guards
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat(0x2a2d33)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
     g.add(box(0.26, 0.08, 0.2, 0xfff1cf, 0, H, 0, { emissive: 0xffd28a, night: 2.5 }));   // a lamp under the canopy
+    this.#dockApproach(g);
     // the open front faces the driveway
     const dist = 2.75;
     const rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
