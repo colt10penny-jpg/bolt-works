@@ -585,7 +585,7 @@ export function buildLand(name, T, blocks) {
     // little touches so open ground doesn't look like a putting green
     place(1500, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10 });
     place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180 });
-    place(40, S.boulder, { minH: 4, blob: 0 });
+    place(40, S.boulder, { minH: 4, pad: 3.5, blob: 0 });
     // farm fields near the lake side
     const fields = FIELDS;
     // a dense evergreen forest closing in round the town: thin at the town's edge, thick
@@ -609,20 +609,20 @@ export function buildLand(name, T, blocks) {
     place(1100, (r, h) => S.tuft(r, h, [0xc9b06a, 0xb59a52, 0xa8a45c, 0xd6c07c]), { pad: 0.1, blob: 0, span: 180 });
     place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180 });
     place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 0.3, blob: 0.7 });
-    place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 1, blob: 0 });
+    place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 3.5, blob: 0 });
   } else if (name === 'mars') {
     // black basalt boulders and wind-carved spires, rusty stones, frost-dusted rocks, and
     // the odd old lander left from the first missions
     place(700, r => S.rock(r, 0, r() < 0.55 ? 0x3a2420 : 0x8a3a22), { pad: 0.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x5a2c22), { pad: 0.1, blob: 0, span: 180 });
-    place(120, (r, h) => S.boulder(r, h, 0x2e1e1c), { pad: 1, blob: 0.6 });
+    place(120, (r, h) => S.boulder(r, h, 0x2e1e1c), { pad: 3.5, blob: 0.6 });
     place(160, S.spire, { pad: 1, blob: 0.7 });
     place(90, S.frostRock, { pad: 0.6, blob: 0.5 });
     place(6, S.lander, { pad: 3, span: 150, blob: 0.8 });
   } else {
     place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 0.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180 });
-    place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 1, blob: 0.6 });
+    place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 3.5, blob: 0.6 });
     place(40, S.antenna, { pad: 1, span: 160, blob: 0.6 });
     place(24, S.solarArray, { pad: 2, span: 180, blob: 0 });
   }
@@ -637,9 +637,9 @@ export function buildLand(name, T, blocks) {
         const m = mesaAt(name, x, z), onTop = m.h > m.top * 0.97, foot = m.h > 0.05 && m.h < m.top * 0.2;
         if (!(foot || (onTop && r() < 0.25)) || roadDist(x, z) < HW + SW + 1 || townDist(x, z) < 2) continue;
         const h = H(x, z), s = foot ? 0.5 + r() * 1.3 : 0.4 + r() * 0.6;
-        const o = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), rm[Math.floor(r() * 3)]);
-        o.scale.set(s * (0.8 + r() * 0.5), s * (0.5 + r() * 0.4), s * (0.8 + r() * 0.5)); o.rotation.set(r() * 3, r() * 3, r() * 3);
-        o.position.set(x, h + s * 0.25, z);
+        const o = new THREE.Mesh(rockGeo(r, s > 1 ? 2 : 1), rm[Math.floor(r() * 3)]);
+        o.scale.set(s * (0.8 + r() * 0.5), s * (0.5 + r() * 0.4), s * (0.8 + r() * 0.5)); o.rotation.set((r() - 0.5) * 0.5, r() * 6.3, (r() - 0.5) * 0.5);
+        o.position.set(x, h - s * 0.12, z);
         const gr = new THREE.Group(); gr.add(o);
         ((Math.abs(x) < NEAR && Math.abs(z) < NEAR) ? near : far).addObject(gr);
         if (h < 4) blobs.push([x, h, z, s]);
@@ -662,6 +662,35 @@ export function buildLand(name, T, blocks) {
 }
 
 // ---------- scenery models ----------
+// ---- rocks ----
+// A rock shape: a lumpy ball broken by a few flat fracture faces, with a flat bottom so it
+// sits on the ground. Points at the same spot always move the same way, so the faces stay
+// joined. A handful of variants are made once and shared.
+function makeRockGeo(seed, detail = 2) {
+  let sd = seed * 7919 + 13;
+  const rr = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646;
+  const g = new THREE.IcosahedronGeometry(1, detail);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  const cuts = Array.from({ length: 3 + Math.floor(rr() * 3) }, () => ({ n: new THREE.Vector3(rr() - 0.5, (rr() - 0.3) * 0.8, rr() - 0.5).normalize(), k: 0.55 + rr() * 0.3 }));
+  const sx = 0.8 + rr() * 0.5, sz = 0.8 + rr() * 0.5;
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = fbm(v.x * 1.7 + seed, v.y * 1.7 + v.z * 0.7, 2, 101) - 0.5, fine = fbm(v.x * 5 + seed, v.z * 5 + v.y * 3, 2, 103) - 0.5;
+    v.multiplyScalar(1 + n * 0.45 + fine * 0.12);
+    for (const c of cuts) { const d = v.dot(c.n); if (d > c.k) v.addScaledVector(c.n, (c.k - d) * 0.92); }   // fracture faces
+    v.x *= sx; v.z *= sz;
+    if (v.y < -0.3) v.y = -0.3 + (v.y + 0.3) * 0.15;                                                  // the flat bottom
+    p.setXYZ(i, v.x, v.y + 0.3, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+// three levels of detail: big boulders get the most, small stones and rubble the least,
+// so a field of thousands of rocks stays light for a phone
+const ROCKS = {};
+const rockPool = d => (ROCKS[d] ||= Array.from({ length: 8 }, (_, i) => makeRockGeo(i + 1 + d * 20, d)));
+const rockGeo = (r, d = 2) => rockPool(d)[Math.floor(r() * 8)];
+
 function sceneryKit() {
   const M = new Map();
   const m = (color, o = {}, sway = 0) => {
@@ -778,16 +807,24 @@ function sceneryKit() {
       for (let i = 0; i < 6; i++) g.add(mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), m(c), (r() - 0.5) * 1.2, 0.12 + r() * 0.1, (r() - 0.5) * 1.2));
       return g;
     },
+    // a rock: a broken stone, sometimes with a chip or two lying beside it
     rock(r, h, color = 0x8f8f94) {
-      const s = 0.4 + r() * 1.1;
-      const o = mesh(new THREE.IcosahedronGeometry(0.7, 0), m(color), 0, 0.18 * s, 0);
-      o.scale.set(s, s * (0.45 + r() * 0.3), s * (0.8 + r() * 0.4));
-      const g = new THREE.Group(); g.add(o); g.userData.r = s; return g;
+      const s = 0.4 + r() * 1.1, g = new THREE.Group();
+      const shade = c => new THREE.Color(c).multiplyScalar(0.82 + r() * 0.3).getHex();
+      const o = mesh(rockGeo(r, 1), m(shade(color)), 0, -0.05 * s, 0);
+      o.scale.set(s * 0.6, s * (0.35 + r() * 0.25), s * 0.6); o.rotation.y = r() * 6.3; g.add(o);
+      for (let k = 0, n = r() < 0.35 ? 1 : 0; k < n; k++) { const a = r() * 6.3, c = mesh(rockGeo(r, 0), m(shade(color)), Math.cos(a) * s * 0.7, -0.02, Math.sin(a) * s * 0.7); c.scale.setScalar(s * (0.12 + r() * 0.12)); c.rotation.y = r() * 6.3; g.add(c); }
+      g.userData.r = s; return g;
     },
+    // a boulder: a big fractured block with a smaller one leaning on it and rubble round
+    // its foot, the rubble a little paler where it has broken off fresh
     boulder(r, h, color = 0x8d8a82) {
       const g = new THREE.Group(), s = 1.4 + r() * 2.4;
-      const o = mesh(new THREE.DodecahedronGeometry(1, 0), m(color), 0, 0.4 * s, 0);
-      o.scale.set(s, s * 0.7, s * 0.9); g.add(o);
+      const o = mesh(rockGeo(r), m(color), 0, -0.1 * s, 0);
+      o.scale.set(s * 0.95, s * (0.6 + r() * 0.3), s * 0.85); o.rotation.y = r() * 6.3; g.add(o);
+      if (r() < 0.7) { const a = r() * 6.3, b = mesh(rockGeo(r, 1), m(new THREE.Color(color).multiplyScalar(0.88).getHex()), Math.cos(a) * s * 0.85, -0.05 * s, Math.sin(a) * s * 0.85); b.scale.set(s * 0.45, s * 0.4, s * 0.4); b.rotation.set(0.25, r() * 6.3, 0.15); g.add(b); }
+      const pale = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.18).getHex();
+      for (let k = 0; k < 4 + Math.floor(r() * 3); k++) { const a = r() * 6.3, d = s * (0.9 + r() * 0.5), c = mesh(rockGeo(r, 0), m(r() < 0.5 ? pale : color), Math.cos(a) * d, -0.03, Math.sin(a) * d); c.scale.setScalar(s * (0.06 + r() * 0.1)); c.rotation.y = r() * 6.3; g.add(c); }
       g.userData.r = s;
       return g;
     },
