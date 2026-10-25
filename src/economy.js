@@ -176,7 +176,7 @@ export const PRICE_STEP = 0.15;
 // time, so you can't stock up.
 export const ROCKET_BASE = 1500, ROCKET_GROWTH = 1.9;
 export const rocketNeed = sent => ROCKET_BASE * Math.pow(ROCKET_GROWTH, Math.max(0, sent || 0));
-export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
+export const THEMES = ['colorado', 'moon', 'mars', 'desert'];   // the order you reach them
 
 // Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
 // no money), and money stays in the world it was made in. Launching a rocket unlocks the
@@ -184,9 +184,9 @@ export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
 // has a perk, and trade routes with your other worlds make every town earn more.
 export const WORLDS = [
   { id: 'colorado', name: 'Timberline Valley', short: 'Timberline', perk: 'Mountain ore: the Ore Mine digs 50% faster.', perks: { mine: 1.5 } },
-  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
   { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: the Rocket Bay builds rockets 2× faster.', perks: { rocket: 2 } },
   { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power.', perks: { power: 3 } },
+  { id: 'desert', name: 'Mojave Test Site', short: 'Mojave', perk: 'Desert sun: the Solar Farm makes 3× electricity.', perks: { power: 3 } },
 ];
 WORLDS.forEach((w, i) => { w.price = Math.round((1 + PRICE_STEP * i) * 100) / 100; });
 // a building's numbers in a given world: every cost scales by the world's price

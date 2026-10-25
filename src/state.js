@@ -41,7 +41,7 @@ export function freshState() {
     firstSeen: Date.now(),
     lastSeen: Date.now(),
     totalEarned: 0,
-    econ: 9,             // economy version (6 = trade routes instead of Engineering Points, 9 = each world counts its own rockets)
+    econ: 10,            // economy version (6 = trade routes, 9 = each world counts its own rockets, 10 = worlds reordered)
     layout: 4,           // town layout version (4 = fixed 3x3 plan, HQ by the mine, two roads out)
     current: 'colorado',
     worlds: { colorado: freshRun() },
@@ -347,6 +347,15 @@ export class Game {
       s.econ = 9;
       for (const [w, r] of Object.entries(s.worlds)) r.rocketsSent = Math.floor(Object.entries(s.trade || {}).filter(([k]) => k.split('|').includes(w)).reduce((a, [, l]) => a + l, 0) / 2);
       delete s.rocketsSent;
+    }
+    // v10: the worlds come in a new order (Timberline, the Moon, Mars, the Mojave). A trade
+    // route is stored under its two worlds in that order, so file each one under its new name.
+    if ((saved.econ || 1) < 10) {
+      s.econ = 10;
+      const t = {};
+      for (const [k, l] of Object.entries(s.trade || {})) { const [a, b] = k.split('|'); const nk = this.routeKey(a, b); t[nk] = Math.max(t[nk] || 0, l); }
+      s.trade = t;
+      this.invalidate();
     }
   }
   async save() {
