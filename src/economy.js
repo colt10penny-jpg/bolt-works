@@ -8,25 +8,25 @@
 // Output grows with the level (and doubles at each milestone); each upgrade costs
 // `growth` times the one before.
 export const FACTORIES = [
-  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0, baseCost: 6, growth: 1.17, perLevel: 1,        value: 0.4,     need: 0 },
-  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90, baseCost: 45, growth: 1.17, perLevel: 0.5,      value: 3,       need: 2 },
-  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 3000, baseCost: 1500, growth: 1.17, perLevel: 0.25,     value: 48,      need: 2 },
-  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 75000, baseCost: 37500, growth: 1.17, perLevel: 0.125,    value: 720,     need: 2 },
-  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 1e6, baseCost: 5e5, growth: 1.17, perLevel: 0.0625,   value: 11200,   need: 2 },
-  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 1.8e7, baseCost: 9e6, growth: 1.17, perLevel: 0.03125,  value: 160000,  need: 2 },
-  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 1.9e8, baseCost: 9.5e7, growth: 1.17, perLevel: 0.015625, value: 2.24e6,  need: 2 },
+  { id: 'mine',    name: 'Ore Mine',      makes: 'iron ore', unit: 'ore',      color: 0x8a6a4f, unlock: 0, baseCost: 6, growth: 1.15, perLevel: 1,        value: 0.4,     need: 0 },
+  { id: 'furnace', name: 'Steel Furnace', makes: 'steel',    unit: 'steel',    color: 0xc75b3e, unlock: 90, baseCost: 45, growth: 1.15, perLevel: 0.5,      value: 3,       need: 2 },
+  { id: 'press',   name: 'Bolt Press',    makes: 'bolts',    unit: 'bolts',    color: 0x4a86c8, unlock: 2000, baseCost: 1000, growth: 1.15, perLevel: 0.25,     value: 48,      need: 2 },
+  { id: 'gear',    name: 'Gear Cutter',   makes: 'gears',    unit: 'gears',    color: 0xe3a93a, unlock: 50000, baseCost: 25000, growth: 1.15, perLevel: 0.125,    value: 720,     need: 2 },
+  { id: 'engine',  name: 'Engine Line',   makes: 'engines',  unit: 'engines',  color: 0x7f6bbf, unlock: 650000, baseCost: 325000, growth: 1.15, perLevel: 0.0625,   value: 11200,   need: 2 },
+  { id: 'turbine', name: 'Turbine Shop',  makes: 'turbines', unit: 'turbines', color: 0x2fa39a, unlock: 1.2e7, baseCost: 6e6, growth: 1.15, perLevel: 0.03125,  value: 160000,  need: 2 },
+  { id: 'rocket',  name: 'Rocket Bay',    makes: 'rockets',  unit: 'rockets',  color: 0xe8e4da, unlock: 1.25e8, baseCost: 6.25e7, growth: 1.15, perLevel: 0.015625, value: 2.24e6,  need: 2 },
 ];
 
 // Support buildings: not part of the chain, they help every factory.
 // Power Plant makes electricity (MW). Data Center turns electricity into compute,
 // and compute makes every factory run faster.
 export const SUPPORT = [
-  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 2e6, baseCost: 1e6, growth: 1.17, perLevel: 3, need: 0 },
-  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 4e6, baseCost: 2e6, growth: 1.17, perLevel: 1, need: 3, needUnit: 'MW' },
+  { id: 'power',      name: 'Power Plant', makes: 'electricity', unit: 'MW',     color: 0x6f8fa8, unlock: 1.3e6, baseCost: 650000, growth: 1.15, perLevel: 3, need: 0 },
+  { id: 'datacenter', name: 'Data Center', makes: 'compute',     unit: 'PFLOPS', color: 0x3d4b6b, unlock: 2.6e6, baseCost: 1.3e6, growth: 1.15, perLevel: 1, need: 3, needUnit: 'MW' },
 ];
 export const ALL = [...FACTORIES, ...SUPPORT];
 // Headquarters: where you hire managers and send them out to factories.
-export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 50000, baseCost: 50000, growth: 1.17, perLevel: 0, need: 0 };
+export const HQ = { id: 'hq', name: 'Headquarters', makes: 'managers', unit: 'managers', color: 0x5b7a99, unlock: 30000, baseCost: 30000, growth: 1.15, perLevel: 0, need: 0 };
 // While you're away, managers drop what they collect off at headquarters, up to a limit
 // measured in hours of their pay: 30 minutes at level 1, 2 more minutes per level, up to 8 hours.
 export const vaultHours = level => Math.min(8, 0.5 + Math.max(0, level - 1) / 30);   // 30 min at level 1, +2 min a level, up to 8 hours
@@ -35,14 +35,14 @@ export const BUILDINGS = [...ALL, HQ];
 export { isPlot } from './layout.js';
 // land costs more for each plot you develop (and more in later worlds)
 // Every building now needs a plot, so land is cheap at first and rises gently.
-export const landCost = developed => 40 * Math.pow(2.3, developed);
+export const landCost = developed => 40 * Math.pow(2.1, developed);
 // Roads: restoring an old one is cheaper than building one from scratch.
 export const roadCost = (kind, built) => 15 * (1 + built * 0.08);
 // an extra copy costs more to build and upgrade than the first one
 export const EXTRA_BUILD = 2, EXTRA_UPGRADE = 3;
 // Each manager you hire costs 6× the one before, starting at $25K, so early on you
 // collect by hand for a while. Managers can be moved between factories.
-export const hireCost = n => 25000 * Math.pow(6, n);
+export const hireCost = n => 15000 * Math.pow(5, n);
 export const isSupport = id => SUPPORT.some(s => s.id === id);
 
 // Compute speeds up every factory, with diminishing returns:
@@ -132,7 +132,7 @@ export function flow(levels, mult = 1, perks = {}, extras = [], effCore = {}) {
 // sets the pace of a new town; then LATE_GROWTH times the one before up to level LINEAR;
 // after that each level costs the same fixed amount more than the last (a straight line),
 // so the long climb past 100 never runs away.
-export const KNEE = 25, LATE_GROWTH = 1.08, LINEAR = 100;
+export const KNEE = 25, LATE_GROWTH = 1.07, LINEAR = 100;
 // price of going from `level` to level + 1
 export function levelPrice(def, level) {
   const g = def.growth;
@@ -169,12 +169,12 @@ export const TRADE_STEP = 0.10, TRADE_MAX = 4;
 // Each world costs a little more than the one before (building, upgrading, land, roads
 // and managers), because later worlds have more trade routes to boost their income:
 // 1x, 1.2x, 1.4x, 1.6x... A straight line, so it never runs away however many worlds.
-export const PRICE_STEP = 0.2;
+export const PRICE_STEP = 0.15;
 // A launch needs a whole rocket's worth of what the Rocket Bay makes, and every rocket
-// your whole empire sends (from any world) needs 2.2x more than the one before it: 2,000,
-// 4,400, 9,680... Upgrading the bay is how you keep up. It holds one finished rocket at a
+// your whole empire sends (from any world) needs 1.9x more than the one before it: 1,500,
+// 2,850, 5,415... Upgrading the bay is how you keep up. It holds one finished rocket at a
 // time, so you can't stock up.
-export const ROCKET_BASE = 2000, ROCKET_GROWTH = 2.2;
+export const ROCKET_BASE = 1500, ROCKET_GROWTH = 1.9;
 export const rocketNeed = sent => ROCKET_BASE * Math.pow(ROCKET_GROWTH, Math.max(0, sent || 0));
 export const THEMES = ['colorado', 'desert', 'moon', 'mars'];
 
@@ -204,13 +204,13 @@ export const BIN_SECONDS = 180;   // a factory's storage holds 3 minutes of what
 
 // Building takes time: a few seconds for the first buildings, longer the further along
 // the chain a building is. Every world builds at the same speed. Upgrades are instant.
-// seconds to put up each building in the first world: 45 seconds for the Steel Furnace,
-// up to an hour and a half for the Rocket Bay. Later worlds take longer by their price (1.2x...).
+// seconds to put up each building in the first world: 30 seconds for the Steel Furnace,
+// up to 54 minutes for the Rocket Bay. Later worlds take longer by their price (1.2x...).
 // (An ad finishes any building straight away.)
-export const BUILD_SECS = { mine: 10, furnace: 45, hq: 180, press: 240, gear: 450, engine: 900, power: 1200, datacenter: 1800, turbine: 2700, rocket: 5400 };
+export const BUILD_SECS = { mine: 8, furnace: 30, hq: 100, press: 150, gear: 270, engine: 540, power: 720, datacenter: 1080, turbine: 1620, rocket: 3240 };
 export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.price || 1));
 // A manager collects automatically for one building.
-export const managerCost = def => def.unlock ? def.unlock * 15 : 150;
+export const managerCost = def => def.unlock ? def.unlock * 10 : 150;
 export const THEME_NAMES = { colorado: 'Golden, Colorado', desert: 'Mojave Test Site', moon: 'Tranquility Base', mars: 'Jezero Colony' };
 export const themeFor = launches => THEMES[Math.min(launches, THEMES.length - 1)];
 
