@@ -293,6 +293,7 @@ export class World {
     for (const c of [...land.scenery.children]) this.sceneryGroup.add(c);
     splitBig(this.groundGroup); splitBig(this.sceneryGroup);   // drawn tile by tile, so off-screen parts are skipped
     for (const g of [this.groundGroup, this.sceneryGroup]) freezeStatic(g);
+    this.detailGroup = this.sceneryGroup.getObjectByName('detail') || null;
     this.land = land.ground.userData;
     this.heightAt = land.height;
     this.#roads();
@@ -1653,12 +1654,32 @@ export class World {
     if (this.land?.water) { this.land.water.offset.x = this.t * 0.01; this.land.water.offset.y = this.t * 0.006; }
     for (const m of NIGHT_LIST()) m.emissiveIntensity = n * m.userData.night;
     if (this.look.sunDir) {
-      this.sun.position.copy(this.target).add(this.look.sunDir);
-      this.sun.target.position.copy(this.target);
-      const span = Math.min(70, 34 / this.zoom + 6);
+      // The shadow map covers the area round where you're looking. Its size goes up in a
+      // few fixed steps as you zoom out (not smoothly, which made shadow edges crawl
+      // while zooming), and it moves in whole shadow-map texels, so edges stay put
+      // instead of shimmering as you pan.
+      const need = 34 / this.zoom + 6;
+      const span = [40, 48, 58, 70].find(v => v >= need) || 70;
       const c = this.sun.shadow.camera;
       if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
+      const d = this._sd ||= new THREE.Vector3(), ax = this._sx ||= new THREE.Vector3(), ay = this._sy ||= new THREE.Vector3(), t = this._st ||= new THREE.Vector3();
+      d.copy(this.look.sunDir).normalize();
+      ax.crossVectors(THREE.Object3D.DEFAULT_UP, d).normalize(); ay.crossVectors(d, ax);
+      const texel = (2 * span) / this.sun.shadow.mapSize.x;
+      const px = this.target.dot(ax), py = this.target.dot(ay);
+      t.copy(this.target).addScaledVector(ax, Math.round(px / texel) * texel - px).addScaledVector(ay, Math.round(py / texel) * texel - py);
+      this.sun.position.copy(t).add(this.look.sunDir);
+      this.sun.target.position.copy(t);
     }
+    // zoomed far out: the tiniest scenery is hidden (only specks at that size), and the
+    // shadow map, which then covers a big area, is redrawn every other frame unless the
+    // view is moving (shadows of things far below can lag a frame without anyone seeing)
+    const far = this.zoom < (this.detailGroup?.visible === false ? 0.74 : 0.7);
+    if (this.detailGroup) this.detailGroup.visible = !far;
+    const moving = !!(this.panTo || this.zoomTo || this.dragging || this.lastView?.distanceTo(this.camera.position) > 1e-4 || this.lastZoom !== this.zoom);
+    (this.lastView ||= new THREE.Vector3()).copy(this.camera.position); this.lastZoom = this.zoom;
+    this.shadowSkip = far && !moving && !this.launching ? !this.shadowSkip : false;
+    this.renderer.shadowMap.autoUpdate = !this.shadowSkip;
     this.camera.updateMatrixWorld();
     this.puffLayer?.update(this.camera);
     this.look.render();

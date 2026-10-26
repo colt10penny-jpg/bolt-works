@@ -136,9 +136,12 @@ export class Look {
   setQuality(q) {
     this.quality = q;
     const hi = q === 'high';
-    this.r.setPixelRatio(Math.min(hi ? 2 : 1.5, window.devicePixelRatio || 1));
+    // battery saver skips the post effects (bloom, colour grade) but keeps a sharp
+    // picture: on a phone's high-density screen a lower resolution looks pixelated, and
+    // small shadow maps go blocky when zoomed out
+    this.r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.r.shadowMap.type = hi ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-    if (this.sun) { this.sun.shadow.mapSize.set(hi ? 2048 : 1024, hi ? 2048 : 1024); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
+    if (this.sun) { this.sun.shadow.mapSize.set(2048, 2048); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
     this.r.shadowMap.needsUpdate = true;
     if (hi && !this.composer) this.#buildComposer();
     this.resize();

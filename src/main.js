@@ -878,7 +878,7 @@ function openSettings() {
     <h2>Settings</h2>
     <button class="btn plain toggle" data-act="rename">Town name: <b>${game.townName()}</b></button>
     <button class="btn plain toggle" data-act="sound" aria-pressed="${game.s.settings.sound}">Sound and vibration: <b>${game.s.settings.sound ? 'On' : 'Off'}</b></button>
-    <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
+    <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${(game.s.settings.graphics || 'auto') === 'auto' ? `Automatic (${world.look.quality === 'high' ? 'high' : 'battery saver'})` : world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
     <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
     <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
     <p>Rockets launched: <b>${game.s.launches}</b> · Trade bonus here: <b>+${Math.round((game.tradeMult() - 1) * 100)}%</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
@@ -896,8 +896,10 @@ function openSettings() {
       openSettings();
     }
     if (act === 'gfx') {
-      game.s.settings.graphics = world.look.quality === 'high' ? 'low' : 'high';
-      world.look.setQuality(game.s.settings.graphics);
+      // automatic → high → battery saver → automatic
+      const g = game.s.settings.graphics || 'auto';
+      game.s.settings.graphics = g === 'auto' ? 'high' : g === 'high' ? 'low' : 'auto';
+      world.look.setQuality(game.s.settings.graphics === 'auto' ? (game.s.settings.autoGfx || 'high') : game.s.settings.graphics);
       track('graphics_changed', { to: game.s.settings.graphics });
       save(); openSettings();
     }
@@ -1120,22 +1122,29 @@ function dayCheck() {
 // ---------- main loop ----------
 let last = performance.now(), uiT = 0, hintCache = null, achT = 1;
 const hintSeen = new Map(), HINT_SHOW = 7000, HINT_AGAIN = 120000;   // when each hint was last shown
-// On the first run, watch the frame rate for a few seconds. If the phone struggles
-// with the full effects, switch to battery saver for it (the player can change it).
-let perf = { start: 0, frames: 0, done: false };
-function perfCheck(now, dt) {
-  if (perf.done) return;
-  if ((game.s.settings.graphics || 'auto') !== 'auto' || document.hidden) { perf.done = true; return; }
-  if (!perf.start) { perf.start = now + 1500; return; }   // skip start-up hitches
-  if (now < perf.start) return;
+// Automatic graphics: keep an eye on the frame rate the whole time (not just once at the
+// first launch). If the phone struggles with the full effects for a while, drop to
+// battery saver; if it's running smoothly on battery saver, try the full effects again.
+// The choice is remembered for next time, but only as the automatic pick: the player's
+// own choice in Settings always wins.
+let perf = { t0: 0, frames: 0, lows: 0, highs: 0, flips: 0 };
+function perfCheck(now) {
+  if ((game.s.settings.graphics || 'auto') !== 'auto' || document.hidden || launching || current) { perf.t0 = 0; return; }
+  if (!perf.t0) { perf.t0 = now + 1200; perf.frames = 0; return; }   // skip the hitch of whatever just happened
+  if (now < perf.t0) return;
   perf.frames++;
-  const secs = (now - perf.start) / 1000;
-  if (secs >= 5) {
-    perf.done = true;
-    const fps = perf.frames / secs;
-    game.s.settings.graphics = fps < 38 ? 'low' : 'high';
-    if (fps < 38) world.look.setQuality('low');
-    track('graphics_auto', { fps: Math.round(fps), chose: game.s.settings.graphics });
+  const secs = (now - perf.t0) / 1000;
+  if (secs < 4) return;
+  const fps = perf.frames / secs; perf.t0 = 0;
+  const q = world.look.quality;
+  let to = null;
+  if (q === 'high') { perf.lows = fps < 40 ? perf.lows + 1 : 0; if (perf.lows >= 2) to = 'low'; }
+  else { perf.highs = fps > 56 ? perf.highs + 1 : 0; if (perf.highs >= 3 && perf.flips < 3) to = 'high'; }
+  if (to) {
+    perf.lows = perf.highs = 0; perf.flips++;
+    world.look.setQuality(to);
+    game.s.settings.autoGfx = to;
+    track('graphics_auto', { fps: Math.round(fps), chose: to });
   }
 }
 // write text into the page only when it changed (cheaper than rewriting it every frame)
@@ -1146,7 +1155,7 @@ function loop(now) {
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = Math.max(last, now);
   if (!launching) game.tick(dt);
-  perfCheck(now, dt);
+  perfCheck(now);
   { const fl = game.baseFlow(); world.setFlow(fl.per, fl.support); world.setPowerLine(game.built('power') && game.built('datacenter'), fl.support.power.util); }
   world.frame(dt, labelFor);
   vaultTip();
@@ -1196,8 +1205,11 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   sfx.setEnabled(game.s.settings.sound);
   step('building town');
   // graphics: High unless the player chose otherwise (an automatic check below may lower it)
+  // (saves from before this version stored the old one-off automatic pick as if the
+  // player had chosen it: give those phones a fresh automatic check)
+  if (!game.s.settings.gfxV2) { game.s.settings.gfxV2 = true; game.s.settings.graphics = 'auto'; }
   const gfx = game.s.settings.graphics || 'auto';
-  world.look.setQuality(gfx === 'low' ? 'low' : 'high');
+  world.look.setQuality(gfx === 'auto' ? (game.s.settings.autoGfx || 'high') : gfx);
   world.look.cycle = game.s.settings.daynight !== false;
   { const st = new URLSearchParams(location.search).get('style'); world.look.setStyle(st || game.s.settings.style || 'plain'); }
   world.setSeed([...game.s.playerId].reduce((h, c) => (h * 33 + c.charCodeAt(0)) >>> 0, 5381));

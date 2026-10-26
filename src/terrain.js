@@ -40,7 +40,7 @@ function canvasTex(size, draw, repeat = true) {
   const t = new THREE.CanvasTexture(c);
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;   // keeps roads and yards crisp when seen at a low angle from far away
   return t;
 }
 let TEX = null;
@@ -571,6 +571,9 @@ export function buildLand(name, T, blocks) {
 
   // ---------- scenery ----------
   const near = new Batch(), far = new Batch(), blobs = [];
+  // the tiniest things (grass tufts, pebbles, flowers) go in a layer of their own that is
+  // hidden when zoomed far out, where they'd only be specks shimmering on the screen
+  const tinyNear = new Batch(), tinyFar = new Batch();
   const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(name === 'colorado' ? 7 : name === 'desert' ? 11 : 13);
   const blocked = (x, z, pad) => {
     if (roadDist(x, z) < HW + SW + pad) return true;
@@ -579,7 +582,7 @@ export function buildLand(name, T, blocks) {
     return townDist(x, z) < 0.5 + pad * 0.3;
   };
   const SPAN = 270, NEAR = 60;
-  const place = (count, make, { pad = 0.6, maxH = 99, minH = -0.3, span = SPAN, where = null, blob = 1 } = {}) => {
+  const place = (count, make, { pad = 0.6, maxH = 99, minH = -0.3, span = SPAN, where = null, blob = 1, tiny = false } = {}) => {
     let n = 0;
     for (let i = 0; i < count * 8 && n < count; i++) {
       const x = (r() - 0.5) * span, z = (r() - 0.5) * span;
@@ -594,7 +597,7 @@ export function buildLand(name, T, blocks) {
       obj.position.set(x, h, z);
       obj.rotation.y = r() * Math.PI * 2;
       const isNear = Math.abs(x) < NEAR && Math.abs(z) < NEAR;
-      (isNear ? near : far).addObject(obj);
+      (tiny ? (isNear ? tinyNear : tinyFar) : (isNear ? near : far)).addObject(obj);
       if (blob && h < 4) blobs.push([x, h, z, (obj.userData.r || 1) * blob]);
       n++;
     }
@@ -608,11 +611,11 @@ export function buildLand(name, T, blocks) {
     place(900, S.pine, { minH: 2, maxH: 24 });
     place(260, S.pine, { maxH: 2 });
     place(500, S.bush, { pad: 0.9, blob: 0.6 });
-    place(420, S.flowers, { pad: 0.6, blob: 0, maxH: 6 });
+    place(420, S.flowers, { pad: 0.6, blob: 0, maxH: 6, tiny: true });
     place(160, S.rock, { pad: 1.3, blob: 0.7 });
     // little touches so open ground doesn't look like a putting green
-    place(1500, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10 });
-    place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180 });
+    place(1500, S.tuft, { pad: 0.1, blob: 0, span: 180, maxH: 10, tiny: true });
+    place(450, S.pebbles, { pad: 0.1, blob: 0, span: 180, tiny: true });
     place(40, S.boulder, { minH: 4, pad: 7, blob: 0 });
     // farm fields near the lake side
     const fields = FIELDS;
@@ -634,8 +637,8 @@ export function buildLand(name, T, blocks) {
     place(260, S.joshua, { pad: 1.2 });
     place(600, S.shrub, { pad: 0.3, blob: 0.5 });
     place(220, S.barrel, { pad: 0.2, blob: 0.4 });
-    place(1100, (r, h) => S.tuft(r, h, [0xc9b06a, 0xb59a52, 0xa8a45c, 0xd6c07c]), { pad: 0.1, blob: 0, span: 180 });
-    place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180 });
+    place(1100, (r, h) => S.tuft(r, h, [0xc9b06a, 0xb59a52, 0xa8a45c, 0xd6c07c]), { pad: 0.1, blob: 0, span: 180, tiny: true });
+    place(600, (r, h) => S.pebbles(r, h, 0xa87f58), { pad: 0.1, blob: 0, span: 180, tiny: true });
     place(320, r => S.rock(r, 0, 0xb98b5c), { pad: 1.3, blob: 0.7 });
     place(70, (r, h) => S.boulder(r, h, 0xb5603a), { pad: 7, blob: 0 });
     // the frontier round the town: an oil field of wooden derricks off to the east, a
@@ -658,14 +661,14 @@ export function buildLand(name, T, blocks) {
     // black basalt boulders and wind-carved spires, rusty stones, frost-dusted rocks, and
     // the odd old lander left from the first missions
     place(700, r => S.rock(r, 0, r() < 0.55 ? 0x3a2420 : 0x8a3a22), { pad: 1.3, blob: 0.8 });
-    place(900, (r, h) => S.pebbles(r, h, 0x5a2c22), { pad: 0.1, blob: 0, span: 180 });
+    place(900, (r, h) => S.pebbles(r, h, 0x5a2c22), { pad: 0.1, blob: 0, span: 180, tiny: true });
     place(120, (r, h) => S.boulder(r, h, 0x2e1e1c), { pad: 7, blob: 0.6 });
     place(160, S.spire, { pad: 1, blob: 0.7 });
     place(90, S.frostRock, { pad: 0.6, blob: 0.5 });
     place(6, S.lander, { pad: 3, span: 150, blob: 0.8 });
   } else {
     place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 1.3, blob: 0.8 });
-    place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180 });
+    place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180, tiny: true });
     place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 7, blob: 0.6 });
     place(40, S.antenna, { pad: 1, span: 160, blob: 0.6 });
     place(24, S.solarArray, { pad: 2, span: 180, blob: 0 });
@@ -693,6 +696,9 @@ export function buildLand(name, T, blocks) {
   }
   near.build(scenery, { cast: true });
   far.build(scenery, { cast: false });
+  const detail = new THREE.Group(); detail.name = 'detail';
+  tinyNear.build(detail, { cast: true }); tinyFar.build(detail, { cast: false });
+  scenery.add(detail);
   // soft dark patches under things, so they sit on the ground
   if (blobs.length) {
     const bm = new THREE.MeshBasicMaterial({ map: tx.blob, transparent: true, opacity: name === 'moon' ? 0.55 : 0.38, depthWrite: false, color: 0x000000 });
@@ -745,11 +751,13 @@ function sceneryKit() {
   };
   const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); return o; };
   const greens = [0x3f8f4a, 0x4fa152, 0x357d40, 0x5bb05a, 0x6aa84a];
+  // (trunks and the cones of pines and firs are open-ended: their ends are always
+  // hidden, inside the foliage or facing the ground, so drawing them is wasted work)
   const golds = [0xf2c230, 0xe8a91e, 0xf5d34a, 0xd98c1c, 0xb6c43c];
   return {
     tree(r) {
       const g = new THREE.Group(), s = 0.8 + r() * 0.7, col = greens[Math.floor(r() * greens.length)];
-      g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.2 * s, 1.1 * s, 6), m(0x7a5230), 0, 0.55 * s, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.2 * s, 1.1 * s, 6, 1, true), m(0x7a5230), 0, 0.55 * s, 0));
       const lm = m(col, {}, 0.9 * s);
       g.add(mesh(new THREE.IcosahedronGeometry(0.85 * s, 0), lm, 0, 1.55 * s, 0));
       g.add(mesh(new THREE.IcosahedronGeometry(0.6 * s, 0), lm, 0.45 * s, 1.25 * s, 0.2 * s));
@@ -759,7 +767,7 @@ function sceneryKit() {
     },
     aspen(r) {
       const g = new THREE.Group(), s = 0.75 + r() * 0.6, col = golds[Math.floor(r() * golds.length)];
-      g.add(mesh(new THREE.CylinderGeometry(0.09 * s, 0.12 * s, 2.2 * s, 6), m(0xeeeae0), 0, 1.1 * s, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.09 * s, 0.12 * s, 2.2 * s, 6, 1, true), m(0xeeeae0), 0, 1.1 * s, 0));
       for (let k = 0; k < 3; k++) g.add(mesh(new THREE.BoxGeometry(0.2 * s, 0.05 * s, 0.2 * s), m(0x2e2a26), 0, 0.5 * s + k * 0.45 * s, 0));
       const lm = m(col, {}, 1.4 * s);
       const crown = mesh(new THREE.IcosahedronGeometry(0.62 * s, 0), lm, 0, 2.35 * s, 0); crown.scale.y = 1.5; g.add(crown);
@@ -768,9 +776,9 @@ function sceneryKit() {
     },
     pine(r) {
       const g = new THREE.Group(), s = 0.8 + r() * 0.8, col = r() < 0.5 ? 0x2f6f3e : 0x285f37;
-      g.add(mesh(new THREE.CylinderGeometry(0.12 * s, 0.17 * s, 0.7 * s, 6), m(0x6b4a2b), 0, 0.35 * s, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.12 * s, 0.17 * s, 0.7 * s, 6, 1, true), m(0x6b4a2b), 0, 0.35 * s, 0));
       const lm = m(col, {}, 1.0 * s);
-      for (let i = 0; i < 3; i++) g.add(mesh(new THREE.ConeGeometry((1.0 - i * 0.25) * s, 1.25 * s, 7), lm, 0, (1.05 + i * 0.62) * s, 0));
+      for (let i = 0; i < 3; i++) g.add(mesh(new THREE.ConeGeometry((1.0 - i * 0.25) * s, 1.25 * s, 7, 1, true), lm, 0, (1.05 + i * 0.62) * s, 0));
       g.userData.r = s;
       return g;
     },
@@ -811,9 +819,9 @@ function sceneryKit() {
     // a tall forest fir: four tiers, dark and dense, for the woods round town
     fir(r) {
       const g = new THREE.Group(), s = 1.0 + r() * 0.9, col = [0x245c33, 0x2b6a3a, 0x1f5230][Math.floor(r() * 3)];
-      g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.6 * s, 5), m(0x5a3d24), 0, 0.3 * s, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 0.6 * s, 5, 1, true), m(0x5a3d24), 0, 0.3 * s, 0));
       const lm = m(col, {}, 1.0 * s);
-      for (let i = 0; i < 4; i++) g.add(mesh(new THREE.ConeGeometry((1.05 - i * 0.22) * s, 1.15 * s, 7), lm, 0, (0.95 + i * 0.55) * s, 0));
+      for (let i = 0; i < 4; i++) g.add(mesh(new THREE.ConeGeometry((1.05 - i * 0.22) * s, 1.15 * s, 7, 1, true), lm, 0, (0.95 + i * 0.55) * s, 0));
       g.userData.r = s;
       return g;
     },
