@@ -551,7 +551,7 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 .pid { font-variant-numeric: tabular-nums; }
 
 /* ---- v10: the building panel opens taller, with room between its parts ---- */
-#sheet { min-height: min(46%, 430px); gap: 14px; padding-top: 16px; padding-bottom: calc(22px + var(--sa-b)); }
+#sheet { min-height: min(46%, 430px); gap: 18px; padding-top: 16px; padding-bottom: calc(22px + var(--sa-b)); }
 #sheet .sh-head { gap: 12px; }
 #sheet .sh-title b { font-size: 21px; }
 #sheet .sh-title small { font-size: 13px; }
@@ -560,3 +560,6 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 #sheet .sh-bar { height: 9px; }
 #sheet .sh-buy .btn { min-height: 54px; font-size: 19px; }
 #sheet .sh-mgr { font-size: 13.5px; }
+#sheet .sh-mgr { margin-top: 2px; }
+/* fill the panel's height: its parts spread out evenly instead of bunching at the top */
+#sheet { justify-content: space-evenly; }

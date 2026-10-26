@@ -211,7 +211,6 @@ function buyRow(d, lv) {
     ${afford ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${Math.min(100, game.cash / cost * 100).toFixed(1)}%"></i></span><small>Saving up: ${Math.floor(Math.min(99, game.cash / cost * 100))}%</small></div>`}
     ${afford ? '' : cashAdButton(cost - game.cash)}`;
 }
-const demolishRow = d => `<button class="link danger" data-act="demolish">Demolish ${d.name}</button>`;
 function managerRow(d) {
   if (game.hasManager(d.id)) return '';
   const store = `<span>${ICON.person}<span>Storage <b>$${fmt(game.bin(d.id))}</b> / $${fmt(game.binCap(d.id))}</span></span>`;
@@ -288,7 +287,7 @@ function hqSheet(d) {
   return head(d, ICON.hq, d.name, sub, lv) + vault + buyRow(d, lv) + `
     <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${!more ? 'One manager per factory: build more to hire more' : `Hire a manager · $${fmtCost(cost)}`}</button></div>
     ${afford || !more ? '' : cashAdButton(cost - game.cash)}
-    <div class="hq-list">${rows}</div>${demolishRow(d)}`;
+    <div class="hq-list">${rows}</div>`;
 }
 const fmtHours = h => { const m = Math.round(h * 60); return m < 60 ? `${m} minutes` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m === 60 ? '1 hour' : `${m / 60} hours`; };
 function renderSheet(force = false) {
@@ -311,7 +310,7 @@ function renderSheet(force = false) {
     const nextSpeed = Math.round((speedFromCompute(Math.min(dc2, pw2 / SUPPORT[1].need)) - 1) * 100);
     const made = t === 'power' ? `${fmtRate(game.info(id).made)} MW` : `${fmtRate(game.info(id).made)} PFLOPS`;
     const sub = `${made} · speed +${pctSpeed()}%${nextSpeed > pctSpeed() ? ` <em>→ +${nextSpeed}%</em>` : ''}`;
-    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub, lv) + supportStatus({ ...d, id: t }) + mileBar(lv, t) + buyRow(d, lv) + demolishRow(d);
+    html = head(d, t === 'power' ? ICON.boltSm : ICON.chip, d.name, sub, lv) + supportStatus({ ...d, id: t }) + mileBar(lv, t) + buyRow(d, lv);
   } else if (lv > 0) {
     const f = game.info(id);
     const earn = f.made * d.value * game.mult();
@@ -328,7 +327,7 @@ function renderSheet(force = false) {
       return how + prog + `<div class="sh-row"><span>${ready ? `${one(d.unit)[0].toUpperCase() + one(d.unit).slice(1)} ready!` : ''}</span>
         <button class="btn small red" data-act="launch" ${can ? '' : 'disabled'}>${!ready ? `Building ${one(d.unit)}` : unlocks ? `Launch · unlock ${next.short}` : can ? 'Send cargo' : 'Trade routes full'}</button></div>`;
     })() : '';
-    html = head(d, ICON.factory, d.name, sub, lv) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d) + demolishRow(d);
+    html = head(d, ICON.factory, d.name, sub, lv) + statusLine(d) + rocket + mileBar(lv, t) + buyRow(d, lv) + managerRow(d);
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   const key = lot + ':' + (id || '');
