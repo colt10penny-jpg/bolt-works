@@ -115,10 +115,8 @@ export class Look {
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    const pm = new THREE.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.makeEnvironment();
     scene.environmentIntensity = 0.45;
-    pm.dispose();
     this.quality = 'high';
     this.cycle = true;
     this.time = 0.2;          // 0..1 through the day
@@ -128,6 +126,16 @@ export class Look {
     scene.fog = new THREE.Fog(0xd6e7f2, 165, 430);
     this.sunScale = 0.85; this.skyScale = 0.5; this.envScale = 0.5;
     this.tmp = { sun: new THREE.Color(), sky: new THREE.Color(), gnd: new THREE.Color(), haze: new THREE.Color() };
+  }
+
+  // the soft studio reflections everything picks up (made on the graphics card, so it is
+  // made again if the phone ever takes the graphics away and gives them back)
+  makeEnvironment() {
+    const pm = new THREE.PMREMGenerator(this.r);
+    const old = this.scene.environment;
+    this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    old?.dispose?.();
+    pm.dispose();
   }
 
   setLights(sun, hemi, ground) { this.sun = sun; this.hemi = hemi; this.groundBase = ground; }

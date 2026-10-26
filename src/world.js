@@ -1130,6 +1130,17 @@ export class World {
 
   setPowerLine() {}
 
+  // the graphics came back after the phone took them away: everything uploads again by
+  // itself, but the effects' own buffers and the shadow map need making afresh
+  onContextRestored() {
+    const L = this.look;
+    if (L.composer) { L.composer.dispose?.(); L.composer = null; L.bloom = L.grade = L.tiltH = L.tiltV = L.ink = null; }
+    if (L.normalRT) { L.normalRT.dispose(); L.normalRT = null; }
+    L.makeEnvironment();
+    L.setQuality(L.quality);
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+
   // ---------- traffic ----------
   #traffic() {
     this.fleet = 'earth';
@@ -1682,7 +1693,7 @@ export class World {
     this.renderer.shadowMap.autoUpdate = !this.shadowSkip;
     this.camera.updateMatrixWorld();
     this.puffLayer?.update(this.camera);
-    this.look.render();
+    if (!this.contextLost) this.look.render();   // (nothing to draw with while the phone has taken the graphics away)
     this.#labels(dt, labelFor);
   }
 

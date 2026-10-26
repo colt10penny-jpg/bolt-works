@@ -1106,9 +1106,45 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { save(); flush(); }
   else { welcomeBack(); maybeDaily(); dayCheck(); }
 });
+// ---------- if the phone takes the 3D view away ----------
+// Phones can drop a game's graphics (WebGL) when it's in the background, short on memory
+// or in Low Power Mode, which left a blank green screen with only the labels on it. The
+// renderer is told to keep everything so it can come back; if the phone hasn't given the
+// graphics back after a moment (iPhones often don't), the game saves and restarts its
+// view, which only takes a second and keeps all progress.
+{
+  const canvas = world.renderer.domElement;
+  let restartT = null;
+  const restart = async () => {
+    // (never more than once in half a minute, in case a phone can't hold onto graphics at all)
+    let lastT = 0; try { lastT = +sessionStorage.getItem('gfxRestart') || 0; } catch {}
+    if (Date.now() - lastT < 30000) return;
+    try { sessionStorage.setItem('gfxRestart', String(Date.now())); } catch {}
+    await game.save(); location.reload();
+  };
+  const lostNow = () => world.renderer.getContext().isContextLost?.();
+  canvas.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    world.contextLost = true;
+    track('gfx_context_lost', { hidden: document.hidden });
+    clearTimeout(restartT);
+    if (!document.hidden) restartT = setTimeout(() => { if (world.contextLost) restart(); }, 2500);
+  }, false);
+  canvas.addEventListener('webglcontextrestored', () => {
+    clearTimeout(restartT);
+    world.contextLost = false;
+    world.onContextRestored();
+  }, false);
+  // coming back to the app: if the graphics are gone, restart the view straight away
+  const check = () => { if (!document.hidden && (world.contextLost || lostNow())) { clearTimeout(restartT); restartT = setTimeout(() => { if (world.contextLost || lostNow()) restart(); }, 1200); } };
+  document.addEventListener('visibilitychange', check);
+  addEventListener('pageshow', check);
+  addEventListener('focus', check);
+  canvas.addEventListener('gfxcheck', check);
+}
 if (Capacitor.isNativePlatform()) {
   import('@capacitor/app').then(({ App }) => {
-    App.addListener('appStateChange', ({ isActive }) => { if (!isActive) save(); });
+    App.addListener('appStateChange', ({ isActive }) => { if (!isActive) save(); else if (world.contextLost || world.renderer.getContext().isContextLost?.()) world.renderer.domElement.dispatchEvent(new Event('gfxcheck')); });
     App.addListener('backButton', () => {
       if (current) closeModal(true);
       else if (world.selected) world.select(null);
