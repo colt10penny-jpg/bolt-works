@@ -977,7 +977,7 @@ function materialsTip() {
   if (!game.built(f.id) || game.jobOf(f.id)) return;
   const F = def(f.id), M = def(m.id);
   if (!tutorial.tip({
-    say: `Trucks bring <b>${M.unit}</b> here to make <b>${F.makes}</b>. More ${M.unit} = more ${F.makes}!`,
+    say: `Trucks bring <b>${M.unit}</b> here to make <b>${F.makes}</b>. Each factory needs stuff from the one before it to run well. <b>Keep them all upgraded!</b>`,
     lot: lotOf(f.id),
     hold: () => !!world.selected,   // waits while a building's panel is open
   })) return;
