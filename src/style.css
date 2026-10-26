@@ -549,3 +549,14 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 .policy ul { padding-left: 18px; margin: 4px 0; }
 .policy .date { font-size: 12px; }
 .pid { font-variant-numeric: tabular-nums; }
+
+/* ---- v10: the building panel opens taller, with room between its parts ---- */
+#sheet { min-height: min(46%, 430px); gap: 14px; padding-top: 16px; padding-bottom: calc(22px + var(--sa-b)); }
+#sheet .sh-head { gap: 12px; }
+#sheet .sh-title b { font-size: 21px; }
+#sheet .sh-title small { font-size: 13px; }
+#sheet .sh-status { font-size: 13.5px; padding: 9px 12px; min-height: 40px; }
+#sheet .sh-mile { font-size: 12.5px; }
+#sheet .sh-bar { height: 9px; }
+#sheet .sh-buy .btn { min-height: 54px; font-size: 19px; }
+#sheet .sh-mgr { font-size: 13.5px; }

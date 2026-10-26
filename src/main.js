@@ -126,12 +126,12 @@ function labelFor(lot) {
 }
 
 // ---------- bottom sheet (compact) ----------
-let buyMode = 1;
 let factOpen = false;
 const sheet = $('sheet');
 let sheetKey = '';
 // how many levels the buy button buys, never past the top level
-const buyCount = (d, lv) => Math.max(0, Math.min(LEVEL_CAP - lv, buyMode === 'max' ? Math.max(1, maxAffordable(d, lv, game.cash)) : buyMode));
+// (always one level at a time: each upgrade is its own step)
+const buyCount = (d, lv) => Math.max(0, Math.min(LEVEL_CAP - lv, 1));
 const go = (id, label) => lotOf(id) ? `<button class="link" data-goto="${lotOf(id)}">${label}</button>` : '';
 const one = u => /ss$/.test(u) ? u : /ies$/.test(u) ? u.replace(/ies$/, 'y') : u.replace(/s$/, '');
 
@@ -206,12 +206,7 @@ function buyRow(d, lv) {
   const cost = upgradeCost(d, lv, n);
   const afford = game.canAfford(cost);
   return `<div class="sh-buy">
-      <div class="amounts sm" role="group" aria-label="How many levels to buy">
-        <button data-buy="1" aria-pressed="${buyMode === 1}">×1</button>
-        <button data-buy="10" aria-pressed="${buyMode === 10}">×10</button>
-        <button data-buy="max" aria-pressed="${buyMode === 'max'}">Max</button>
-      </div>
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>+${n} · $${fmtCost(cost)}</button>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + n} · $${fmtCost(cost)}</button>
     </div>
     ${afford ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${Math.min(100, game.cash / cost * 100).toFixed(1)}%"></i></span><small>Saving up: ${Math.floor(Math.min(99, game.cash / cost * 100))}%</small></div>`}
     ${afford ? '' : cashAdButton(cost - game.cash)}`;
@@ -372,7 +367,6 @@ sheet.addEventListener('click', async e => {
   if (!b) return;
   const lot = world.selected, id = slotAt(lot);
   if (b.dataset.act === 'fact') { factOpen = !factOpen; renderSheet(true); return; }
-  if (b.dataset.buy) { buyMode = b.dataset.buy === 'max' ? 'max' : +b.dataset.buy; sfx.tap(); renderSheet(true); return; }
   if (b.dataset.goto) { world.select(b.dataset.goto); world.focus(b.dataset.goto); sfx.tap(); return; }
   const act = b.dataset.act;
   if (act === 'close') world.select(null);
@@ -975,6 +969,22 @@ function vaultTip() {
     hold: () => world.selected === lotOf('hq'),
   });
 }
+// once the second factory is running in your first town: how goods move between factories
+function materialsTip() {
+  const tips = game.s.tutorial.tips ||= {};
+  if (tips.materials || current || launching || game.s.current !== 'colorado') return;
+  const f = FACTORIES[1], m = FACTORIES[0];
+  if (!game.built(f.id) || game.jobOf(f.id)) return;
+  const F = def(f.id), M = def(m.id);
+  if (!tutorial.tip({
+    say: `Trucks bring <b>${M.unit}</b> from your ${M.name} to your <b>${F.name}</b>. Every factory turns the goods of the one before it into something worth more, so <b>upgrade its supplier too</b> or it runs short.`,
+    lot: lotOf(f.id),
+    hold: () => !!world.selected,   // waits while a building's panel is open
+  })) return;
+  tips.materials = true;
+  track('tip', { id: 'materials' });
+  save();
+}
 // the first time a headquarters opens in your first town
 function hqIntro(id) {
   const tips = game.s.tutorial.tips ||= {};
@@ -1193,6 +1203,7 @@ function loop(now) {
     renderContract();
     if (!sheet.hidden) renderSheet();
     if ((achT -= 0.2) <= 0) { achT = 1; achievementTick(); }
+    materialsTip();
   }
   requestAnimationFrame(loop);
 }
