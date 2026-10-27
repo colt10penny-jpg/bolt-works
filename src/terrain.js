@@ -3,6 +3,8 @@
 // scenery (trees, aspens, bushes, flowers, cactus, rocks...). Everything static is
 // baked into a few big meshes so it stays fast on phones.
 import * as THREE from 'three';
+import { J, roof as jRoof, hall as jHall, shoji as jShoji, engawa as jEngawa, lantern as jLantern, pine as jPine, shrub as jShrub, torii as jTorii, rod as jRod, at as jAt } from './japan-kit.js';
+import { box as jBox } from './models.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RANGE } from './buildings-west.js';
 import { GLOW } from './models.js';
@@ -145,7 +147,20 @@ function textures() {
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     return t;
   })();
-  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex };
+  // grey granite setts (ishidatami) in running courses, each stone its own shade
+  const setts = canvasTex(256, (d, n) => {
+    const RH = 8;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const i = (y * n + x) * 4, row = Math.floor(y / RH), off = (row % 2) * 6, sw = 11;
+      const col = Math.floor(((x + off) % n) / sw), ex = ((x + off) % n) % sw, ey = y % RH;
+      const edge = Math.min(ex, sw - 1 - ex, ey, RH - 1 - ey);
+      let v = 0.78 + (hash(col, row, 21) - 0.5) * 0.22 + (hash(x, y, 5) - 0.5) * 0.08;
+      if (edge < 1) v = 0.45; else if (edge < 2) v *= 0.85;
+      v = Math.max(0, Math.min(1, v)) * 255;
+      d[i] = v; d[i + 1] = v * 0.99; d[i + 2] = v * 0.96; d[i + 3] = 255;
+    }
+  });
+  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex, setts };
   SHARED.cloudTex.value = cloud;
   return TEX;
 }
@@ -274,6 +289,9 @@ function townDist(x, z) {
 }
 const roadDist = (x, z) => distToRoad(x, z);
 const LAKE = { x: 66, z: 64, r: 15 };
+// Sakura Valley: Fuji far behind town, and an island in the lake
+const FUJI = { x: -100, z: -86, r: 80, h: 70 };
+const ISLE = { x: 69, z: 67, r: 3.6 };
 // farm fields near the lake (Colorado): [x, z, width, depth, colour]
 const FIELDS = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
 
@@ -326,6 +344,28 @@ function rawHeight(name, x, z) {
     if (dl < LAKE.r + 7) h = Math.min(h, -1.8 + smooth(LAKE.r - 4, LAKE.r + 7, dl) * 2.3);
     else if (dl < LAKE.r + 18) h = Math.max(h, 0.5) + (h - Math.max(h, 0.5)) * smooth(LAKE.r + 12, LAKE.r + 18, dl);
     // level ground under the farm fields, so the crops lie flat with no grass poking through
+    for (const [fx, fz, w, d] of FIELDS) {
+      const e = Math.max(Math.abs(x - fx) - w / 2, Math.abs(z - fz) - d / 2);
+      if (e < 6) h = h + (0.3 - h) * (1 - smooth(0, 6, e));
+    }
+    return h;
+  }
+  if (name === 'japan') {
+    let h = (fbm(x / 30, z / 30, 4, 3) - 0.45) * 4.5;
+    // steep, jagged, forested ridges behind and beside the town, like the hills of Kyoto
+    const rg = ridged(x / 30, z / 30, 17), rg2 = ridged(x / 13, z / 13, 29);
+    const bk = clamp01((-(x + z) - 62) / 70);   // the hills start closer behind town here
+    h += bk * (rg * rg * 40 + rg2 * 8 + 4) + side * (rg * 16 + rg2 * 3);
+    // Fuji, alone far behind: a long concave cone with a flattened crater top
+    const fd = Math.hypot(x - FUJI.x, z - FUJI.z) * (1 + (fbm(x / 9, z / 9, 2, 61) - 0.5) * 0.08);
+    if (fd < FUJI.r) h = Math.max(h * smooth(FUJI.r * 0.55, FUJI.r, fd), Math.min(FUJI.h * 0.95, FUJI.h * Math.pow(1 - fd / FUJI.r, 1.6)));   // (the ridges fade out round it, so it stands clear)
+    // the lake, with an island in it
+    const dl = Math.hypot(x - LAKE.x, z - LAKE.z) + (fbm(x / 9, z / 9, 3, 41) - 0.5) * 9;
+    if (dl < LAKE.r + 7) h = Math.min(h, -1.8 + smooth(LAKE.r - 4, LAKE.r + 7, dl) * 2.3);
+    else if (dl < LAKE.r + 18) h = Math.max(h, 0.5) + (h - Math.max(h, 0.5)) * smooth(LAKE.r + 12, LAKE.r + 18, dl);
+    const di = Math.hypot(x - ISLE.x, z - ISLE.z);
+    if (di < ISLE.r + 2) h = Math.max(h, -1.8 + smooth(ISLE.r + 2, ISLE.r - 1, di) * 2.4);
+    // rice paddies and tea rows lie flat
     for (const [fx, fz, w, d] of FIELDS) {
       const e = Math.max(Math.abs(x - fx) - w / 2, Math.abs(z - fz) - d / 2);
       if (e < 6) h = h + (0.3 - h) * (1 - smooth(0, 6, e));
@@ -440,6 +480,8 @@ const PAL = {
   desert: { grass: [0xe2c58f, 0xd9b77d, 0xebd3a3, 0xd2a46e], rock: 0xc06c45, snow: 0xd88a5a, dirt: 0xc9a06b },
   // rust and maroon dust over dark basalt, with frost on the heights and in craters
   mars: { grass: [0x8e3820, 0x6e2a18, 0xa8482a, 0x4e1e14], rock: 0x2e1e1c, snow: 0xf3ece8, dirt: 0x9c4a2e },
+  // spring green, dark cedar forest on the heights
+  japan: { grass: [0x7aaf54, 0x699e48, 0x8cbc60, 0x9cb45e], rock: 0x2c5530, snow: 0x335a36, dirt: 0x9a8262 },
   moon: { grass: [0x9a9aa0, 0x77777f, 0xaeaeb4, 0x5f6068], rock: 0x86868d, snow: 0xc4c4ca, dirt: 0x8f8f96 },
 };
 
@@ -465,10 +507,22 @@ export function buildLand(name, T, blocks) {
     c.setHex(g[0]).lerp(c2.setHex(g[1]), smooth(0.35, 0.7, n)).lerp(c2.setHex(g[2]), smooth(0.6, 0.85, n2) * 0.6).lerp(c2.setHex(g[3]), smooth(0.62, 0.8, fbm(x / 40, z / 40, 2, 12)) * 0.7);
     if (h > 6) c.lerp(c2.setHex(P.rock), smooth(6, 12, h + n2 * 4));
     if (h > 20) c.lerp(c2.setHex(P.snow), smooth(20, 28, h + n * 8));
-    if (name === 'colorado') {
+    if (name === 'japan') {
+      // misty blue-grey volcanic slopes on Fuji, a snow cap streaked down its gullies
+      const fd = Math.hypot(x - FUJI.x, z - FUJI.z);
+      if (fd < FUJI.r) {
+        const k = smooth(16, 30, h) * smooth(FUJI.r, FUJI.r * 0.7, fd);
+        c.lerp(c2.setHex(0x8494aa), k * 0.85);
+        const streak = 0.5 + 0.5 * Math.sin(Math.atan2(z - FUJI.z, x - FUJI.x) * 26 + n2 * 3);
+        c.lerp(c2.setHex(0xf6f8fc), smooth(FUJI.h * 0.36 - streak * 8, FUJI.h * 0.44 - streak * 8, h));
+      } else if (h > 26) c.lerp(c2.setHex(0x55604a), smooth(26, 40, h + n2 * 6) * 0.5);   // bare rock on the sharpest peaks
+      // pale cherry groves on the lower hills
+      if (h > 2 && h < 14) c.lerp(c2.setHex(0xd9b0bc), smooth(0.7, 0.8, fbm(x / 11, z / 11, 2, 88)) * 0.25);
+    }
+    if (name === 'colorado' || name === 'japan') {
       // a sandy beach ringing the lake, wet and darker right at the water
       const dl = Math.hypot(x - LAKE.x, z - LAKE.z) + (fbm(x / 9, z / 9, 3, 41) - 0.5) * 9;
-      c.lerp(c2.setHex(0xd8c597), smooth(LAKE.r + 9, LAKE.r + 5, dl + (n2 - 0.5) * 2) * 0.9);
+      c.lerp(c2.setHex(name === 'japan' ? 0xb9b4a6 : 0xd8c597), smooth(LAKE.r + 9, LAKE.r + 5, dl + (n2 - 0.5) * 2) * 0.9);
       if (h < -0.35 && dl < LAKE.r + 9) c.lerp(c2.setHex(0x9c8a64), 0.7);   // the lake bed (not dry hollows elsewhere)
     }
     if (name === 'mars') {
@@ -578,13 +632,14 @@ export function buildLand(name, T, blocks) {
   }
   ground.userData.base = new THREE.Color(P.grass[0]);
 
-  // lake (Colorado)
-  if (name === 'colorado') {
+  // lake (Colorado, and Sakura Valley's lake with its island)
+  if (name === 'colorado' || name === 'japan') {
     const wg = new THREE.CircleGeometry(LAKE.r + 13, 64);
     wg.rotateX(-Math.PI / 2); wg.translate(LAKE.x, -0.45, LAKE.z);
     const ripples = tx.ripples.clone(); ripples.repeat.set(3, 3); ripples.needsUpdate = true;
     const water = new THREE.MeshStandardMaterial({ color: 0x3a8cc4, roughness: 0.08, metalness: 0.15, transparent: true, opacity: 0.88, bumpMap: ripples, bumpScale: 0.6 });
     water.userData.ripples = ripples;
+    if (name === 'japan') water.color.setHex(0x3f8fa0);
     const wm = new THREE.Mesh(wg, water); wm.receiveShadow = true;
     ground.add(wm);
     ground.userData.water = ripples;
@@ -605,6 +660,7 @@ export function buildLand(name, T, blocks) {
     }
     // the dock, on the side facing town
     const da = Math.atan2(-LAKE.z, -LAKE.x);
+    if (name === 'japan') ground.add(...isle(H, da).children);
     let dd = LAKE.r - 3; while (dd < LAKE.r + 12 && H(LAKE.x + Math.cos(da) * dd, LAKE.z + Math.sin(da) * dd) < -0.45) dd += 0.25;
     const plankM = std(0x8a6038, { roughness: 0.9 }), postM = std(0x5a3d24, { roughness: 0.9 });
     const dock = new THREE.Group();
@@ -614,7 +670,7 @@ export function buildLand(name, T, blocks) {
     dock.position.set(LAKE.x + Math.cos(da) * (dd - 2.2), -0.25, LAKE.z + Math.sin(da) * (dd - 2.2));
     dock.rotation.y = -da;
     dock.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    ground.add(dock);
+    if (name !== 'japan') ground.add(dock);
     const sm = new THREE.Group(); shore.build(sm, { cast: true }); ground.add(...sm.children);
   }
 
@@ -625,11 +681,12 @@ export function buildLand(name, T, blocks) {
   // the tiniest things (grass tufts, pebbles, flowers) go in a layer of their own that is
   // hidden when zoomed far out, where they'd only be specks shimmering on the screen
   const tinyNear = new Batch(), tinyFar = new Batch();
-  const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(name === 'colorado' ? 7 : name === 'desert' ? 11 : 13);
+  const r = (s => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646)(name === 'colorado' ? 7 : name === 'desert' ? 11 : name === 'japan' ? 19 : 13);
   const blocked = (x, z, pad) => {
     if (roadDist(x, z) < HW + SW + pad) return true;
-    if (name === 'colorado' && (H(x, z) < -0.3 && Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 20 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
-    if (name !== 'colorado' && Math.hypot(x - 40, z - 40) < 4 + pad * 2) return true;   // the landing spot for the rocket you arrive in (world.js LANDER_AT)
+    if ((name === 'colorado' || name === 'japan') && (H(x, z) < -0.3 && Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 20 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
+    if (name !== 'colorado' && Math.hypot(x - 40, z - 40) < 4 + pad * 2) return true;
+    if (name === 'japan' && Math.hypot(x - FUJI.x, z - FUJI.z) < FUJI.r * 0.85 && H(x, z) > 14) return true;   // Fuji's bare upper slopes   // the landing spot for the rocket you arrive in (world.js LANDER_AT)
     return townDist(x, z) < 0.5 + pad * 0.3;
   };
   const SPAN = 270, NEAR = 60;
@@ -643,7 +700,7 @@ export function buildLand(name, T, blocks) {
       // nothing from the general scatter stands on a mesa (they get their own fallen rocks)
       if (name === 'desert' || name === 'mars') { const m = mesaAt(name, x, z); if (m.h > 0.4) continue; }
       // low ground only matters where there's water: Colorado's hollows away from the lake get trees too
-      if (h > maxH || h < minH && (name !== 'colorado' || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 14)) continue;
+      if (h > maxH || h < minH && ((name !== 'colorado' && name !== 'japan') || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 14)) continue;
       const obj = make(r, h);
       obj.position.set(x, h, z);
       obj.rotation.y = r() * Math.PI * 2;
@@ -683,6 +740,46 @@ export function buildLand(name, T, blocks) {
       far.add(fieldM.get(color), g);
     }
 
+  } else if (name === 'japan') {
+    // round the town: cherry trees and maples, clipped azaleas, bamboo groves; tall cedars
+    // and umbrella pines closing in, and dark cedar forest up every ridge
+    const JK = japanKit();
+    const blossom = (x, z) => fbm(x / 20, z / 20, 2, 88) > 0.5;
+    place(520, JK.sakura, { where: blossom, maxH: 12 });
+    place(260, JK.maple, { maxH: 14 });
+    place(420, JK.azalea, { pad: 0.6, blob: 0.5, maxH: 8 });
+    place(140, JK.bamboo, { where: (x, z) => fbm(x / 16, z / 16, 2, 51) > 0.56, maxH: 10, pad: 0.8 });
+    place(300, JK.kasa, { maxH: 18 });
+    place(1300, (r, h) => S.tuft(r, h, [0x5f9e3c, 0x6fae44, 0x4f8c36, 0x86b84c]), { pad: 0.1, blob: 0, span: 180, maxH: 10, tiny: true });
+    place(380, S.flowers, { pad: 0.6, blob: 0, maxH: 6, tiny: true });
+    place(140, r => S.rock(r, 0, 0x8f8c84), { pad: 1.3, blob: 0.7 });
+    const inField = (x, z) => FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
+    const woods = (x, z) => { const d = townDist(x, z); return d > 15 && !inField(x, z) && r() < Math.min(0.95, (d - 15) / 18) * (0.7 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
+    place(2600, JK.sugi, { where: woods, span: 250, maxH: 60, pad: 0.4, blob: 0.9 });
+    place(600, JK.kasa, { where: woods, span: 230, maxH: 30, pad: 0.4, blob: 0.8 });
+    place(200, JK.maple, { where: woods, span: 200, maxH: 30, pad: 0.4, blob: 0.6 });
+    // rice paddies (bright young rice standing in water) and a tea garden in rows
+    const paddyM = [0x8fcf5a, 0x7cbf4a, 0x9fd06a].map(c => withClouds(std(c, { map: tx.rows, roughness: 0.6, metalness: 0.05 })));
+    const teaM = withClouds(std(0x3f7a34, { map: tx.rows, roughness: 0.95 })), bundM = std(0x7a6a4a, { roughness: 1 });
+    FIELDS.forEach(([fx, fz, w, d], k) => {
+      const y = H(fx, fz) + 0.06, tea = k === 3;
+      if (tea) { far.add(teaM, rect(fx - w / 2, fz - d / 2, fx + w / 2, fz + d / 2, y, 4)); for (let i = -d / 2 + 1; i < d / 2; i += 1.4) far.add(teaM, (() => { const g = new THREE.CylinderGeometry(0.45, 0.5, w - 1, 8, 1); g.rotateZ(Math.PI / 2); g.scale(1, 0.55, 1); g.translate(fx, y + 0.15, fz + i); return g; })()); return; }
+      // terraced paddies split into plots by low earth banks
+      const nx = Math.max(1, Math.round(w / 7)), nz = Math.max(1, Math.round(d / 7));
+      for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+        const x0 = fx - w / 2 + i * w / nx, z0 = fz - d / 2 + j * d / nz;
+        far.add(paddyM[(i + j + k) % 3], rect(x0 + 0.15, z0 + 0.15, x0 + w / nx - 0.15, z0 + d / nz - 0.15, y, 5));
+      }
+      for (let i = 0; i <= nx; i++) far.add(bundM, boxAt(0.3, 0.12, d, fx - w / 2 + i * w / nx, y - 0.06, fz));
+      for (let j = 0; j <= nz; j++) far.add(bundM, boxAt(w, 0.12, 0.3, fx, y - 0.06, fz - d / 2 + j * d / nz));
+    });
+    // farmhouses, shrines and torii, stone lanterns, and a pagoda up on a hill
+    const flatJ = (lim = 1.2) => (x, z) => Math.abs(H(x + 2, z) - H(x - 2, z)) + Math.abs(H(x, z + 2) - H(x, z - 2)) < lim;
+    const okJ = (f, lim) => (x, z) => f(x, z) && flatJ(lim)(x, z) && Math.hypot(x - LAKE.x, z - LAKE.z) > LAKE.r + 10 && !inField(x, z);
+    place(12, JK.minka, { pad: 4, span: 170, where: okJ((x, z) => townDist(x, z) > 7, 1.2), maxH: 5, blob: 1.2 });
+    place(4, JK.shrine, { pad: 4, span: 150, where: okJ((x, z) => townDist(x, z) > 6, 1.0), maxH: 5, blob: 1 });
+    place(14, JK.lantern, { pad: 1.5, span: 120, where: okJ((x, z) => townDist(x, z) > 3, 2), maxH: 6, blob: 0.4 });
+    place(2, JK.pagoda, { pad: 6, span: 200, where: okJ((x, z) => townDist(x, z) > 18, 2.2), minH: 1.5, maxH: 14, blob: 1.4 });
   } else if (name === 'desert') {
     place(420, S.saguaro, { pad: 0.5 });
     place(260, S.joshua, { pad: 1.2 });
@@ -1102,12 +1199,114 @@ function arcBand(cx, cz, r0, r1, a0, a1, h) {
 }
 
 let MARS_GLOW = null, LUNA_GLOW = null;
+// ---------- Sakura Valley scenery ----------
+// the island in the lake: a pine, a little pavilion and a red arched bridge from the shore
+function isle(H, da) {
+  const g = new THREE.Group();
+  const y = H(ISLE.x, ISLE.z);
+  jPine(g, ISLE.x - 1.2, ISLE.z - 0.8, 1.5, y, 7);
+  jLantern(g, ISLE.x + 1.6, ISLE.z - 1.0, 1.0, y);
+  // the pavilion (azumaya): four posts under a hipped roof
+  const px = ISLE.x + 0.6, pz = ISLE.z + 0.6;
+  g.add(jBox(1.9, 0.18, 1.9, J.STONE, px, y, pz));
+  for (const [dx, dz] of [[-0.75, -0.75], [0.75, -0.75], [-0.75, 0.75], [0.75, 0.75]]) g.add(jBox(0.12, 1.3, 0.12, J.VERM, px + dx, y + 0.18, pz + dz));
+  for (const e of [-0.75, 0.75]) g.add(jBox(1.6, 0.1, 0.1, J.VERM, px, y + 1.38, pz + e), jBox(0.1, 0.1, 1.6, J.VERM, px + e, y + 1.38, pz));
+  jRoof(g, { x: px, y: y + 1.48, z: pz, w: 2.4, d: 2.4, h: 0.9, lift: 0.3, ridge: true });
+  // the bridge: from the island toward the town-side shore
+  let dd = ISLE.r + 1.5; while (dd < LAKE.r + 14 && H(ISLE.x + Math.cos(da) * dd, ISLE.z + Math.sin(da) * dd) < -0.45) dd += 0.25;
+  const L = Math.max(4, dd - ISLE.r + 2.5), br = new THREE.Group(), N = Math.ceil(L / 0.35), rise = Math.min(2.4, L * 0.2);
+  const arc = t => rise * (1 - 4 * (t - 0.5) ** 2);
+  for (let k = 0; k <= N; k++) { const t = k / N, pl = jBox(0.36, 0.08, 1.6, J.WOOD, t * L, arc(t), 0); pl.rotation.z = -Math.atan(rise * 4 * (1 - 2 * t) / L) * -1; br.add(pl); }
+  for (const e of [-0.75, 0.75]) {
+    for (let k = 0; k <= 6; k++) { const t = k / 6; br.add(jBox(0.09, 0.6, 0.09, J.VERM, t * L, arc(t), e)); if (k === 0 || k === 6) br.add(jBox(0.12, 0.12, 0.12, J.GOLD, t * L, arc(t) + 0.6, e)); }
+    for (let k = 0; k < 12; k++) { const t0 = k / 12, t1 = (k + 1) / 12; jRod(br, [t0 * L, arc(t0) + 0.58, e], [t1 * L, arc(t1) + 0.58, e], 0.05, J.VERM); jRod(br, [t0 * L, arc(t0) + 0.32, e], [t1 * L, arc(t1) + 0.32, e], 0.035, J.VERM); }
+    for (let k = 1; k < 6; k++) { const t = k / 6; br.add(jBox(0.12, 1.4, 0.12, J.WOOD_D, t * L, -1.3, e * 0.9)); }
+  }
+  br.position.set(ISLE.x + Math.cos(da) * (ISLE.r - 1.2), Math.max(y, 0) - 0.05, ISLE.z + Math.sin(da) * (ISLE.r - 1.2));
+  br.rotation.y = -da;
+  g.add(br);
+  // water lilies
+  for (let k = 0; k < 14; k++) { const a = k * 2.4, rr = ISLE.r + 2 + (k % 4) * 1.6; const lily = new THREE.Mesh(new THREE.CircleGeometry(0.35 + (k % 3) * 0.12, 8), std(0x4f8f3a, { roughness: 0.8 })); lily.rotation.x = -Math.PI / 2; lily.position.set(ISLE.x + Math.cos(a) * rr, -0.42, ISLE.z + Math.sin(a) * rr); g.add(lily); if (k % 3 === 0) g.add(jAt(new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 4), std(0xf6c8d8)), lily.position.x + 0.1, -0.36, lily.position.z)); }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+function japanKit() {
+  const M = new Map();
+  const m = (color, o = {}, sway = 0) => {
+    const k = color + JSON.stringify(o) + (sway ? 1 : 0);
+    if (!M.has(k)) { const mm = std(color, { flatShading: true, ...o }); if (sway) withSway(mm); M.set(k, mm); }
+    return M.get(k);
+  };
+  const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); return o; };
+  const PINK = [0xf7c9d6, 0xf2b4c8, 0xfadbe4, 0xf5bfd0, 0xffe4ec], RED = [0xd9452b, 0xe86a2a, 0xc23524, 0xf08a3a, 0xe8b23a];
+  // turn a kit object (drawn with the models' materials) into scenery materials so it batches well
+  const keep = g => g;
+  return {
+    // a tall, narrow Japanese cedar: a straight trunk and a dark, layered spire
+    sugi(r) {
+      const g = new THREE.Group(), s = 1.0 + r() * 1.1, col = [0x234f2e, 0x2a5a34, 0x1e4628, 0x31613a][Math.floor(r() * 4)];
+      g.add(mesh(new THREE.CylinderGeometry(0.1 * s, 0.16 * s, 1.4 * s, 5, 1, true), m(0x6a4a34), 0, 0.7 * s, 0));
+      const lm = m(col, {}, 1);
+      for (let i = 0; i < 5; i++) g.add(mesh(new THREE.ConeGeometry((0.72 - i * 0.12) * s, 1.0 * s, 7, 1, true), lm, 0, (1.3 + i * 0.55) * s, 0));
+      g.userData.r = s * 0.8; return g;
+    },
+    // an umbrella pine: a leaning bare trunk with flat, layered crowns up top
+    kasa(r) {
+      const g = new THREE.Group(), s = 0.9 + r() * 0.9, lean = (r() - 0.5) * 0.5;
+      const tr = mesh(new THREE.CylinderGeometry(0.1 * s, 0.17 * s, 3.2 * s, 6, 1, true), m(0x5a4030), lean * 0.8 * s, 1.6 * s, 0); tr.rotation.z = -lean * 0.5; g.add(tr);
+      const lm = m(r() < 0.5 ? 0x2f5a32 : 0x3a6a3a, {}, 1);
+      for (let i = 0; i < 4; i++) { const a = r() * 6.3, d = i ? (0.5 + r() * 0.5) * s : 0; const pad = mesh(new THREE.SphereGeometry((0.95 - i * 0.12) * s, 9, 5), lm, Math.cos(a) * d + lean * 1.6 * s, (3.0 + i * 0.32 - (i ? 0.5 : 0)) * s, Math.sin(a) * d); pad.scale.y = 0.32; g.add(pad); }
+      g.userData.r = s; return g;
+    },
+    sakura(r) {
+      const g = new THREE.Group(), s = 0.75 + r() * 0.6;
+      const tr = mesh(new THREE.CylinderGeometry(0.1 * s, 0.17 * s, 1.3 * s, 6, 1, true), m(0x4a3428), 0, 0.65 * s, 0); tr.rotation.z = (r() - 0.5) * 0.3; g.add(tr);
+      for (let i = 0; i < 7; i++) { const a = r() * 6.3, d = (0.3 + r() * 0.6) * s, p = mesh(new THREE.IcosahedronGeometry((0.5 + r() * 0.25) * s, 1), m(PINK[Math.floor(r() * PINK.length)], { roughness: 0.9 }, 1), Math.cos(a) * d, (1.7 + r() * 0.6) * s, Math.sin(a) * d); p.scale.y = 0.72; g.add(p); }
+      g.userData.r = s * 1.2; return g;
+    },
+    maple(r) {
+      const g = new THREE.Group(), s = 0.75 + r() * 0.6, c = RED[Math.floor(r() * RED.length)];
+      g.add(mesh(new THREE.CylinderGeometry(0.08 * s, 0.13 * s, 1.2 * s, 6, 1, true), m(0x4a3428), 0, 0.6 * s, 0));
+      for (let i = 0; i < 6; i++) { const a = r() * 6.3, d = (0.25 + r() * 0.5) * s, p = mesh(new THREE.IcosahedronGeometry((0.42 + r() * 0.2) * s, 0), m(r() < 0.75 ? c : RED[Math.floor(r() * 5)], {}, 1), Math.cos(a) * d, (1.3 + r() * 0.6) * s, Math.sin(a) * d); p.scale.y = 0.65; g.add(p); }
+      g.userData.r = s; return g;
+    },
+    azalea(r) {
+      const g = new THREE.Group(), s = 0.5 + r() * 0.5, col = [0xd8579a, 0xe86aa8, 0xf2f0ea, 0x4f8f3a, 0x5a9a40, 0xd84a6a][Math.floor(r() * 6)];
+      const b = mesh(new THREE.SphereGeometry(0.55 * s, 10, 6), m(col, { roughness: 0.95 }), 0, 0.3 * s, 0); b.scale.y = 0.7; g.add(b);
+      if (r() < 0.5) { const b2 = mesh(new THREE.SphereGeometry(0.4 * s, 9, 5), m(col, { roughness: 0.95 }), 0.5 * s, 0.22 * s, 0.2 * s); b2.scale.y = 0.7; g.add(b2); }
+      g.userData.r = s; return g;
+    },
+    bamboo(r) {
+      const g = new THREE.Group(), n = 6 + Math.floor(r() * 6);
+      for (let i = 0; i < n; i++) {
+        const h = 3 + r() * 2.5, px = (r() - 0.5) * 2, pz = (r() - 0.5) * 2;
+        const st = mesh(new THREE.CylinderGeometry(0.05, 0.06, h, 5, 1, true), m(r() < 0.5 ? 0x7aa84a : 0x8ab85a), px, h / 2, pz); st.rotation.z = (r() - 0.5) * 0.12; g.add(st);
+        const lf = mesh(new THREE.IcosahedronGeometry(0.45, 0), m(0x6aa040, {}, 1), px, h, pz); lf.scale.set(1.2, 0.6, 1.2); g.add(lf);
+      }
+      g.userData.r = 1.4; return g;
+    },
+    // a thatched farmhouse with white walls, dark timbers and a veranda
+    minka(r) { const g = new THREE.Group(); const t = jHall(g, { w: 3.2, d: 2.4, h: 1.3, y0: 0, wall: J.PLASTER, frame: J.WOOD_D, bay: 0.6, baseH: 0.25 }); jShoji(g, 'z', 0.3, 0.4, 1.2, 1.8, 0.75); jEngawa(g, { axis: 'z', a: 0.3, f: 1.2, len: 2.4, depth: 0.45, y: 0.36, rail: null, posts: false }); jRoof(g, { y: t, w: 4.1, d: 3.4, h: 1.9, kind: 'thatch' }); jShrub(g, -1.9, 1.5, 1, 0, 0xd8579a); g.userData.r = 2.2; return keep(g); },
+    // a little roadside shrine with its torii
+    shrine(r) { const g = new THREE.Group(); g.add(jBox(2.2, 0.25, 2.0, J.STONE, 0, 0, 0)); const t = jHall(g, { z: -0.3, w: 1.4, d: 1.1, h: 0.9, y0: 0.25, wall: 0xf2ead8, frame: J.VERM, bay: 0.45, baseH: 0.1 }); jRoof(g, { y: t, z: -0.3, w: 2.0, d: 1.7, h: 0.65, color: 0x4f8a78, under: J.VERM, lift: 0.15 }); jTorii(g, 0, 1.8, 1.3, 1.7, 0); jLantern(g, -1.2, 1.1, 0.8, 0); jLantern(g, 1.2, 1.1, 0.8, 0); g.userData.r = 1.6; return keep(g); },
+    lantern(r) { const g = new THREE.Group(); jLantern(g, 0, 0, 1.1 + r() * 0.4, 0); g.userData.r = 0.5; return g; },
+    // a five-storey pagoda standing up among the trees
+    pagoda(r) {
+      const g = new THREE.Group(); g.add(jBox(3.4, 0.4, 3.4, J.STONE_D, 0, 0, 0));
+      let y = 0.4;
+      for (let i = 0; i < 5; i++) { const w = 2.0 - i * 0.24, h = 0.75; g.add(jBox(w, h, w, J.VERM, 0, y, 0)); g.add(jBox(w + 0.02, 0.12, w + 0.02, J.PLASTER, 0, y + h - 0.2, 0)); jRoof(g, { y: y + h, w: w + 1.2, d: w + 1.2, h: 0.5, lift: 0.35, ridge: false }); y += h + 0.45; }
+      g.add(jBox(0.08, 2.0, 0.08, 0x8a6a3a, 0, y, 0));
+      g.userData.r = 2.4; return g;
+    },
+  };
+}
 export function buildRoads(name, T, stateOf) {
   const tx = textures();
   const group = new THREE.Group();
   const road = new Batch();
   const west = name === 'desert';   // the Wild West: packed dirt streets and plank boardwalks
-  const asphaltM = west ? withClouds(std(0xe0b583, { map: tx.asphalt, roughness: 1 })) : withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
+  const nihon = name === 'japan';   // Sakura Valley: granite-sett streets, gravel walks, stone lanterns
+  const asphaltM = west ? withClouds(std(0xe0b583, { map: tx.asphalt, roughness: 1 })) : nihon ? withClouds(std(0xc9c5bc, { map: tx.setts, roughness: 0.9 })) : withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
   const rutM = withClouds(std(0xc09668, { roughness: 1 })), seamM = std(0x4e3a26, { roughness: 1 });
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
@@ -1116,7 +1315,7 @@ export function buildRoads(name, T, stateOf) {
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
   const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
-  const curbM = west ? std(0x5e4630, { roughness: 0.95 }) : std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
+  const curbM = west ? std(0x5e4630, { roughness: 0.95 }) : nihon ? std(0x7d7a72, { roughness: 0.9 }) : std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
   const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', luna = name === 'moon', moon = luna || mars;   // Mars roads are lit like the Moon's, not painted
   // Mars streets: fused basalt slabs, steel grate walkways behind hazard-striped curbs,
@@ -1227,9 +1426,9 @@ export function buildRoads(name, T, stateOf) {
   // ragged at the edges like Colorado's old roads, with a little surveyor's stake at each
   // corner, so you can make out the plots without it shouting
   if (plan.length) {
-    const trackM = withClouds(std(mars ? 0x7a3420 : moon ? 0xa3a3a9 : 0xe4cd9c, { roughness: 1 }));
-    const blendM = withClouds(std(mars ? 0x8e3a22 : moon ? 0x98989e : 0xdcbd86, { roughness: 1 }));
-    const pebM = std(mars ? 0x3a2420 : moon ? 0x8a8a90 : 0xbf9466, { flatShading: true, roughness: 1 });
+    const trackM = withClouds(std(mars ? 0x7a3420 : moon ? 0xa3a3a9 : nihon ? 0xc9b98e : 0xe4cd9c, { roughness: 1 }));
+    const blendM = withClouds(std(mars ? 0x8e3a22 : moon ? 0x98989e : nihon ? 0x9cbc6a : 0xdcbd86, { roughness: 1 }));
+    const pebM = std(mars ? 0x3a2420 : moon ? 0x8a8a90 : nihon ? 0x9a978f : 0xbf9466, { flatShading: true, roughness: 1 });
     const stakeM = std(0xcaa877, { roughness: 0.9 });
     const tipM = std(0xff7a3a, { roughness: 0.6 });
     const stakes = new Map();
@@ -1361,7 +1560,7 @@ export function buildRoads(name, T, stateOf) {
     }
     if (mars) marsStreet(sp, a0, a1);
     if (luna) lunaStreet(sp, a0, a1);
-    if (west || moon) {} else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
+    if (west || moon || nihon) {} else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
       road.add(edgeM, sp.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, sp.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, sp.line + sd * (HW - 0.12), 0.075, i));
     else for (let i = a0 + STOP_R - 1.4; i < a1 - STOP_R + 1.8; i += 2.4)
       road.add(paintM, sp.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.08, sp.line) : boxAt(0.14, 0.02, 1.1, sp.line, 0.08, i));
@@ -1403,7 +1602,7 @@ export function buildRoads(name, T, stateOf) {
       if (mars) continue;   // Mars junctions get a light ring instead of paint (below)
       const ax = -hx, az = -hz;
       const cx = x - ax * STOP_R + (-az) * LANE, cz = z - az * STOP_R + ax * LANE;
-      if (west) continue;   // no paint on a dirt street
+      if (west || nihon) continue;   // no paint on a dirt street, nor on stone setts
       road.add(paintM, ax ? boxAt(0.26, 0.022, HW - 0.15, cx, 0.08, cz) : boxAt(HW - 0.15, 0.022, 0.26, cx, 0.08, cz));
       const zc = STOP_R - 0.62;
       if (!moon) for (let k = -3; k <= 3; k++) {
@@ -1440,6 +1639,8 @@ export function buildRoads(name, T, stateOf) {
   const lunaMastM = std(0xe8eaee, { roughness: 0.5, metalness: 0.3 }), lunaPanelM = std(0x223f78, { roughness: 0.25, metalness: 0.4 });
   const lampM = new THREE.MeshStandardMaterial({ color: 0xfff6e2, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.3 });
   const lights = [];
+  const stoneM2 = std(0xa8a49a, { roughness: 0.95, flatShading: true }), stoneDM = std(0x7d7a72, { roughness: 0.95, flatShading: true });
+  const vermM = std(0xd2452c, { roughness: 0.7 }), blackM = std(0x2a2624, { roughness: 0.8 });
   const lamp = (x, z, ax, az) => {
     if (mars) {
       const l = Math.hypot(ax, az), ux = ax / l, uz = az / l, ang = Math.atan2(uz, ux);
@@ -1469,6 +1670,19 @@ export function buildRoads(name, T, stateOf) {
       poles.add(poleM, boxAt(0.18, 0.7, 0.18, x, 0.14, z));
       poles.add(edgeM, boxAt(0.26, 0.16, 0.26, x, 0.84, z));
       lights.push(new THREE.Vector3(x, 0.9, z));
+      return;
+    }
+    if (nihon) {
+      // a tall stone lantern (toro): a base, a shaft, a glowing fire box, a curved cap
+      const S = 1.35;
+      poles.add(stoneM2, boxAt(0.42 * S, 0.14, 0.42 * S, x, 0.14, z));
+      const sh = new THREE.CylinderGeometry(0.09 * S, 0.11 * S, 0.8 * S, 8); sh.translate(x, 0.28 + 0.4 * S, z); poles.add(stoneM2, sh);
+      const pl = new THREE.CylinderGeometry(0.25 * S, 0.17 * S, 0.12 * S, 6); pl.translate(x, 0.28 + 0.86 * S, z); poles.add(stoneM2, pl);
+      poles.add(stoneM2, boxAt(0.3 * S, 0.3 * S, 0.3 * S, x, 0.28 + 0.92 * S, z));
+      poles.add(lampM, boxAt(0.32 * S, 0.14 * S, 0.12 * S, x, 0.28 + 1.0 * S, z)); poles.add(lampM, boxAt(0.12 * S, 0.14 * S, 0.32 * S, x, 0.28 + 1.0 * S, z));
+      const cap = new THREE.ConeGeometry(0.42 * S, 0.3 * S, 6); cap.translate(x, 0.28 + 1.37 * S, z); poles.add(stoneDM, cap);
+      const j = new THREE.SphereGeometry(0.08 * S, 8, 6); j.translate(x, 0.28 + 1.58 * S, z); poles.add(stoneM2, j);
+      lights.push(new THREE.Vector3(x, 0.28 + 1.1 * S, z));
       return;
     }
     if (west) {
@@ -1508,6 +1722,21 @@ export function buildRoads(name, T, stateOf) {
   for (const e of liveExits) for (let d = 14; d <= 110; d += 14) {
     if (e.dir.x) lamp(e.node.x + e.dir.x * d, e.node.z + o, 0, -1);
     else lamp(e.node.x + o, e.node.z + e.dir.z * d, -1, 0);
+  }
+  // a great vermilion torii over each road out of town
+  if (nihon) for (const e of liveExits) {
+    const d = 22, cx = e.node.x + e.dir.x * d, cz = e.node.z + e.dir.z * d, across = e.dir.x ? 'z' : 'x', w = ROAD_W + 2.2, h = 5.2;
+    const P = (a, y, b) => across === 'z' ? [cx + b, y, cz + a] : [cx + a, y, cz + b];
+    for (const sd of [-1, 1]) {
+      const [px, , pz] = P(sd * w / 2, 0, 0);
+      const pc = new THREE.CylinderGeometry(0.22, 0.27, h, 12); pc.translate(px, h / 2, pz); poles.add(vermM, pc);
+      const bc = new THREE.CylinderGeometry(0.33, 0.33, 0.35, 12); bc.translate(px, 0.17, pz); poles.add(blackM, bc);
+    }
+    const beam = (len, th, dep, y, m) => { const [bx, , bz] = P(0, 0, 0); poles.add(m, across === 'z' ? boxAt(dep, th, len, bx, y, bz) : boxAt(len, th, dep, bx, y, bz)); };
+    beam(w + 0.9, 0.32, 0.36, h * 0.76, vermM);
+    beam(w + 2.2, 0.26, 0.6, h - 0.05, vermM);
+    beam(w + 2.6, 0.3, 0.7, h + 0.2, blackM);
+    const [tx2, , tz2] = P(0, 0, 0); poles.add(vermM, boxAt(across === 'z' ? 0.3 : 0.45, h * 0.24 - 0.3, across === 'z' ? 0.45 : 0.3, tx2, h * 0.76 + 0.32, tz2));
   }
   poles.build(group, { cast: true });
   return { group, lamps: lights, lampMat: lampM, edgeMat: edgeM };

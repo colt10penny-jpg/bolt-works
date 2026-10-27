@@ -109,6 +109,7 @@ function labelFor(lot) {
     return free > 0 ? { cls: 'bub idle', html: `${ICON.person}<b>${free}</b>`, aria: `${free} manager${free > 1 ? 's' : ''} waiting for a job. Tap to send them out.` } : { cls: '', html: '', aria: '' };
   }
   const f = game.info(id);
+  if (!f) return { cls: '', html: '', aria: '' };
   if (isSupport(typeOf(id))) {
     return f.starved ? { cls: 'bub warn', html: '!', aria: `${d.name} is short on power` } : { cls: '', html: '', aria: '' };
   }

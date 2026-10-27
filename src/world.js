@@ -2,7 +2,7 @@
 // map themes, the rocket launch, and tap picking.
 import * as THREE from 'three';
 import { FACTORIES } from './economy.js';
-import { BUILDERS, box, cyl, mat, truck, car, marsRover, marsCrawler, lunarBuggy, lunarHauler, freightWagon, stagecoach, buckboard, crate, powerPole, tree, pine, cactus, rock } from './models.js';
+import { BUILDERS, box, cyl, mat, truck, car, marsRover, marsCrawler, lunarBuggy, lunarHauler, freightWagon, stagecoach, buckboard, keiTruck, keiVan, crate, powerPole, tree, pine, cactus, rock } from './models.js';
 const cylY = (r, h, color, x, y, z) => cyl(r, r, h, color, x, y, z, 14);
 import { Look } from './fx.js';
 import { NightFog } from './nightfog.js';
@@ -12,6 +12,7 @@ import './buildings.js';   // the detailed Colorado buildings replace the plain 
 import { barrel as wBarrel, hay as wHay, crate as wCrate, wheel as wWheel, hitchRail, horse as wHorse } from './buildings-west.js';     // and the Wild West ones
 import './buildings-moon.js';     // and the Moon ones
 import './buildings-mars.js';     // and the Mars colony
+import './buildings-japan.js';    // and Sakura Valley
 import { withDetail } from './surface.js';
 const NIGHT_LIST = () => GLOW.night;
 import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
@@ -21,6 +22,8 @@ import { plotsOf, boundsOf, startView } from './layout.js';
 import { STYLE, PROPS } from './upgrades.js';
 import { WEST_STYLE, westGear } from './west-upgrades.js';
 import { MOON_STYLE, moonGear } from './moon-upgrades.js';
+import { JAPAN_STYLE, japanGear } from './japan-upgrades.js';
+import { roof as jRoof, noren as jNoren, lantern as jLantern, bamboo as jBamboo, maple as jMaple, pine as jPine, sakura as jSakura, shrub as jShrub, rocks as jRocks, J } from './japan-kit.js';
 import { buildWing } from './wings.js';
 import { splitBig } from './chunks.js';
 import { Puff, PuffLayer } from './puffs.js';
@@ -34,6 +37,7 @@ const THEME = {
   colorado: { ground: 0x8cc65f, sky: 0x8cc65f, hemiSky: 0xfff6e5, hemiGround: 0x5d7a46, sun: 2.2, hemi: 1.6, road: 0x5d6470, walk: 0xcfc9bb, pad: 0xd9d4c7 },
   desert:   { ground: 0xe2c58f, sky: 0xe2c58f, hemiSky: 0xfff1d6, hemiGround: 0xa9875a, sun: 2.4, hemi: 1.5, road: 0x6a6460, walk: 0x9a7248, pad: 0xcaa67a },
   mars:     { ground: 0x7a2e1c, sky: 0x7a2e1c, hemiSky: 0xffe0bc, hemiGround: 0x6a2a1a, sun: 2.4, hemi: 1.4, road: 0x3b2a28, walk: 0xb98a74, pad: 0xd8c2b6 },
+  japan:    { ground: 0x7fb556, sky: 0x7fb556, hemiSky: 0xfff4ec, hemiGround: 0x4f7040, sun: 2.2, hemi: 1.6, road: 0x8a8a86, walk: 0xd4cfc2, pad: 0xdedad0 },
   moon:     { ground: 0x9c9ca2, sky: 0x9c9ca2, hemiSky: 0xdfe6ff, hemiGround: 0x3a3d48, sun: 2.6, hemi: 1.2, road: 0x4b4e57, walk: 0xb4b4ba, pad: 0xc9c9cf },
 };
 
@@ -273,7 +277,7 @@ export class World {
     this.shower = null; this.nextShower = null;
     for (const m of this.meteorList || []) this.scene.remove(m.obj);
     this.meteorList = [];
-    const fleet = name === 'mars' ? 'mars' : name === 'moon' ? 'moon' : name === 'desert' ? 'west' : 'earth';
+    const fleet = name === 'mars' ? 'mars' : name === 'moon' ? 'moon' : name === 'desert' ? 'west' : name === 'japan' ? 'japan' : 'earth';
     if (this.fleet !== fleet) {
       this.traffic.clear('manager');
       for (const m of [...this.idleCars, ...this.truckPool, ...this.carPool]) freeGeometry(m);   // the old world's vehicles
@@ -304,7 +308,7 @@ export class World {
     const dusty = name === 'desert';
     if (!this.padMats[name]) this.padMats[name] = withClouds(dusty
       ? new THREE.MeshStandardMaterial({ color: 0xd7b688, map: this.#dustTex(), alphaMap: this.#dustAlpha(), transparent: true, depthWrite: false, roughness: 1 })
-      : new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
+      : new THREE.MeshStandardMaterial({ color: T.pad, map: name === 'japan' ? this.#gravelPad() : this.#padTex(), roughness: 0.92 }));
     // in the old west a lot is just trodden ground: flat, and fading into the sand round it
     for (const L of Object.values(this.lots)) { L.pad.material = this.padMats[name]; L.pad.userData.box ||= L.pad.geometry;
       if (dusty) { this.dustPlane ||= new THREE.PlaneGeometry(LOT + 1.6, LOT + 1.6).rotateX(-Math.PI / 2).translate(0, 0.07, 0); L.pad.geometry = this.dustPlane; }
@@ -418,6 +422,7 @@ export class World {
       let o;
       if (theme === 'colorado') o = r() < 0.5 ? tree(0.8 + r() * 0.6, [0x3f8f4a, 0x4fa152, 0x357d40][Math.floor(r() * 3)]) : pine(0.8 + r() * 0.7);
       else if (theme === 'desert') o = r() < 0.6 ? cactus(0.7 + r() * 0.5) : rock(0.6 + r(), 0xb98b5c);
+      else if (theme === 'japan') { o = new THREE.Group(); const k = r(), sd = Math.floor(r() * 99); if (k < 0.3) jBamboo(o, 0, 0, 0.8 + r() * 0.4, 0, 5, sd); else if (k < 0.5) jMaple(o, 0, 0, 0.9 + r() * 0.4, 0, sd); else if (k < 0.7) jPine(o, 0, 0, 0.9 + r() * 0.4, 0, sd); else if (k < 0.82) jSakura(o, 0, 0, 0.9 + r() * 0.3, 0, sd); else jRocks(o, 0, 0, 1 + r(), 0, 3, sd); }
       else if (theme === 'mars') o = rock(0.5 + r() * 1.3, r() < 0.6 ? 0x3a2622 : 0x7a3420);   // dark basalt and rusty stones
       else o = rock(0.6 + r() * 1.4, 0x85858b);
       o.position.set(x, 0, z); o.rotation.y = r() * 6.28;
@@ -437,8 +442,8 @@ export class World {
       const sz = 0.12 + r() * 0.2, st = new THREE.IcosahedronGeometry(sz, 0);
       st.scale(1, 0.55, 1); st.translate((r() - 0.5) * 9, sz * 0.3, (r() - 0.5) * 9); stones.push(st);
     }
-    const grassC = theme === 'colorado' ? 0x5f9e3c : theme === 'desert' ? 0xc2a862 : null;
-    const stoneC = theme === 'colorado' ? 0x9a978f : theme === 'desert' ? 0xa87f58 : theme === 'mars' ? 0x4a2c24 : 0x8e8e94;
+    const grassC = theme === 'colorado' ? 0x5f9e3c : theme === 'desert' ? 0xc2a862 : theme === 'japan' ? 0x5a9a3a : null;
+    const stoneC = theme === 'colorado' || theme === 'japan' ? 0x9a978f : theme === 'desert' ? 0xa87f58 : theme === 'mars' ? 0x4a2c24 : 0x8e8e94;
     if (grassC) g.add(new THREE.Mesh(mergeGeometries(blades.map(b => b.toNonIndexed())), mat(grassC, { flatShading: true })));
     g.add(new THREE.Mesh(mergeGeometries(stones.map(b => b.index ? b.toNonIndexed() : b)), mat(stoneC, { flatShading: true })));
     blades.forEach(b => b.dispose());
@@ -492,6 +497,25 @@ export class World {
     g.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace;
     return (this.dustAlpha = t);
+  }
+  // Sakura Valley's lots: raked white gravel inside a kerb of granite setts
+  #gravelPad() {
+    if (this.gravelPadTex) return this.gravelPadTex;
+    const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ecebe6'; g.fillRect(0, 0, N, N);
+    let s = 5; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 9000; i++) { const v = 200 + r() * 55; g.fillStyle = `rgba(${v},${v - 3},${v - 9},0.8)`; g.fillRect(r() * N, r() * N, 2, 2); }
+    // straight raked furrows
+    for (let y = 40; y < N - 40; y += 9) { g.fillStyle = 'rgba(110,100,85,0.28)'; g.fillRect(40, y, N - 80, 2.5); g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(40, y + 3.5, N - 80, 2); }
+    // the granite kerb: a border of grey setts
+    for (let k = 0; k < 4; k++) for (let i = 0; i < N; i += 24) {
+      const v = 150 + r() * 40; g.fillStyle = `rgb(${v},${v - 2},${v - 6})`;
+      const [x, y, w, h] = [[i, 0, 23, 34], [i, N - 34, 23, 34], [0, i, 34, 23], [N - 34, i, 34, 23]][k]; g.fillRect(x, y, w, h);
+    }
+    g.fillStyle = 'rgba(80,90,50,0.35)'; for (const [x, y] of [[34, 34], [N - 34, 34], [34, N - 34], [N - 34, N - 34]]) { g.beginPath(); g.arc(x, y, 18, 0, 7); g.fill(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return (this.gravelPadTex = t);
   }
   #padTex() {
     if (this.padTex) return this.padTex;
@@ -734,12 +758,14 @@ export class World {
     const west = this.themeName === 'desert' ? (WEST_STYLE[this.typeOf?.(id)] || WEST_STYLE.default) : null;
     // and so does the Moon (moon-upgrades.js)
     const luna = this.themeName === 'moon' ? (MOON_STYLE[this.typeOf?.(id)] || MOON_STYLE.default) : null;
+    // and Sakura Valley (japan-upgrades.js): its pieces are all garden pieces, set in the corners
+    const nihon = this.themeName === 'japan' ? (JAPAN_STYLE[this.typeOf?.(id)] || JAPAN_STYLE.default) : null;
     const later = [], ground = [];   // no room on the main roof: onto a wing, or into the yard
     [2, 4, 6, 7, 9].forEach((need, k) => {
       if (tier < need) return;
-      const name = k < 4 ? (west ? west.props[k] : luna ? luna.props[k] : style.props[k]) : 'beacon';
-      const P = west ? westGear(name, color, this.typeOf?.(id)) : luna ? moonGear(name, color) : PROPS[name](color, k);
-      if (P.ground) { ground.push(P.g); return; }
+      const name = k < 4 ? (west ? west.props[k] : luna ? luna.props[k] : nihon ? nihon.props[k] : style.props[k]) : 'beacon';
+      const P = west ? westGear(name, color, this.typeOf?.(id)) : luna ? moonGear(name, color) : nihon ? japanGear(name, color) : PROPS[name](color, k);
+      if (P.ground) { if (P.tall) P.g.userData.tall = true; ground.push(P.g); return; }
       const p = roofSpot(P.fw, P.fd, P.minY || 1.8);
       if (p) { P.g.position.copy(p); g.add(P.g); } else later.push(P.g);
     });
@@ -757,7 +783,7 @@ export class World {
     // free corners: an extra wing for each upgrade tier, parked cars in the rest
     let corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8));
-    const cored = west || (this.themeName === 'mars' && m.group.children.some(o => o.userData.core));
+    const cored = west || ((this.themeName === 'mars' || this.themeName === 'japan') && m.group.children.some(o => o.userData.core));
     if (cored) {
       // On the frontier the barrels, horses and hay round the main building only hold a
       // corner until something better comes along: a corner is free as long as the main
@@ -785,10 +811,30 @@ export class World {
       for (const o of [...m.group.children]) if (!o.userData.core && Math.abs(o.position.x - cx) < 1.45 && Math.abs(o.position.z - cz) < 1.45) m.group.remove(o);
     };
     const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
-    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { clearCorner([cx, cz]); const wg = this.#wing(cx, cz, color, tier, i, west ? west.wings[i] : luna ? luna.wings[i] : style.wing); wg.userData.wing = i + 1; ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
+    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { clearCorner([cx, cz]); const wg = this.#wing(cx, cz, color, tier, i, west ? west.wings[i] : luna ? luna.wings[i] : nihon ? nihon.wings[i] : style.wing); wg.userData.wing = i + 1; ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
     // yard props take the free corners first; anything that didn't fit on the main roof
     // goes on a wing roof, or failing that into a free corner
     let spare = corners.slice(wings);
+    if (nihon && ground.length) {
+      // a little garden in each free corner: up to four pieces, one in each quarter of it
+      // (the tall ones toward the back, so the short ones in front still show)
+      const order = [...ground].sort((a, b) => (b.userData.tall ? 1 : 0) - (a.userData.tall ? 1 : 0));
+      const perCorner = Math.ceil(order.length / Math.max(1, spare.length));
+      order.forEach((it, n) => {
+        const ci = n % Math.max(1, spare.length), k = Math.floor(n / Math.max(1, spare.length));
+        const c = spare[ci]; if (!c) return;
+        if (k === 0) clearCorner(c);
+        const alone = perCorner === 1;
+        // tall pieces take the far quarter (toward the building's middle the camera sees past)
+        const q = alone ? null : [3, 1, 2, 0][k % 4];
+        const sx = Math.sign(c[0]) || 1, sz = Math.sign(c[1]) || 1;
+        const off = q === null ? [0, 0] : [[0.55, 0.55], [-0.55, 0.55], [0.55, -0.55], [-0.55, -0.55]][q];
+        it.position.set(c[0] + off[0] * sx, 0.15, c[1] + off[1] * sz);
+        if (!alone) it.scale.setScalar(0.85);
+        ex.add(it);
+      });
+      ground.length = 0; spare = [];
+    }
     ground.forEach(it => {
       const c = spare.shift();
       if (c) { clearCorner(c); it.position.set(c[0], 0.15, c[1]); ex.add(it); } else later.push(it);
@@ -817,6 +863,36 @@ export class World {
       }
       const sandM = this.sandM ||= new THREE.MeshBasicMaterial({ color: 0xb08a5c, transparent: true, opacity: 0.6, depthWrite: false });
       for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.6, 10), sandM); st.rotation.x = -Math.PI / 2; st.scale.set(1.8, 1, 0.8); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
+    } else if (tier <= 1 && this.themeName === 'japan') {
+      // an old country yard: straw rice bales, wooden buckets and a firewood stack, a cart
+      // wheel, sake barrels, a bamboo rack drying radishes, each corner its own
+      const yard = [
+        (ex, cx, cz) => {   // straw rice bales (tawara) heaped up, and wooden buckets
+          for (const [dx, y, dz] of [[-0.4, 0, -0.2], [0.05, 0, -0.2], [-0.18, 0.26, -0.2], [0.5, 0, 0.35]]) { const b = cyl(0.17, 0.17, 0.5, 0xd8c08a, cx + dx, 0.15 + 0.17 + y, cz + dz, 9); b.rotation.x = Math.PI / 2; b.position.y = 0.15 + 0.17 + y; ex.add(b); for (const e of [-0.15, 0.15]) { const r = cyl(0.175, 0.175, 0.04, 0x8a6a3a, 0, 0, 0, 9); r.rotation.x = Math.PI / 2; r.position.set(cx + dx, 0.15 + 0.17 + y, cz + dz + e); ex.add(r); } }
+          for (const [dx, dz] of [[-0.5, 0.55], [-0.15, 0.7]]) { ex.add(cyl(0.16, 0.13, 0.3, 0x9a6b42, cx + dx, 0.15, cz + dz, 10)); ex.add(cyl(0.165, 0.165, 0.03, 0x2a2420, cx + dx, 0.15 + 0.22, cz + dz, 10)); }
+        },
+        (ex, cx, cz) => {   // a firewood stack under a little lean-to and an old cart wheel
+          for (let k = 0; k < 9; k++) { const l = cyl(0.07, 0.07, 0.8, 0x8a6a45, cx - 0.35 + (k % 3) * 0.15, 0.15 + 0.07 + Math.floor(k / 3) * 0.13, cz - 0.5, 6); l.rotation.x = Math.PI / 2; ex.add(l); }
+          ex.add(box(0.06, 0.75, 0.06, 0x3e2a1e, cx - 0.6, 0.15, cz - 0.85), box(0.06, 0.75, 0.06, 0x3e2a1e, cx, 0.15, cz - 0.85));
+          const lr = box(0.8, 0.05, 0.6, 0x8a6c48, cx - 0.3, 0.88, cz - 0.6); lr.rotation.x = 0.3; ex.add(lr);
+          const w = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.04, 5, 16), mat(0x5a4030)); w.rotation.set(0.15, 0.4, 0.1); w.position.set(cx + 0.6, 0.5, cz + 0.4); ex.add(w);
+        },
+        (ex, cx, cz) => {   // straw-wrapped sake barrels and a bamboo rack of drying radishes
+          for (const [dx, dz] of [[-0.45, 0.4], [-0.05, 0.5]]) { ex.add(cyl(0.22, 0.22, 0.45, 0xd8c9a0, cx + dx, 0.15, cz + dz, 10)); ex.add(box(0.18, 0.16, 0.01, 0xd9302a, cx + dx, 0.3, cz + dz + 0.22)); }
+          for (const x of [0.1, 0.8]) ex.add(cyl(0.025, 0.025, 1.0, 0x9ab85a, cx + x, 0.15, cz - 0.55, 6));
+          ex.add(cyl(0.02, 0.02, 0.8, 0x9ab85a, cx + 0.45, 1.1, cz - 0.55, 6).rotateZ(Math.PI / 2));
+          for (let k = 0; k < 6; k++) ex.add(cyl(0.035, 0.02, 0.4, 0xf2efe6, cx + 0.15 + k * 0.12, 0.7, cz - 0.55, 6));
+        },
+        (ex, cx, cz) => {   // a stone well with its wooden roof and bucket
+          ex.add(cyl(0.38, 0.4, 0.45, 0x9a968c, cx, 0.15, cz, 12), cyl(0.3, 0.3, 0.46, 0x1e2a30, cx, 0.16, cz, 12));
+          for (const e of [-0.42, 0.42]) ex.add(box(0.06, 1.05, 0.06, 0x3e2a1e, cx + e, 0.15, cz));
+          jRoof(ex, { x: cx, y: 1.2, z: cz, w: 1.05, d: 0.6, h: 0.22, kind: 'thatch' });
+          ex.add(cyl(0.1, 0.08, 0.14, 0x9a6b42, cx + 0.15, 0.62, cz + 0.05, 8));
+        },
+      ];
+      for (const [cx, cz] of corners.slice(wings, wings + 2)) yard[Math.floor(rnd() * yard.length)](ex, cx, cz);
+      const mossM = this.mossM ||= new THREE.MeshBasicMaterial({ color: 0x7a8a4a, transparent: true, opacity: 0.45, depthWrite: false });
+      for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.6, 10), mossM); st.rotation.x = -Math.PI / 2; st.scale.set(1.6, 1, 0.9); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
     } else if (tier <= 1 && this.themeName === 'mars') {
       // an early colony yard: supply canisters off the last ship, striped cargo crates and
       // a cracked spare wheel, with drifts of red dust
@@ -898,6 +974,7 @@ export class World {
     if (tier >= 7) {
       // a smart new campus: white planters with young trees in the free corners
       for (const [cx, cz] of spare.slice(0, 1)) {
+        if (this.themeName === 'japan') continue;   // (its gardens fill the corners)
         if (this.themeName === 'moon' || this.themeName === 'mars') {
           // off-world: a little glass greenhouse bubble with plants glowing inside
           ex.add(cyl(0.75, 0.8, 0.25, 0xeef0f3, cx, 0.15, cz, 20));
@@ -918,6 +995,10 @@ export class World {
       hitchRail(ex, cx, cz, 1.4, false);
       wHorse(ex, cx - sx * 0.55, cz - 0.3, sx > 0 ? 0 : Math.PI, [0x7a4a2a, 0x2a2420, 0xd8c8b0, 0x5a3a26][Math.floor(rnd() * 4)]);
       if (rnd() < 0.6) wHorse(ex, cx - sx * 0.55, cz + 0.35, sx > 0 ? 0 : Math.PI, [0x7a4a2a, 0x2a2420, 0xb07a4a][Math.floor(rnd() * 3)]);
+    } else if (this.themeName === 'japan') for (const [cx, cz] of spare.slice(tier <= 1 ? 2 : 0)) {
+      // a scrap of garden: a lantern among clipped shrubs, or a cherry tree
+      if (rnd() < 0.5) { jLantern(ex, cx - 0.3, cz - 0.2, 0.85); jShrub(ex, cx + 0.45, cz + 0.3, 1.0); jShrub(ex, cx + 0.05, cz + 0.6, 0.8, 0.15, 0xd8579a); }
+      else { jSakura(ex, cx, cz, 0.8, 0.15, Math.floor(rnd() * 90)); jRocks(ex, cx + 0.5, cz + 0.5, 0.6, 0.15, 2, 3); }
     } else if (this.themeName !== 'moon' && this.themeName !== 'mars') for (const [cx, cz] of spare.slice(tier <= 1 ? 2 : tier >= 7 ? 1 : 0)) {
       if (rnd() < 0.45) continue;
       const colors = [0xe85a3c, 0x2f7fd1, 0xf3f0e8, 0x3a3f48, 0xffc23d, 0x6b8f5a];
@@ -936,10 +1017,11 @@ export class World {
   // look new and sleek: richer colour, smooth satin finishes with a bit of shine.
   // (Lights and windows keep their own materials so they still glow at night.)
   #ageLook(group, tier) {
-    const age = Math.max(0, Math.min(1, (3 - tier) / 3)), modern = Math.max(0, Math.min(1, (tier - 5) / 4));
+    const age = Math.max(0, Math.min(1, (3 - tier) / 3)), modern = Math.max(0, Math.min(1, (tier - 5) / 4)) * (this.themeName === 'japan' ? 0.3 : 1);   // (clay tiles and timber don't turn glossy)
     if (!age && !modern) return;
     this.ageCache ||= new Map();
-    const dirt = new THREE.Color(this.themeName === 'moon' ? 0x8a8a90 : 0x857866), hsl = {};
+    const dirt = new THREE.Color(this.themeName === 'moon' ? 0x8a8a90 : this.themeName === 'japan' ? 0x8a7d6a : 0x857866), hsl = {};
+    const ageK = this.themeName === 'japan' ? 0.25 : 0.42;
     group.traverse(o => {
       if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
       const m0 = o.material;
@@ -951,13 +1033,13 @@ export class World {
         const a = vc.array, c = new THREE.Color();
         for (let i = 0; i < a.length; i += 3) {
           c.setRGB(a[i], a[i + 1], a[i + 2]);
-          if (age) c.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          if (age) c.lerp(dirt, ageK * age).multiplyScalar(1 - 0.2 * age);
           else { c.getHSL(hsl); c.setHSL(hsl.h, Math.min(1, hsl.s * (1 + 0.35 * modern)), Math.min(0.92, hsl.l + 0.05 * modern)); }
           a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b;
         }
         vc.needsUpdate = true;
       }
-      const key = m0.uuid + '|' + tier + (this.themeName === 'moon' ? 'm' : '');
+      const key = m0.uuid + '|' + tier + (this.themeName === 'moon' ? 'm' : this.themeName === 'japan' ? 'j' : '');
       let m = this.ageCache.get(key);
       if (!m) {
         m = m0.clone(); m.userData = { ...m0.userData };
@@ -967,7 +1049,7 @@ export class World {
           m.roughness = age ? Math.min(1, m.roughness + 0.25 * age) : m.roughness + (0.3 - m.roughness) * modern * 0.85;
           m.metalness = age ? m.metalness * (1 - age) : Math.max(m.metalness, 0.22 * modern);
         } else if (age) {
-          m.color.lerp(dirt, 0.42 * age).multiplyScalar(1 - 0.2 * age);
+          m.color.lerp(dirt, ageK * age).multiplyScalar(1 - 0.2 * age);
           m.roughness = Math.min(1, m.roughness + 0.25 * age); m.metalness *= 1 - age;
         } else {
           m.color.getHSL(hsl);
@@ -1074,6 +1156,29 @@ export class World {
     return g;
   }
 
+  // Sakura Valley: a loading gate like a temple's side gate: a stone-flagged floor, two
+  // dark posts, a small curved tile roof, and sliding wooden doors at the back hung with
+  // a noren in the company colour. Open at the sides, so the building still shows.
+  #gateBay(side, color) {
+    const g = new THREE.Group();
+    const W = 2.1, D = 1.6, H = 1.2;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.1, D), mat(0x9a968c)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
+    for (let k = 0; k < 4; k++) g.add(box(W + 0.1, 0.012, 0.025, 0x6e6a62, 0, 0.0, -D / 2 + 0.3 + k * 0.38));
+    // the sliding doors at the back, under a little tiled pent roof
+    g.add(box(W + 0.2, H, 0.12, 0x4a3628, 0, 0, -D / 2 + 0.05));
+    g.add(box(W - 0.3, H - 0.2, 0.04, 0x2a1e18, 0, 0.05, -D / 2 + 0.12));
+    for (const x of [-0.45, 0.45]) g.add(box(0.85, H - 0.3, 0.03, 0x6b4a30, x, 0.1, -D / 2 + 0.15));
+    jNoren(g, 'z', 0, H - 0.08, -D / 2 + 0.15, 1.2, color);
+    jRoof(g, { y: H, z: -D / 2 + 0.2, w: W + 0.5, d: 0.6, h: 0.16, lift: 0.05, ridge: false });
+    // a low gateway at the front: two dark posts on stone footings and a black top beam
+    for (const x of [-W / 2 - 0.05, W / 2 + 0.05]) { g.add(box(0.11, 1.15, 0.11, 0x3e2a1e, x, 0, D / 2 - 0.15), box(0.2, 0.1, 0.2, 0x8a867c, x, 0, D / 2 - 0.15)); }
+    g.add(box(W + 0.55, 0.1, 0.16, 0x2a2624, 0, 1.15, D / 2 - 0.15), box(W + 0.2, 0.07, 0.1, 0x3e2a1e, 0, 0.95, D / 2 - 0.15));
+    g.add(box(0.16, 0.22, 0.16, 0xffe2b0, W / 2 + 0.05, 0.62, D / 2 + 0.0, { emissive: 0xffb050, night: 2.2 }));
+    const dist = 2.75, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    g.rotation.y = rot;
+    g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
+    return g;
+  }
   // which sides of a lot trucks drive in and out of: every side with good road
   #baySides(id) {
     const [lx, lz] = this.P[id];
@@ -1092,6 +1197,7 @@ export class World {
     if (this.themeName === 'desert') return this.#ramada(side, color);
     if (this.themeName === 'mars') return this.#airlockBay(side, color);
     if (this.themeName === 'moon') return this.#dockBay(side, color);
+    if (this.themeName === 'japan') return this.#gateBay(side, color);
     const g = new THREE.Group();
     const wall = new THREE.Color(color).lerp(new THREE.Color(0x777777), 0.35).getHex();
     const W = 2.1, H = 1.75, D = 1.7;
@@ -1202,7 +1308,7 @@ export class World {
 
   #dust(L) {
     // a short, light puff of dust round the foot of a building that just levelled up
-    const dc = { desert: 0xd9bf94, mars: 0xc0704a, moon: 0xc4c4ca }[this.themeName] || 0xcfc3ad;
+    const dc = { desert: 0xd9bf94, mars: 0xc0704a, moon: 0xc4c4ca, japan: 0xf6d6e0 }[this.themeName] || 0xcfc3ad;
     for (let i = 0; i < 8; i++) {
       const m = this.#puff(dc, false, 1.0 + Math.random() * 1.0);
       const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 2;
@@ -1366,12 +1472,13 @@ export class World {
   // cargo haulers on the Moon, pressurised rovers and cargo crawlers on Mars
   #makeFleet() {
     const colors = [0xe85a3c, 0x2f7fd1, 0x1f8a5b, 0xffc23d, 0x7f6bbf, 0xf3f0e8, 0x3a3f48];
-    const mars = this.fleet === 'mars', moon = this.fleet === 'moon', west = this.fleet === 'west';
+    const mars = this.fleet === 'mars', moon = this.fleet === 'moon', west = this.fleet === 'west', jp = this.fleet === 'japan';
     const paint = [0x9c3a2a, 0x2f5a3a, 0x3f4a5c, 0x7a4a2a, 0xc9a24a, 0x6e4a2c, 0x8a3a5a];
     for (let i = 0; i < 15; i++) {
       const m = mars ? (i % 3 === 0 ? marsCrawler(colors[i % colors.length]) : marsRover(colors[(i * 3) % colors.length]))
         : moon ? (i % 3 === 0 ? lunarHauler(colors[i % colors.length]) : lunarBuggy(colors[(i * 3) % colors.length]))
         : west ? (i % 3 === 0 ? freightWagon(paint[i % paint.length]) : i % 3 === 1 ? (i % 2 ? stagecoach(paint[(i * 3) % paint.length]) : buckboard(paint[i % paint.length])) : buckboard([0x7a4a2a, 0x2a2420, 0xd8c8b0, 0x5a3a26][i % 4], true))
+        : jp ? (i % 3 === 0 ? keiTruck([0xf3f0e8, 0xf3f0e8, 0x8a9aa8, 0x2f5f9a][i % 4]) : i % 3 === 1 ? keiVan([0xf3f0e8, 0xe8d9b0, 0x6fa8a0, 0xd9452b, 0xf3f0e8][i % 5]) : car([0xf3f0e8, 0x2a2d33, 0xc9ccd2, 0x8a2a2a, 0x2f5f9a][i % 5], i % 2 ? 'hatch' : 'sedan'))
         : i % 3 === 0 ? truck(colors[i % colors.length]) : car(colors[(i * 3) % colors.length]);
       m.traverse(o => { if (o.isMesh) o.castShadow = true; });
       this.idleCars.push(m);
@@ -1413,7 +1520,7 @@ export class World {
   #spawnDelivery(fromId, toId) {
     let mesh = this.truckPool.pop();
     if (!mesh) {
-      mesh = this.themeName === 'mars' ? marsCrawler(0x2fb5a0) : this.themeName === 'moon' ? lunarHauler(0x2f6fb5) : this.themeName === 'desert' ? freightWagon(0x9c3a2a, true) : truck(0x2f6fb5, true);
+      mesh = this.themeName === 'mars' ? marsCrawler(0x2fb5a0) : this.themeName === 'moon' ? lunarHauler(0x2f6fb5) : this.themeName === 'desert' ? freightWagon(0x9c3a2a, true) : this.themeName === 'japan' ? keiTruck(0xf3f0e8, true) : truck(0x2f6fb5, true);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
       const cargo = new THREE.Group();
       for (const [x, z, h] of [[-0.75, -0.2, 0.42], [-0.75, 0.2, 0.42], [-0.3, -0.2, 0.42], [-0.3, 0.2, 0.36], [-0.75, 0, 0.3]]) cargo.add(box(0.42, h, 0.38, 0xffffff, x, z === 0 && h === 0.3 ? 0.82 : 0.4, z));
@@ -1437,7 +1544,7 @@ export class World {
   sendManager(fromId, toId) {
     let mesh = this.carPool.pop();
     if (!mesh) {
-      mesh = this.themeName === 'mars' ? marsRover(0x2fb5a0) : this.themeName === 'moon' ? lunarBuggy(0x1f8a5b) : this.themeName === 'desert' ? stagecoach(0x2f5a3a) : car(0x1f8a5b);
+      mesh = this.themeName === 'mars' ? marsRover(0x2fb5a0) : this.themeName === 'moon' ? lunarBuggy(0x1f8a5b) : this.themeName === 'desert' ? stagecoach(0x2f5a3a) : this.themeName === 'japan' ? keiVan(0x2a2d33) : car(0x1f8a5b);
       mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
     }
     const go = () => this.#drive(fromId, toId, mesh, 'manager', 6.5, { to: toId }, c => {
@@ -1527,6 +1634,39 @@ export class World {
     }
   }
 
+  // ---------- cherry petals (Sakura Valley) ----------
+  // Pink petals drift down over the part of town you're looking at, fluttering and
+  // turning as they fall, carried along on a soft breeze. One instanced mesh: one draw.
+  #updatePetals(dt) {
+    if (this.themeName !== 'japan') { if (this.petals) this.petals.mesh.visible = false; return; }
+    if (!this.petals) {
+      const geo = new THREE.CircleGeometry(0.075, 5); geo.scale(1, 0.62, 1);
+      const m = new THREE.MeshStandardMaterial({ color: 0xffd0de, side: THREE.DoubleSide, roughness: 0.8, emissive: 0x3a1020, emissiveIntensity: 0.2 });
+      const N = 260, mesh = new THREE.InstancedMesh(geo, m, N);
+      mesh.frustumCulled = false; mesh.castShadow = false;
+      const list = Array.from({ length: N }, () => ({ x: (Math.random() - 0.5) * 60, y: Math.random() * 14, z: (Math.random() - 0.5) * 60, ph: Math.random() * 6.3, sp: 0.5 + Math.random() * 0.5, spin: (Math.random() - 0.5) * 6 }));
+      const tint = new THREE.Color(), pinks = [0xffd0de, 0xfbb8cc, 0xfff0f4, 0xf7c2d2];
+      list.forEach((_, i) => mesh.setColorAt(i, tint.setHex(pinks[i % 4])));
+      this.scene.add(mesh);
+      this.petals = { mesh, list, m4: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), v: new THREE.Vector3(), sc: new THREE.Vector3(1, 1, 1), t: 0 };
+    }
+    const P = this.petals; P.mesh.visible = !this.launching; P.t += dt;
+    const cx = this.target.x, cz = this.target.z, R = 30, wind = 0.6 + 0.4 * Math.sin(P.t * 0.21);
+    P.list.forEach((p, i) => {
+      p.ph += dt * 2.2;
+      p.y -= p.sp * dt; p.x += (wind + Math.sin(p.ph) * 0.5) * dt; p.z += (wind * 0.6 + Math.cos(p.ph * 0.8) * 0.4) * dt;
+      // keep each petal over the view: wrap round the camera's target
+      let dx = p.x - cx, dz = p.z - cz;
+      if (dx > R) p.x -= 2 * R; else if (dx < -R) p.x += 2 * R;
+      if (dz > R) p.z -= 2 * R; else if (dz < -R) p.z += 2 * R;
+      const ground = 0.16;
+      if (p.y < ground) { p.y = 10 + Math.random() * 5; p.x = cx + (Math.random() - 0.5) * 2 * R; p.z = cz + (Math.random() - 0.5) * 2 * R; }
+      P.e.set(p.ph * 0.7, p.ph * p.spin * 0.1, Math.sin(p.ph) * 1.2); P.q.setFromEuler(P.e);
+      P.m4.compose(P.v.set(p.x, p.y, p.z), P.q, P.sc);
+      P.mesh.setMatrixAt(i, P.m4);
+    });
+    P.mesh.instanceMatrix.needsUpdate = true;
+  }
   // ---------- tumbleweeds (the Mojave) ----------
   // Every so often a tumbleweed blows past outside town: in from off screen on the wind,
   // bouncing and spinning as it rolls, and out the far side. It never crosses the town,
@@ -1867,6 +2007,7 @@ export class World {
     this.#updateLaunch(dt);
     this.#updateLanding(dt);
     this.#updateTumbleweeds(dt);
+    this.#updatePetals(dt);
     // day/night, sun follows the view so shadows stay crisp where you're looking
     this.look.update(dt);
     SHARED.time.value = this.t;

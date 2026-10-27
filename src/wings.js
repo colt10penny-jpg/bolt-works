@@ -10,6 +10,7 @@
 // saw-tooth roof, a hangar, a pair of silos, a switchyard, a server hall, or a plain
 // block. On the Moon every wing is a pressurised module tower instead.
 import * as THREE from 'three';
+import { japanWing } from './japan-upgrades.js';
 import { box, cyl, mat } from './models.js';
 import { styledWing } from './upgrades.js';
 import { falseFront, wWin, porch, balcony, barrel } from './buildings-west.js';
@@ -244,7 +245,7 @@ function westWing(g, { color, tier, cx, cz, floors, i }) {
 }
 
 export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
-  if (kind === 'yard' && theme !== 'desert' && theme !== 'moon') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
+  if (kind === 'yard' && theme !== 'desert' && theme !== 'moon' && theme !== 'japan') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
   const g = new THREE.Group();
   const floors = 2 + Math.floor(Math.min(9, tier) / 3) + (i === 0 ? 1 : 0) + (tier >= 8 ? 1 : 0);
   const o = { color, tier, cx, cz, floors, theme };
@@ -258,6 +259,7 @@ export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
   }
   else if (theme === 'mars') top = marsWing(g, o);
   else if (theme === 'moon') top = lunarWing(kind, g, { ...o, i });
+  else if (theme === 'japan') top = japanWing(kind, g, { ...o, i });
   else if (kind === 'silo') top = siloWing(g, o);
   else if (kind === 'sawtooth') top = sawWing(g, o);
   else if (kind === 'hangar') top = hangarWing(g, o);

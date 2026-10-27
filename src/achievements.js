@@ -26,6 +26,7 @@ export const ACHIEVEMENTS = [
   { id: 'launch1', name: 'Liftoff', desc: 'Launch your first rocket', test: g => g.s.launches >= 1 },
   { id: 'launch5', name: 'Frequent Flyer', desc: 'Launch 5 rockets', test: g => g.s.launches >= 5 },
   { id: 'desert', name: 'Desert Pioneer', desc: `Reach ${WORLDS.find(w => w.id === 'desert').name}`, test: g => !!g.s.worlds.desert },
+  { id: 'japan', name: 'Cherry Blossom Season', desc: `Reach ${WORLDS.find(w => w.id === 'japan').name}`, test: g => !!g.s.worlds.japan },
   { id: 'moon', name: 'One Small Step', desc: `Reach ${WORLDS.find(w => w.id === 'moon').name}`, test: g => !!g.s.worlds.moon },
   { id: 'mars', name: 'Red Planet', desc: `Reach ${WORLDS.find(w => w.id === 'mars').name}`, test: g => !!g.s.worlds.mars },
   { id: 'streak7', name: 'Regular', desc: 'Collect the daily delivery 7 days in a row', test: g => g.s.daily.streak >= 7 },

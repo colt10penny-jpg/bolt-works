@@ -1025,3 +1025,44 @@ Object.assign(BUILDERS, {
     return { group: g, top: 5.8, anim(t) { mast.rotation.y = Math.sin(t * 0.4) * 1.2; } };
   },
 });
+
+// Japan's little kei vehicles, pointing +x: a tiny flat-nosed pickup with a drop-side
+// bed (loaded with crates or straw rice bales when it's a delivery), and a boxy kei van
+export function keiTruck(color, load = false) {
+  const g = new THREE.Group();
+  const W = 0.82, L = 1.75, f = L / 2, r = -L / 2, base = 0.17;
+  g.add(flatBox(L - 0.1, 0.1, W - 0.1, TRIM, 0, base, 0));
+  // the cab: tall and flat-fronted, the wheels right under it
+  g.add(box(0.62, 0.38, W, color, f - 0.31, base + 0.06, 0));
+  g.add(box(0.58, 0.34, W - 0.04, TINT, f - 0.33, base + 0.44, 0, { roughness: 0.12, metalness: 0.7 }));
+  g.add(box(0.56, 0.05, W - 0.02, color, f - 0.34, base + 0.78, 0));
+  for (const sd of [-1, 1]) g.add(flatBox(0.05, 0.32, 0.02, color, f - 0.5, base + 0.45, sd * (W / 2 - 0.01)));
+  g.add(flatBox(0.02, 0.06, W - 0.2, 0xf2f2f2, f + 0.005, base + 0.1, 0));
+  mirrors(g, f - 0.06, base + 0.55, W / 2, TRIM);
+  // the drop-side bed
+  const bl = L - 0.66, bx = r + bl / 2;
+  g.add(flatBox(bl, 0.04, W - 0.02, 0xc9ccd2, bx, base + 0.1, 0));
+  for (const sd of [-1, 1]) g.add(flatBox(bl, 0.16, 0.03, 0xc9ccd2, bx, base + 0.14, sd * (W / 2 - 0.015)));
+  g.add(flatBox(0.03, 0.16, W - 0.02, 0xc9ccd2, r + 0.015, base + 0.14, 0));
+  g.add(flatBox(0.04, 0.32, W - 0.06, 0x8a8f99, r + bl + 0.02, base + 0.14, 0));   // the guard behind the cab
+  if (load) {
+    for (const [x, z] of [[-0.55, -0.18], [-0.55, 0.18], [-0.2, -0.18], [-0.2, 0.18]]) { const b = cyl(0.13, 0.13, 0.3, 0xd8c9a0, x, base + 0.28, z, 8); b.rotation.x = Math.PI / 2; b.position.y = base + 0.28; g.add(b); }
+    g.add(box(0.3, 0.22, 0.32, 0xb98a5a, -0.38, base + 0.41, 0));
+  }
+  lights(g, f + 0.02, r - 0.02, base + 0.16, [-0.28, 0.28], 0.12);
+  for (const x of [f - 0.32, r + 0.32]) for (const z of [-(W / 2 - 0.05), W / 2 - 0.05]) wheel(g, x, z, 0.17, 0.13);
+  return mergeVehicle(g);
+}
+export function keiVan(color) {
+  const g = new THREE.Group();
+  const W = 0.82, L = 1.7, f = L / 2, r = -L / 2, base = 0.17;
+  g.add(box(L, 0.4, W, color, 0, base + 0.04, 0));
+  g.add(box(L - 0.12, 0.34, W - 0.04, TINT, -0.04, base + 0.42, 0, { roughness: 0.12, metalness: 0.7 }));
+  g.add(box(L - 0.14, 0.06, W, 0xf3f0e8, -0.05, base + 0.75, 0));
+  for (const sd of [-1, 1]) for (const x of [f - 0.42, -0.2, r + 0.2]) g.add(flatBox(0.06, 0.32, 0.02, 0xf3f0e8, x, base + 0.44, sd * (W / 2 - 0.01)));
+  g.add(flatBox(L - 0.1, 0.05, 0.012, 0xf3f0e8, 0, base + 0.2, W / 2 + 0.003), flatBox(L - 0.1, 0.05, 0.012, 0xf3f0e8, 0, base + 0.2, -W / 2 - 0.003));
+  mirrors(g, f - 0.06, base + 0.5, W / 2, color);
+  lights(g, f + 0.02, r - 0.02, base + 0.2, [-0.28, 0.28], 0.12);
+  for (const x of [f - 0.3, r + 0.3]) for (const z of [-(W / 2 - 0.05), W / 2 - 0.05]) wheel(g, x, z, 0.17, 0.13);
+  return mergeVehicle(g);
+}

@@ -175,9 +175,38 @@ const STYLES = {
     r.userData.flame.position.y = 0.05; r.add(r.userData.flame);
     return r;
   },
+  // a slim white launcher in the H3 style: a long core, a dark interstage, a big rounded
+  // fairing, two (or four) white solid boosters with pointed noses, a rising-sun roundel
+  h3(color) {
+    const r = new THREE.Group(), W = 0xf6f5f0, K = 0x2a2d33, SIL = 0xc9ced6, metal = { metalness: 0.6, roughness: 0.3 };
+    r.add(cyl(0.55, 0.55, 3.6, W, 0, 0.5, 0, 28));
+    r.add(cyl(0.56, 0.56, 0.18, K, 0, 4.1, 0, 28));
+    r.add(cyl(0.5, 0.55, 0.9, W, 0, 4.28, 0, 28));
+    r.add(cyl(0.56, 0.56, 0.1, color, 0, 2.9, 0, 28));
+    // the fairing: wider than the second stage, a long rounded nose
+    r.add(cyl(0.62, 0.52, 0.25, W, 0, 5.18, 0, 28));
+    r.add(cyl(0.62, 0.62, 0.9, W, 0, 5.43, 0, 28));
+    r.add(ogive(0.62, 6.33, 1.25, W, {}, 0.7));
+    r.add(cyl(0.63, 0.63, 0.05, SIL, 0, 5.9, 0, 28, metal));
+    // the red roundel and a coloured stripe up one side
+    const sun = mesh(new THREE.CircleGeometry(0.2, 20), 0xd9302a); sun.position.set(0, 3.6, 0.556); r.add(sun);
+    r.add(panel(0.558, 1.6, 1.0, color, Math.PI * 0.05, Math.PI * 0.12));
+    for (const [x, z] of [[0.2, 0], [-0.2, 0]]) { const b = bell(0.22, 0.48, 0.5); b.position.set(x, 0, z); r.add(b); }
+    for (const s of [-1, 1]) {
+      const x = s * 0.82;
+      r.add(cyl(0.26, 0.26, 2.4, W, x, 0.5, 0, 18));
+      r.add(cyl(0.27, 0.27, 0.1, K, x, 0.5, 0, 18));
+      const n = ogive(0.26, 2.9, 0.75, W); n.position.x = x; r.add(n);
+      const b = bell(0.18, 0.4, 0.55, K); b.position.x = x; r.add(b);
+      for (const y of [0.9, 2.6]) r.add(box(0.3, 0.07, 0.1, SIL, s * 0.6, y, 0, metal));
+    }
+    r.userData.flame = flames([[0.2, 0, 0.24], [-0.2, 0, 0.24], [0.82, 0, 0.22], [-0.82, 0, 0.22]], 3.4);
+    r.userData.flame.position.y = 0.05; r.add(r.userData.flame);
+    return r;
+  },
 };
 
-const SIZE = { classic: 1.22, retro: 1.2, starship: 1.08, colony: 1.15 };
+const SIZE = { classic: 1.22, retro: 1.2, starship: 1.08, colony: 1.15, h3: 1.18 };
 // wrapped in an outer group: the pad grows the rocket by scaling that group's height
 export function buildRocket(style, color) {
   const inner = (STYLES[style] || STYLES.classic)(color);

@@ -2,6 +2,7 @@
 // way: its own style of extra wing, and its own rooftop and yard gear. The world has ten
 // looks (tiers 0-9); the milestone levels 5, 10, 25, 50, 100 and 250 step through them.
 import * as THREE from 'three';
+import { japanLookText } from './japan-upgrades.js';
 import { box, cyl, mat } from './models.js';
 import { westLookText } from './west-upgrades.js';
 import { moonLookText } from './moon-upgrades.js';
@@ -242,6 +243,7 @@ const WING_NAMES = { brick: 'wing', sawtooth: 'workshop', hangar: 'hangar', silo
 export function lookText(type, level, world) {
   if (world === 'desert') return westLookText(type, level);
   if (world === 'moon') return moonLookText(type, level);
+  if (world === 'japan') return japanLookText(type, level);
   const st = STYLE[type] || STYLE.default, w = WING_NAMES[st.wing];
   // the look changes at the milestone levels
   return { 5: `a new ${w} and ${PROP_NAMES[st.props[0]]}`, 10: `a second ${w} and ${PROP_NAMES[st.props[1]]}`, 25: `a third ${w} and ${PROP_NAMES[st.props[2]]}`,

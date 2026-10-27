@@ -54,6 +54,20 @@ export const SKINS = {
     hq: C('Colony Command', 'managers', 'managers', 0x2fb5a0, 'hqmars', 'A day on Mars, called a sol, lasts 24 hours and 39 minutes.'),
     datacenter: C('Ice Vault Data Center', 'compute', 'PFLOPS', 0x4f7fbf, 'icevault', 'Mars is cold (around -60\u00b0C on average), so a data center there could be cooled for free.'),
   },
+  // Japan: temple workshops under curved grey tile roofs, white plaster and vermilion,
+  // thatched farmhouses and a castle keep, in gardens of cherry trees, pines and koi ponds
+  japan: {
+    mine: C('Iron Sand Pit', 'iron sand', 'sand', 0x3a3a40, 'satetsu', 'Japanese swordsmiths’ steel was made from iron sand (satetsu), washed out of crushed hillsides by channels of running water.'),
+    furnace: C('Tatara Furnace', 'tamahagane steel', 'steel', 0xc8502a, 'tatara', 'A tatara furnace burns for about three days and nights without stopping. Then it is broken open to take out the bloom of steel, and its best part is called tamahagane.'),
+    press: C('Bladesmith Forge', 'katana', 'blades', 0x2f4f7a, 'kajiba', 'A Japanese swordsmith folds the steel over and over while forging, which spreads the carbon evenly and squeezes out bits of slag.'),
+    gear: C('Karakuri Workshop', 'clockwork dolls', 'dolls', 0xc8342a, 'karakuri', 'Karakuri dolls are clockwork robots from the Edo period. The tea-serving doll walks to a guest when a cup is put on its tray and stops when the cup is lifted off.'),
+    engine: C('Bullet Train Works', 'bullet trains', 'trains', 0x1f5fb0, 'shinkansen', 'The first Shinkansen bullet train line opened in 1964, between Tokyo and Osaka, just before the Tokyo Olympics.'),
+    turbine: C('Robot Works', 'robots', 'robots', 0xe8622a, 'robotics', 'Japanese companies build a large share of the world’s industrial robots, the arms that weld, paint and assemble in factories.'),
+    rocket: C('Tanegashima Spaceport', 'rockets', 'rockets', 0xd9302a, 'spaceportjp', 'Tanegashima Space Center, on an island south of Kyushu, is Japan’s largest rocket launch site, with its pads right beside the sea.'),
+    power: C('Water Wheel Mill', 'electricity', 'MW', 0x6b4a30, 'waterwheel', 'For centuries, water wheels powered Japanese mills, lifting heavy wooden pounders to polish rice and grind grain.'),
+    hq: C('Castle Keep', 'managers', 'managers', 0x2a2a2e, 'castle', 'Himeji Castle’s main keep was finished in 1609. Its white plastered walls, which also helped protect it from fire, earned it the name White Heron Castle.'),
+    datacenter: C('Pagoda Data Center', 'compute', 'PFLOPS', 0xd2452c, 'pagoda', 'Tall wooden pagodas in Japan have stood through centuries of earthquakes. Each storey can sway on its own around a central pillar, the shinbashira.'),
+  },
 };
 
 export const CUSTOMERS = {
@@ -92,6 +106,15 @@ export const CUSTOMERS = {
     engine: ['Ice Prospectors', 'Lunar Tour Co.', 'Rim Survey Team'],
     turbine: ['Far Side Observatory', 'Deep Sky Institute', 'Exoplanet Hunters'],
     rocket: ['Mars Colony Fleet', 'Asteroid Miners', 'Outer Planets Mission'],
+  },
+  japan: {
+    mine: ['Village Tatara Guild', 'Mountain Smelters', 'Riverside Ironworks'],
+    furnace: ['Swordsmiths’ Guild', 'Temple Bell Foundry', 'Shipwright Yard'],
+    press: ['Castle Armory', 'Kendo Dojo', 'Imperial Museum'],
+    gear: ['Festival Float Makers', 'Tea House Owners', 'Puppet Theatre'],
+    engine: ['Tokaido Line', 'Hokkaido Express', 'Mountain Railway'],
+    turbine: ['Car Assembly Plant', 'Hospital Helpers', 'Space Robotics Lab'],
+    rocket: ['Space Agency', 'Asteroid Sample Mission', 'Lunar Explorers'],
   },
 };
 

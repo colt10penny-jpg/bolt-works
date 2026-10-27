@@ -174,7 +174,7 @@ export const PRICE_STEP = 0.15;   // no longer used for prices; kept for old imp
 // time, so you can't stock up.
 export const ROCKET_BASE = 1500, ROCKET_GROWTH = 1.9;
 export const rocketNeed = (sent, world) => ROCKET_BASE * (world?.rocketScale || 1) * Math.pow(ROCKET_GROWTH, Math.max(0, sent || 0));
-export const THEMES = ['colorado', 'moon', 'mars', 'desert'];   // the order you reach them
+export const THEMES = ['colorado', 'moon', 'mars', 'desert', 'japan'];   // the order you reach them
 
 // Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
 // no money), and money stays in the world it was made in. Launching a rocket unlocks the
@@ -185,13 +185,14 @@ export const WORLDS = [
   { id: 'moon', name: 'Tranquility Base', short: 'Moon', perk: 'Low gravity: the Rocket Bay builds rockets 2× faster.', perks: { rocket: 2 } },
   { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power.', perks: { power: 3 } },
   { id: 'desert', name: 'Tumbleweed Gulch', short: 'Wild West', perk: 'Prairie wind: the windmills make 3× power.', perks: { power: 3 } },
+  { id: 'japan', name: 'Sakura Valley', short: 'Japan', perk: 'Master craftsmen: the Karakuri Workshop works 2× faster.', perks: { gear: 2 } },
 ];
 // Each world is a bigger job than the last: everything costs more (WORLD_PRICE), its
 // first rocket needs more parts (WORLD_ROCKET; the Moon's rocket bay works twice as
 // fast, so its 2x is really the same as here), and buildings take a little longer to put up.
 // (Before this, a world only cost 15% more than the last, and with the trade bonus and
 // the Moon's fast rocket bay, playtesters got through the Moon faster than the first world.)
-const WORLD_PRICE = [1, 1.4, 2.0, 2.8], WORLD_ROCKET = [1, 2.0, 1.6, 2.0];
+const WORLD_PRICE = [1, 1.4, 2.0, 2.8, 3.9], WORLD_ROCKET = [1, 2.0, 1.6, 2.0, 2.4];
 WORLDS.forEach((w, i) => { w.price = WORLD_PRICE[i] ?? WORLD_PRICE[WORLD_PRICE.length - 1] * Math.pow(1.7, i - WORLD_PRICE.length + 1); w.rocketScale = WORLD_ROCKET[i] ?? 3.2; w.buildScale = 1 + 0.2 * i; });
 // a building's numbers in a given world: every cost scales by the world's price
 export function inWorld(def, world) {
@@ -215,7 +216,7 @@ export const BUILD_SECS = { mine: 8, furnace: 30, hq: 100, press: 150, gear: 270
 export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.buildScale || 1));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 10 : 150;
-export const THEME_NAMES = { colorado: 'Timberline Valley', desert: 'Tumbleweed Gulch', moon: 'Tranquility Base', mars: 'Jezero Colony' };
+export const THEME_NAMES = { colorado: 'Timberline Valley', desert: 'Tumbleweed Gulch', moon: 'Tranquility Base', mars: 'Jezero Colony', japan: 'Sakura Valley' };
 export const themeFor = launches => THEMES[Math.min(launches, THEMES.length - 1)];
 
 // ---- formatting ----

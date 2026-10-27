@@ -100,4 +100,19 @@ export const WORLD_ART = {
       <circle cx="50" cy="22" r="2" fill="#8f3520"/>`,
     landmark: `<path d="M27 47 a4 4 0 0 1 8 0 Z" fill="#9cf08a" opacity=".95"/><path d="M33 47 a2.6 2.6 0 0 1 5.2 0 Z" fill="#7de06a"/><path d="M27 47 a4 4 0 0 1 8 0" stroke="#fff" stroke-width=".7" fill="none"/><rect x="26" y="47" width="13" height=".9" fill="#ddd6c8"/>`,
   }),
+
+  // Japan: green islands in a blue sea, pink cherry-blossom groves, a snowcapped volcano,
+  // and a little vermilion torii gate with a pagoda
+  japan: planet('jp', {
+    base: ['#86cdf0', '#3f92cf', '#1f5c98'], rim: '#d6efff', glow: '#ffd0e0',
+    body: `${speckle(9, '#1a4f8a', 30, 0.2)}
+      <path d="M10 20 Q18 12 30 15 Q40 17 44 25 Q50 31 47 39 Q42 47 32 46 Q22 48 16 41 Q8 34 10 26 Z" fill="#6fb84a"/>
+      <path d="M48 44 Q54 41 57 46 Q54 52 48 50 Z" fill="#6fb84a"/><path d="M50 12 Q55 11 56 15 Q53 18 49 16 Z" fill="#7fc45a"/>
+      <path d="M18 28 L27 16 L36 28 Z" fill="#6f7f96"/><path d="M27 16 L23.5 20.8 L25.5 20 L27 21.2 L28.6 20 L30.5 20.8 Z" fill="#fff"/>
+      <g fill="#f7b8cc"><circle cx="16" cy="34" r="3"/><circle cx="20" cy="37" r="2.6"/><circle cx="40" cy="31" r="2.8"/><circle cx="43" cy="35" r="2.2"/><circle cx="36" cy="41" r="2.4"/></g>
+      <g fill="#f29ab4"><circle cx="17" cy="35" r="1.4"/><circle cx="41" cy="32" r="1.3"/></g>
+      <path d="M4 50 Q16 47 26 51 Q36 54 46 51" stroke="#fff" stroke-opacity=".7" stroke-width="2.2" fill="none" stroke-linecap="round"/>`,
+    landmark: `<rect x="26.6" y="34" width="1.1" height="7" fill="#d2452c"/><rect x="32.3" y="34" width="1.1" height="7" fill="#d2452c"/><path d="M25 33 Q30 32.2 35 33 L35 34 Q30 33.4 25 34 Z" fill="#2a2420"/><rect x="25.8" y="34.6" width="8.4" height=".9" fill="#d2452c"/>
+      <rect x="38" y="35" width="2.6" height="6" fill="#f3eee3"/><path d="M36.6 35.4 L39.3 34 L42 35.4 Z" fill="#5d6574"/><path d="M36.9 37.6 L39.3 36.4 L41.7 37.6 Z" fill="#5d6574"/><path d="M37.2 39.8 L39.3 38.7 L41.4 39.8 Z" fill="#5d6574"/><rect x="39.1" y="32" width=".4" height="2.2" fill="#a8803a"/>`,
+  }),
 };
