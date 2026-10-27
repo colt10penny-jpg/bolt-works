@@ -166,16 +166,14 @@ export function maxAffordable(def, level, cash, cap = LEVEL_CAP - level) {
 // the income of both worlds. A world can trade with every other world you've reached, so
 // the more worlds there are, the more it can earn, but each route adds only a little.
 export const TRADE_STEP = 0.10, TRADE_MAX = 4;
-// Each world costs a little more than the one before (building, upgrading, land, roads
-// and managers), because later worlds have more trade routes to boost their income:
-// 1x, 1.2x, 1.4x, 1.6x... A straight line, so it never runs away however many worlds.
-export const PRICE_STEP = 0.15;
+// (each world's prices: see WORLD_PRICE below)
+export const PRICE_STEP = 0.15;   // no longer used for prices; kept for old imports
 // A launch needs a whole rocket's worth of what the Rocket Bay makes, and every rocket
 // a world sends needs 1.9x more than that world's last one (each world counts its own): 1,500,
 // 2,850, 5,415... Upgrading the bay is how you keep up. It holds one finished rocket at a
 // time, so you can't stock up.
 export const ROCKET_BASE = 1500, ROCKET_GROWTH = 1.9;
-export const rocketNeed = sent => ROCKET_BASE * Math.pow(ROCKET_GROWTH, Math.max(0, sent || 0));
+export const rocketNeed = (sent, world) => ROCKET_BASE * (world?.rocketScale || 1) * Math.pow(ROCKET_GROWTH, Math.max(0, sent || 0));
 export const THEMES = ['colorado', 'moon', 'mars', 'desert'];   // the order you reach them
 
 // Each world is its own town with its own wallet: you start from scratch (an Ore Mine and
@@ -188,7 +186,13 @@ export const WORLDS = [
   { id: 'mars', name: 'Jezero Colony', short: 'Mars', perk: 'Dust storms: the Wind Farm makes 3× power.', perks: { power: 3 } },
   { id: 'desert', name: 'Tumbleweed Gulch', short: 'Wild West', perk: 'Prairie wind: the windmills make 3× power.', perks: { power: 3 } },
 ];
-WORLDS.forEach((w, i) => { w.price = Math.round((1 + PRICE_STEP * i) * 100) / 100; });
+// Each world is a bigger job than the last: everything costs more (WORLD_PRICE), its
+// first rocket needs more parts (WORLD_ROCKET; the Moon's rocket bay works twice as
+// fast, so its 2x is really the same as here), and buildings take a little longer to put up.
+// (Before this, a world only cost 15% more than the last, and with the trade bonus and
+// the Moon's fast rocket bay, playtesters got through the Moon faster than the first world.)
+const WORLD_PRICE = [1, 1.4, 2.0, 2.8], WORLD_ROCKET = [1, 2.0, 1.6, 2.0];
+WORLDS.forEach((w, i) => { w.price = WORLD_PRICE[i] ?? WORLD_PRICE[WORLD_PRICE.length - 1] * Math.pow(1.7, i - WORLD_PRICE.length + 1); w.rocketScale = WORLD_ROCKET[i] ?? 3.2; w.buildScale = 1 + 0.2 * i; });
 // a building's numbers in a given world: every cost scales by the world's price
 export function inWorld(def, world) {
   const p = world?.price || 1;
@@ -205,10 +209,10 @@ export const BIN_SECONDS = 180;   // a factory's storage holds 3 minutes of what
 // Building takes time: a few seconds for the first buildings, longer the further along
 // the chain a building is. Every world builds at the same speed. Upgrades are instant.
 // seconds to put up each building in the first world: 30 seconds for the Steel Furnace,
-// up to 54 minutes for the Rocket Bay. Later worlds take longer by their price (1.2x...).
+// up to 54 minutes for the Rocket Bay. Each later world takes 20% longer (buildScale).
 // (An ad finishes any building straight away.)
 export const BUILD_SECS = { mine: 8, furnace: 30, hq: 100, press: 150, gear: 270, engine: 540, power: 720, datacenter: 1080, turbine: 1620, rocket: 3240 };
-export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.price || 1));
+export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.buildScale || 1));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 10 : 150;
 export const THEME_NAMES = { colorado: 'Timberline Valley', desert: 'Tumbleweed Gulch', moon: 'Tranquility Base', mars: 'Jezero Colony' };

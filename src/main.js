@@ -51,7 +51,7 @@ world.lotsOf = type => game.slotsOf(type).filter(s => game.jobOf(s)?.kind !== 'b
 world.workOf = lot => { const s = slotAt(lot); return s && game.jobOf(s) ? game.jobProgress(s) : null; };
 world.roadInfo = () => ({ good: new Set(Object.keys(game.run.roads)), exits: game.exitsOf(game.s.current), state: k => game.roadState(k) });
 const typeOf = id => game.typeOf(id);
-if (location.search.includes('debug')) Promise.all([import('./traffic.js'), import('three'), import('./models.js')]).then(([m, T, M]) => Object.assign(window, { __game: game, __world: world, __net: m.NET, __tm: m, __THREE: T, __BUILDERS: M.BUILDERS }));
+if (location.search.includes('debug')) Promise.all([import('./traffic.js'), import('three'), import('./models.js'), import('./layout.js')]).then(([m, T, M, Lay]) => Object.assign(window, { __game: game, __world: world, __net: m.NET, __tm: m, __THREE: T, __BUILDERS: M.BUILDERS, __layout: Lay }));
 const idx = id => FACTORIES.findIndex(f => f.id === id);
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 const tint = d => hex([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(d.color) ? 0x8a8f99 : d.color);
@@ -323,7 +323,7 @@ function renderSheet(force = false) {
       const can = game.canLaunch();
       // how rockets get built: parts arrive by truck, the bay puts them together, then you launch
       const prev = def(FACTORIES[idx('rocket') - 1].id), made = game.typeInfo('rocket')?.made || 0;
-      const ready = game.hasRocket(), frac = Math.min(1, game.run.rocketsBuilt || 0), need = rocketNeed(game.run.rocketsSent);
+      const ready = game.hasRocket(), frac = Math.min(1, game.run.rocketsBuilt || 0), need = rocketNeed(game.run.rocketsSent, game.world);
       const eta = made > 0 ? fmtTime((1 - frac) * need / made) : null;
       const how = `<p class="sh-how">Trucks bring <b>${prev.unit}</b> from your ${prev.name}, and this bay turns them into rocket parts. This ${one(d.unit)} needs <b>${fmt(need)} parts</b>. Every ${one(d.unit)} ${game.townName()} sends makes its next one need ${ROCKET_GROWTH}× more, so <b>upgrade this bay</b> to keep up. It holds one at a time.</p>`;
       const prog = ready ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></span><small>${made > 0 ? `${fmt(frac * need)} of ${fmt(need)} parts · ${eta}` : `Waiting for ${prev.unit}`}</small></div>`;
@@ -337,7 +337,7 @@ function renderSheet(force = false) {
   // the headquarters panel scrolls as a whole (its manager list can be long); swipe it
   // down by its top edge to close it
   sheet.classList.toggle('scrolly', id === 'hq' && lv > 0);
-  if (sheet.dataset.for !== key) { sheet.innerHTML = html; sheet.dataset.for = key; sheetKey = html; sheet.scrollTop = 0; }
+  if (sheet.dataset.for !== key) { sheetOpenedAt = performance.now(); sheet.innerHTML = html; sheet.dataset.for = key; sheetKey = html; sheet.scrollTop = 0; }
   else if (force || html !== sheetKey) { const t = document.createElement('div'); t.innerHTML = html; morphKids(sheet, t); sheetKey = html; }
   sheet.hidden = false;
   const h = sheet.offsetHeight, H = window.innerHeight || 1;
@@ -366,8 +366,16 @@ const cashAdAmount = short => Math.max(short * 1.05, game.totalRate() * 60 * GAM
 const cashAdOffered = short => short <= Math.max(game.totalRate() * 600, 100);
 const cashAdButton = short => cashAdOffered(short) ? `<button class="btn gold" data-act="cash-ad" data-short="${Math.ceil(short)}">${AD} Watch ad for $${fmt(cashAdAmount(short))}</button>` : '';
 
+// A tap on a building opens its panel under the finger. Phones send a "click" a moment
+// after the finger lifts, aimed wherever the finger was, which could land on a button in
+// the panel that just opened (on the headquarters that was the "Collect 2x" ad button).
+// So the panel ignores taps for a moment after it opens, and taps on the town never send
+// that late click at all.
+let sheetOpenedAt = 0;
+world.renderer.domElement.addEventListener('touchend', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 sheet.addEventListener('click', async e => {
   if (sheet.dataset.swiped) return;   // that was a swipe, not a tap
+  if (performance.now() - sheetOpenedAt < 450) { e.stopImmediatePropagation(); return; }
   const b = e.target.closest('button');
   if (!b) return;
   const lot = world.selected, id = slotAt(lot);

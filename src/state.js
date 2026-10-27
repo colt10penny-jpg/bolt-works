@@ -549,7 +549,7 @@ export class Game {
         const d = FACTORIES[i];
         const units = p.made * seconds;
         run.made[d.id] = (run.made[d.id] || 0) + units;
-        if (d.id === 'rocket') run.rocketsBuilt = Math.min(1, (run.rocketsBuilt || 0) + units / rocketNeed(run.rocketsSent));   // one finished rocket at a time
+        if (d.id === 'rocket') run.rocketsBuilt = Math.min(1, (run.rocketsBuilt || 0) + units / rocketNeed(run.rocketsSent, worldById(wId)));   // one finished rocket at a time
         const amount = units * d.value * this.tradeMult(wId) * boost;
         // split between the main building and any copies on developed land
         const slots = this.slotsOf(d.id, run);
