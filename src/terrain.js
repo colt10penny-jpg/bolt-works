@@ -1072,6 +1072,84 @@ export function buildRoads(name, T, stateOf) {
       road.add(tipM, boxAt(0.09, 0.08, 0.09, x, 0.4, z));
     }
   }
+  // ---- the Wild West: a dusty, rough-edged main street ----
+  // Not a neat strip of dirt: the ground is mottled and scuffed, drifts of loose sand and
+  // dry weeds creep in from the edges, the wagon ruts wander, stones lie about, and the
+  // boardwalks are separate weathered planks (a few missing or warped) behind a broken,
+  // uneven log edging.
+  const plankM = [0x9a7248, 0x8a6440, 0xa87e52, 0x7e5a38].map(c => withClouds(std(c, { roughness: 0.95 })));
+  const dirtM = [0xcfa874, 0xd9b585, 0xc49c68, 0xe3c290].map(c => withClouds(std(c, { roughness: 1 })));
+  const weedM2 = std(0xa89a5a, { flatShading: true, roughness: 1 }), sageM = std(0x8a9a6a, { flatShading: true, roughness: 1 }), stoneM = std(0xa8977e, { flatShading: true, roughness: 1 });
+  const logM = std(0x5e4630, { roughness: 0.95 });
+  function westStreet(sp, a0, a1, loN, hiN) {
+    const P = (along, across) => sp.along === 'x' ? [along, sp.line + across] : [sp.line + across, along];
+    const blob = (m, along, across, rx, rz, y, rot = r() * 6.3) => {
+      const g = new THREE.CircleGeometry(1, 11); g.rotateX(-Math.PI / 2); g.scale(rx, 1, rz); g.rotateY(rot);
+      const [x, z] = P(along, across); g.translate(x, y, z); road.add(m, g);
+    };
+    const L0 = sp.lo + (loN ? HW : -HW), L1 = sp.hi + (hiN ? -HW : HW);
+    // mottled dirt: big soft patches all over, and sand drifting in at the edges
+    for (let i = L0 + 0.6; i < L1 - 0.4; i += 0.9 + r() * 1.1) {
+      blob(dirtM[Math.floor(r() * 4)], i, (r() - 0.5) * (ROAD_W - 1), 0.5 + r() * 0.9, 0.3 + r() * 0.5, 0.077 + r() * 0.001);
+      for (const sd of [-1, 1]) if (r() < 0.75) blob(dirtM[r() < 0.6 ? 3 : 1], i + r(), sd * (HW - 0.15 - r() * 0.35), 0.45 + r() * 0.8, 0.22 + r() * 0.3, 0.0785, 0);
+    }
+    // wandering wagon ruts, made of short pieces that drift from side to side
+    for (const off of [-1.3, -0.5, 0.5, 1.3]) {
+      const ph = r() * 6.3, amp = 0.08 + r() * 0.08;
+      for (let i = a0 + 0.4; i < a1 - 0.4; i += 0.5) {
+        if (r() < 0.12) continue;   // worn away here and there
+        const w = off + Math.sin(i * 0.7 + ph) * amp;
+        const g = new THREE.PlaneGeometry(0.55, 0.16 + r() * 0.06); g.rotateX(-Math.PI / 2);
+        if (sp.along === 'z') g.rotateY(Math.PI / 2);
+        const [x, z] = P(i, w); g.translate(x, 0.0795, z); road.add(rutM, g);
+      }
+    }
+    // stones, dry weeds and the odd sagebrush, mostly near the edges
+    for (let i = a0 + 0.5; i < a1 - 0.5; i += 0.5 + r() * 0.9) {
+      const sd = r() < 0.5 ? -1 : 1, edge = r() < 0.7;
+      const acr = edge ? sd * (HW - 0.12 - r() * 0.4) : (r() - 0.5) * (ROAD_W - 1);
+      const k = r();
+      if (k < 0.45) { const g = new THREE.IcosahedronGeometry(0.05 + r() * 0.1, 0); g.scale(1, 0.55, 1.2); const [x, z] = P(i, acr); g.translate(x, 0.085, z); road.add(stoneM, g); }
+      else if (edge && k < 0.85) {
+        for (let b = 0; b < 4; b++) { const g = new THREE.ConeGeometry(0.03, 0.22 + r() * 0.16, 3, 1, true); g.rotateZ((r() - 0.5) * 0.7); g.rotateX((r() - 0.5) * 0.7); const [x, z] = P(i + (r() - 0.5) * 0.2, acr + (r() - 0.5) * 0.15); g.translate(x, 0.18, z); road.add(weedM2, g); }
+      } else if (edge) { const g = new THREE.IcosahedronGeometry(0.16 + r() * 0.1, 0); g.scale(1.2, 0.7, 1); const [x, z] = P(i, sd * (HW - 0.25)); g.translate(x, 0.15, z); road.add(sageM, g); }
+    }
+    // the boardwalks: separate weathered planks laid across, uneven, some missing
+    for (const side of [-1, 1]) {
+      const mid = side * (HW + SW / 2);
+      // the dirt and the joist under the planks (seen through the gaps)
+      { const g = new THREE.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2); g.scale(sp.along === 'x' ? a1 - a0 : SW, 1, sp.along === 'x' ? SW : a1 - a0); const [x, z] = P((a0 + a1) / 2, mid); g.translate(x, 0.065, z); road.add(dirtM[2], g); }
+      for (const j of [-0.22, 0.22]) { const [x, z] = P((a0 + a1) / 2, mid + j); road.add(logM, sp.along === 'x' ? boxAt(a1 - a0, 0.06, 0.08, x, 0.02, z) : boxAt(0.08, 0.06, a1 - a0, x, 0.02, z)); }
+      for (let i = a0 + 0.17; i < a1 - 0.1; i += 0.34) {
+        if (r() < 0.06) continue;                                   // a missing plank
+        const lenP = SW - 0.02 - r() * 0.22, h = 0.1 + r() * 0.035, sh = (r() - 0.5) * (SW - lenP);
+        const g = sp.along === 'x' ? new THREE.BoxGeometry(0.3, h, lenP) : new THREE.BoxGeometry(lenP, h, 0.3);
+        if (r() < 0.15) { if (sp.along === 'x') g.rotateZ((r() - 0.5) * 0.12); else g.rotateX((r() - 0.5) * 0.12); }   // warped
+        const [x, z] = P(i, mid + sh); g.translate(x, 0.04 + h / 2, z); road.add(plankM[Math.floor(r() * 4)], g);
+      }
+      // a broken log edging along the street: lengths of log, gaps, not quite straight
+      for (let i = a0; i < a1 - 0.2;) {
+        const len = Math.min(a1 - i, 0.7 + r() * 1.3);
+        if (r() < 0.82) {
+          const g = new THREE.CylinderGeometry(0.06 + r() * 0.02, 0.07, len - 0.08, 6); g.rotateZ(Math.PI / 2); if (sp.along === 'z') g.rotateY(Math.PI / 2);
+          g.rotateY((r() - 0.5) * 0.08);
+          const [x, z] = P(i + len / 2, side * (HW + 0.06 + (r() - 0.5) * 0.05)); g.translate(x, 0.1 + (r() - 0.5) * 0.03, z); road.add(logM, g);
+        }
+        i += len;
+      }
+    }
+  }
+  // a patch of boardwalk planks over a w x d area (planks run along z when `alongZ`)
+  function westPlanks(cx, cz, w, d, alongZ) {
+    const len = alongZ ? w : d, span2 = alongZ ? d : w;
+    for (let i = -len / 2 + 0.17; i < len / 2 - 0.1; i += 0.34) {
+      if (r() < 0.05) continue;
+      const lp = span2 - 0.02 - r() * 0.18, h = 0.1 + r() * 0.035, sh = (r() - 0.5) * (span2 - lp);
+      const g = alongZ ? new THREE.BoxGeometry(0.3, h, lp) : new THREE.BoxGeometry(lp, h, 0.3);
+      g.translate(cx + (alongZ ? i : sh), 0.04 + h / 2, cz + (alongZ ? sh : i)); road.add(plankM[Math.floor(r() * 4)], g);
+    }
+    const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); g.translate(cx, 0.065, cz); road.add(dirtM[2], g);
+  }
   // in good repair
   for (const sg of good) {
     const sp = span(sg);
@@ -1080,7 +1158,8 @@ export function buildRoads(name, T, stateOf) {
     strip(asphaltM, sp, sp.lo + (loN ? HW : -HW), sp.hi + (hiN ? -HW : HW), 0.075);
     const lo = sp.lo + HW, hi = sp.hi - (sg.exit ? 0 : HW);
     const a0 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.lo : lo, a1 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.hi - HW : hi;
-    for (const side of [-1, 1]) {
+    if (west) westStreet(sp, a0, a1, loN, hiN);
+    else for (const side of [-1, 1]) {
       if (sp.along === 'x') {
         road.add(walkM, boxAt(a1 - a0, 0.14, SW, (a0 + a1) / 2, 0, sp.line + side * (HW + SW / 2)));
         road.add(curbM, boxAt(a1 - a0, 0.16, 0.12, (a0 + a1) / 2, 0, sp.line + side * (HW + 0.06)));
@@ -1089,18 +1168,7 @@ export function buildRoads(name, T, stateOf) {
         road.add(curbM, boxAt(0.12, 0.16, a1 - a0, sp.line + side * (HW + 0.06), 0, (a0 + a1) / 2));
       }
     }
-    if (west) {
-      // wagon-wheel ruts worn into the dirt, a hoofprint-scuffed middle, and the gaps
-      // between the boardwalk planks
-      for (const off of [-1.35, -0.45, 0.45, 1.35]) strip(rutM, { ...sp, line: sp.line + off }, a0 + 0.4, a1 - 0.4, 0.078 + Math.abs(off) * 0.0005, 0.2);
-      for (let i = a0 + 0.2; i < a1; i += 0.36) for (const side of [-1, 1])
-        road.add(seamM, sp.along === 'x' ? boxAt(0.035, 0.006, SW - 0.04, i, 0.14, sp.line + side * (HW + SW / 2)) : boxAt(SW - 0.04, 0.006, 0.035, sp.line + side * (HW + SW / 2), 0.14, i));
-      for (let i = a0 + 1; i < a1 - 1; i += 1.4 + r() * 2) {
-        const g = new THREE.IcosahedronGeometry(0.06 + r() * 0.08, 0); g.scale(1, 0.5, 1);
-        const off = (r() - 0.5) * (ROAD_W - 0.8);
-        g.translate(sp.along === 'x' ? i : sp.line + off, 0.08, sp.along === 'x' ? sp.line + off : i); road.add(rutM, g);
-      }
-    } else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
+    if (west) {} else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
       road.add(edgeM, sp.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, sp.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, sp.line + sd * (HW - 0.12), 0.075, i));
     else for (let i = a0 + STOP_R - 1.4; i < a1 - STOP_R + 1.8; i += 2.4)
       road.add(paintM, sp.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.08, sp.line) : boxAt(0.14, 0.02, 1.1, sp.line, 0.08, i));
@@ -1120,12 +1188,13 @@ export function buildRoads(name, T, stateOf) {
       road.add(walkM, arcBand(cx, cz, ROAD_W, ROAD_W + SW, mid - Math.PI / 4, mid + Math.PI / 4, 0.14));
       road.add(curbM, arcBand(cx, cz, ROAD_W - 0.01, ROAD_W + 0.12, mid - Math.PI / 4, mid + Math.PI / 4, 0.16));
     }
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (!rc || sx !== rc.sx || sz !== rc.sz) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (!rc || sx !== rc.sx || sz !== rc.sz) { if (west) westPlanks(x + sx * (HW + SW / 2), z + sz * (HW + SW / 2), SW, SW, true); else road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2))); }
     const ways = DIRS.filter(([hx, hz]) => hasRoad(x, z, { x: hx, z: hz }));
     for (const [hx, hz] of DIRS) {
       if (!ways.some(([a, b]) => a === hx && b === hz)) {
         if (rc) continue;   // the curve takes the place of the closed sides
-        if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z)); }
+        if (west) { if (hx) { westPlanks(x + hx * (HW + SW / 2), z, SW, ROAD_W, false); road.add(logM, boxAt(0.12, 0.16, ROAD_W - 0.3, x + hx * (HW + 0.06), 0, z)); } else { westPlanks(x, z + hz * (HW + SW / 2), ROAD_W, SW, true); road.add(logM, boxAt(ROAD_W - 0.3, 0.16, 0.12, x, 0, z + hz * (HW + 0.06))); } }
+        else if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z)); }
         else { road.add(walkM, boxAt(ROAD_W, 0.14, SW, x, 0, z + hz * (HW + SW / 2))); road.add(curbM, boxAt(ROAD_W, 0.16, 0.12, x, 0, z + hz * (HW + 0.06))); }
         continue;
       }
