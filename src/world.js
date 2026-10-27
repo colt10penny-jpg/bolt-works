@@ -299,8 +299,15 @@ export class World {
     this.#roads();
     this.scene.fog.near = name === 'moon' ? 260 : name === 'mars' ? 210 : 165; this.scene.fog.far = name === 'moon' ? 600 : name === 'mars' ? 540 : 430;
     if (!this.padMats) this.padMats = {};
-    if (!this.padMats[name]) this.padMats[name] = withClouds(new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
-    for (const L of Object.values(this.lots)) L.pad.material = this.padMats[name];
+    const dusty = name === 'desert';
+    if (!this.padMats[name]) this.padMats[name] = withClouds(dusty
+      ? new THREE.MeshStandardMaterial({ color: 0xd7b688, map: this.#dustTex(), alphaMap: this.#dustAlpha(), transparent: true, depthWrite: false, roughness: 1 })
+      : new THREE.MeshStandardMaterial({ color: T.pad, map: this.#padTex(), roughness: 0.88 }));
+    // in the old west a lot is just trodden ground: flat, and fading into the sand round it
+    for (const L of Object.values(this.lots)) { L.pad.material = this.padMats[name]; L.pad.userData.box ||= L.pad.geometry;
+      if (dusty) { this.dustPlane ||= new THREE.PlaneGeometry(LOT + 1.6, LOT + 1.6).rotateX(-Math.PI / 2).translate(0, 0.07, 0); L.pad.geometry = this.dustPlane; }
+      else L.pad.geometry = L.pad.userData.box;
+      L.pad.renderOrder = dusty ? -2 : 0; }
     for (const L of Object.values(this.lots)) this.#wild(L, name);
     this.#respawnAmbient();
     this.look.groundBase = new THREE.Color(T.ground);
@@ -390,6 +397,39 @@ export class World {
     L.sale.visible = developed && !L.model;
   }
 
+  // trodden dirt: blotchy, scuffed, no seams
+  #dustTex() {
+    if (this.dustTex) return this.dustTex;
+    const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ececec'; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 60; i++) {
+      const x = Math.random() * N, y = Math.random() * N, r = 10 + Math.random() * 40, v = 200 + Math.random() * 55;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${v},${v - 8},${v - 18},0.5)`); gr.addColorStop(1, `rgba(${v},${v - 8},${v - 18},0)`);
+      g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r);
+    }
+    for (let i = 0; i < 3000; i++) { const v = 190 + Math.random() * 60; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * N, Math.random() * N, 1.5, 1.5); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return (this.dustTex = t);
+  }
+  // full in the middle, fading out over the outer part with a ragged, uneven edge
+  #dustAlpha() {
+    if (this.dustAlpha) return this.dustAlpha;
+    const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d'), img = g.createImageData(N, N);
+    const rnd = (() => { let a = 7; return () => ((a = (a * 16807) % 2147483647) / 2147483647); })();
+    const bumps = Array.from({ length: 40 }, () => [rnd() * N, rnd() * N, 14 + rnd() * 30, (rnd() - 0.5) * 0.35]);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const u = Math.abs(x / N * 2 - 1), v = Math.abs(y / N * 2 - 1);
+      let d = Math.pow(Math.pow(u, 6) + Math.pow(v, 6), 1 / 6);   // a rounded square
+      for (const [bx, by, br, bs] of bumps) { const q = ((x - bx) ** 2 + (y - by) ** 2) / (br * br); if (q < 1) d += bs * (1 - q); }
+      const a = Math.max(0, Math.min(1, (0.97 - d) / 0.3));
+      const i = (y * N + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * a * a * (3 - 2 * a)); img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace;
+    return (this.dustAlpha = t);
+  }
   #padTex() {
     if (this.padTex) return this.padTex;
     const c = document.createElement('canvas'); c.width = c.height = 256;
@@ -652,7 +692,8 @@ export class World {
     // free corners: an extra wing for each upgrade tier, parked cars in the rest
     let corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8));
-    if (west) {
+    const cored = west || (this.themeName === 'mars' && m.group.children.some(o => o.userData.core));
+    if (cored) {
       // On the frontier the barrels, horses and hay round the main building only hold a
       // corner until something better comes along: a corner is free as long as the main
       // building itself hardly stands in it (sampled on a grid, ignoring low things like
@@ -669,7 +710,7 @@ export class World {
       corners.sort((a, b) => (b[0] + b[1]) - (a[0] + a[1]));
     } else corners = corners.filter(([cx, cz]) => { const hit = topAt(lx + cx, lz + cz); return !(hit && hit.point.y > 0.6); });
     const clearCorner = ([cx, cz]) => {
-      if (!west) return;
+      if (!cored) return;
       for (const o of [...m.group.children]) if (!o.userData.core && Math.abs(o.position.x - cx) < 1.45 && Math.abs(o.position.z - cz) < 1.45) m.group.remove(o);
     };
     const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
@@ -708,11 +749,36 @@ export class World {
     } else if (tier <= 1 && this.themeName === 'mars') {
       // an early colony yard: supply canisters off the last ship, striped cargo crates and
       // a cracked spare wheel, with drifts of red dust
-      for (const [cx, cz] of corners.slice(wings, wings + 2)) {
-        for (let k = 0; k < 3; k++) { const can = cyl(0.24, 0.24, 0.9, k === 1 ? 0xff8a3a : 0xddd6c8, cx - 0.45 + 0.3 * k, 0.15 + 0.24 - 0.45, cz + 0.5 * (k % 2), 14).rotateZ(Math.PI / 2); ex.add(can); }
-        for (let k = 0; k < 3; k++) { ex.add(box(0.55, 0.45, 0.55, 0x666a72, cx + 0.5, 0.15 + (k === 2 ? 0.45 : 0), cz - 0.75 + (k === 1 ? 0.6 : 0))); ex.add(box(0.57, 0.08, 0.57, 0xff8a3a, cx + 0.5, 0.15 + (k === 2 ? 0.45 : 0) + 0.3, cz - 0.75 + (k === 1 ? 0.6 : 0))); }
-        const tyre = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.12, 6, 14), mat(0x2a2d33)); tyre.rotation.set(1.2, 0.3, 0); tyre.position.set(cx - 0.7, 0.3, cz - 0.8); ex.add(tyre);
-      }
+      // (each corner picks its own: no two lots alike)
+      const yard = [
+        (ex, cx, cz) => {   // supply canisters, striped crates and a cracked spare wheel
+          for (let k = 0; k < 3; k++) { const can = cyl(0.24, 0.24, 0.9, k === 1 ? 0xff8a3a : 0xddd6c8, cx - 0.45 + 0.3 * k, 0.15 + 0.24 - 0.45, cz + 0.5 * (k % 2), 14).rotateZ(Math.PI / 2); ex.add(can); }
+          for (let k = 0; k < 3; k++) { ex.add(box(0.55, 0.45, 0.55, 0x666a72, cx + 0.5, 0.15 + (k === 2 ? 0.45 : 0), cz - 0.75 + (k === 1 ? 0.6 : 0))); ex.add(box(0.57, 0.08, 0.57, 0xff8a3a, cx + 0.5, 0.15 + (k === 2 ? 0.45 : 0) + 0.3, cz - 0.75 + (k === 1 ? 0.6 : 0))); }
+          const tyre = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.12, 6, 14), mat(0x2a2d33)); tyre.rotation.set(1.2, 0.3, 0); tyre.position.set(cx - 0.7, 0.3, cz - 0.8); ex.add(tyre);
+        },
+        (ex, cx, cz) => {   // a pair of fold-out solar panels charging a battery box
+          for (const dx of [-0.55, 0.55]) { ex.add(box(0.07, 0.55, 0.07, 0x3a3d44, cx + dx, 0.15, cz)); const p = box(0.95, 0.05, 0.75, 0x1d3550, cx + dx, 0.68, cz, { roughness: 0.25, metalness: 0.5 }); p.rotation.x = -0.5; ex.add(p); }
+          ex.add(box(0.5, 0.35, 0.35, 0xddd6c8, cx, 0.15, cz + 0.75), box(0.3, 0.06, 0.02, 0x6fe8ff, cx, 0.35, cz + 0.93, { emissive: 0x6fe8ff, night: 2 }));
+        },
+        (ex, cx, cz) => {   // a little survey rover parked up, its mast camera up
+          ex.add(box(0.95, 0.32, 0.6, 0xe8e4dc, cx, 0.42, cz), box(0.97, 0.06, 0.62, 0xff8a3a, cx, 0.6, cz));
+          for (const [dx, dz] of [[-0.35, -0.36], [0.35, -0.36], [-0.35, 0.36], [0.35, 0.36]]) ex.add(cyl(0.16, 0.16, 0.12, 0x2a2d33, cx + dx, 0.31 - 0.06, cz + dz, 10).rotateX(Math.PI / 2));
+          ex.add(box(0.05, 0.5, 0.05, 0xb9b4a8, cx + 0.3, 0.66, cz - 0.15), box(0.2, 0.12, 0.12, 0x3a3d44, cx + 0.3, 1.16, cz - 0.15));
+          const pan = box(0.7, 0.03, 0.5, 0x1d3550, cx - 0.15, 0.68, cz, { roughness: 0.25, metalness: 0.5 }); ex.add(pan);
+        },
+        (ex, cx, cz) => {   // cut ice blocks and a rack of cryo bottles
+          for (const [dx, y, dz] of [[-0.4, 0, -0.3], [0.1, 0, -0.35], [-0.15, 0.4, -0.3], [0.5, 0, 0.3]]) ex.add(box(0.42, 0.4, 0.42, 0xd2f0fa, cx + dx, 0.15 + y, cz + dz, { roughness: 0.15, transparent: true, opacity: 0.9 }));
+          ex.add(box(0.9, 0.08, 0.35, 0x3a3d44, cx - 0.2, 0.15, cz + 0.65));
+          for (let k = 0; k < 4; k++) ex.add(cyl(0.1, 0.1, 0.65, k % 2 ? 0x6fc3e0 : 0xeef1f4, cx - 0.5 + k * 0.2, 0.23, cz + 0.65, 10));
+        },
+        (ex, cx, cz) => {   // a tripod antenna and a cable drum
+          for (let k = 0; k < 3; k++) { const a = k * 2.094; const l = box(0.04, 1.1, 0.04, 0xb9b4a8, cx + Math.cos(a) * 0.25, 0.15, cz + Math.sin(a) * 0.25); l.rotation.set(Math.sin(a) * 0.2, 0, -Math.cos(a) * 0.2); ex.add(l); }
+          const dish = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2.6), mat(0xe8e4dc, { side: THREE.DoubleSide })); dish.rotation.x = 2.3; dish.position.set(cx, 1.35, cz); ex.add(dish);
+          const drum = cyl(0.35, 0.35, 0.4, 0xff8a3a, cx + 0.7, 0.5, cz + 0.4, 14); drum.rotation.x = Math.PI / 2; drum.position.y = 0.5; ex.add(drum);
+          ex.add(cyl(0.22, 0.22, 0.42, 0x2a2d33, cx + 0.7, 0.5, cz + 0.4, 14).rotateX(Math.PI / 2));
+        },
+      ];
+      for (const [cx, cz] of corners.slice(wings, wings + 2)) yard[Math.floor(rnd() * yard.length)](ex, cx, cz);
       const dustM = this.dustM ||= new THREE.MeshBasicMaterial({ color: 0xa8482a, transparent: true, opacity: 0.45, depthWrite: false });
       for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.6, 10), dustM); st.rotation.x = -Math.PI / 2; st.scale.set(1.8, 1, 0.8); st.position.set((rnd() - 0.5) * 7, 0.165, (rnd() - 0.5) * 7); ex.add(st); }
     } else if (tier <= 1) {
@@ -807,7 +873,8 @@ export class World {
     if (!this.padLooks.has(key)) {
       const m = base.clone(); m.userData = { ...base.userData };
       if (base.onBeforeCompile) m.onBeforeCompile = base.onBeforeCompile;
-      if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.45); m.roughness = 1; }
+      if (this.themeName === 'desert') { if (tier <= 1) m.color.lerp(new THREE.Color(0xb08a5e), 0.25); else if (tier >= 7) m.color.lerp(new THREE.Color(0xf0dcb8), 0.3); }
+      else if (tier <= 1) { m.color.lerp(new THREE.Color(0x8f8068), 0.45); m.roughness = 1; }
       else if (tier <= 3) m.color.lerp(new THREE.Color(0xa89c86), 0.2);
       else if (tier >= 7) { m.color.lerp(new THREE.Color(0xffffff), 0.35); m.roughness = 0.6; }
       this.padLooks.set(key, m);

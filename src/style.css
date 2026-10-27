@@ -563,3 +563,7 @@ body.tutorial .toast { bottom: calc(var(--sa-b, 0px) + 110px); }
 #sheet .sh-mgr { margin-top: 2px; }
 /* fill the panel's height: its parts spread out evenly instead of bunching at the top */
 #sheet { justify-content: space-evenly; }
+/* ---- v11: long building names and stats wrap instead of being cut off ---- */
+#sheet .sh-name-row { flex-wrap: wrap; row-gap: 2px; }
+#sheet .sh-title b { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.12; overflow-wrap: anywhere; }
+#sheet .sh-title small { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
