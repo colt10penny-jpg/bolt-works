@@ -584,7 +584,7 @@ contractEl.addEventListener('click', () => {
     openModal(`
       <div class="big-icon">${ICON.clip}</div>
       <h2>Order filled!</h2>
-      <p>${c.customer} got their ${fmt(c.target)} ${c.unit}.</p>
+      <p>${c.customer} got their ${fmt(c.target)} ${c.unit}.${c.early >= 0.01 ? ` Early delivery bonus: <b>+${Math.round(c.early * 100)}%</b>!` : ''}</p>
       <div class="big-num">$${fmt(c.reward)}</div>
       <button class="btn gold" data-act="c2">${AD} Collect 2× · $${fmt(c.reward * 2)}</button>
       <button class="btn plain" data-act="c1">Collect $${fmt(c.reward)}</button>`, async act => {
@@ -602,12 +602,12 @@ contractEl.addEventListener('click', () => {
   openModal(`
     <div class="big-icon">${ICON.clip}</div>
     <h2>${c.customer}</h2>
-    <p>Wants <b>${fmt(c.target)} ${c.unit}</b> in ${c.minutes} minutes. Pays <b>$${fmt(c.reward)}</b>.</p>
+    <p>Wants <b>${fmt(c.target)} ${c.unit}</b> in ${c.minutes} minutes. Pays <b>$${fmt(c.base || c.reward)}</b>, and up to <b>double</b> if you deliver early.</p>
     <div class="stats">
       <div class="stat"><small>You make</small><b>${fmtRate(rate)}/s</b></div>
       <div class="stat"><small>On pace needs</small><b><em>${fmtRate(needRate)}/s</em></b></div>
     </div>
-    <p>${rate >= needRate ? 'You’re on pace. Nice.' : `Upgrade your ${d.name} (and its suppliers) to finish in time.`} Time left: <b>${fmtTime(left)}</b></p>
+    <p>${rate >= needRate ? `You’re on pace. Upgrade your ${d.name} to deliver sooner for a bigger bonus.` : `Upgrade your ${d.name} (and its suppliers) to finish in time.`} Time left: <b>${fmtTime(left)}</b>${c.base ? ` · Bonus now: <b>+${Math.round(Math.max(0, Math.min(1, left / (c.minutes * 60))) * 100)}%</b>` : ''}</p>
     <button class="btn green" data-act="goto">Go to ${d.name}</button>
     <button class="btn plain" data-act="dismiss">Close</button>`, act => {
     if (act === 'goto' && lotOf(c.id)) { world.select(lotOf(c.id)); world.focus(lotOf(c.id)); }

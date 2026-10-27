@@ -752,7 +752,12 @@ export class Game {
     if (c.status !== 'active') return;
     const p = this.typeInfo(c.id);
     c.progress = Math.min(c.target, c.progress + (p ? p.made * dt : 0));
-    if (c.progress >= c.target) { c.status = 'done'; this.emit('contract', c); }
+    if (c.progress >= c.target) {
+      // the early-delivery bonus: the share of the time still left, up to double the pay
+      c.early = c.base ? Math.max(0, Math.min(1, (c.endsAt - now) / (c.minutes * 60_000))) : 0;
+      if (c.base) c.reward = c.base * (1 + c.early);
+      c.status = 'done'; this.emit('contract', c);
+    }
     else if (now >= c.endsAt) { c.status = 'failed'; this.emit('contract', c); }
   }
 
@@ -761,15 +766,21 @@ export class Game {
     if (!builtIds.length) { this.s.nextContractAt = Date.now() + 30_000; return; }
     const pick = builtIds[Math.max(0, builtIds.length - 1 - Math.floor(Math.random() * Math.min(2, builtIds.length)))];
     const d = FACTORIES.find(f => f.id === pick);
+    // An order is always something you can fill at the speed you have now (about half to
+    // four fifths of what this factory makes in the time), so there's never a reason to hold
+    // back upgrades until one comes along. What it pays depends on how big your whole town's
+    // income is when it arrives (so getting ahead pays), and delivering early adds a bonus
+    // of up to 100% (so upgrading while it runs pays too).
     const minutes = [5, 8, 10, 15][Math.floor(Math.random() * 4)];
     const rate = this.typeInfo(pick).made;
-    const stretch = 1.15 + Math.random() * 0.6;
-    const target = Math.max(5, Math.ceil(rate * minutes * 60 * stretch / 5) * 5);
-    const reward = Math.max(50, target * d.value * this.tradeMult() * 2.5);
+    const share = 0.55 + Math.random() * 0.3;
+    const target = Math.max(5, Math.floor(rate * minutes * 60 * share / 5) * 5);
+    const base = Math.max(50, this.totalRate() * minutes * 60 * 1.5);   // one and a half times what the town makes in the time
+    const reward = base;
     const list = (CUSTOMERS[this.s.current] || CUSTOMERS.colorado)[pick];
     this.s.contract = {
       id: pick, unit: this.unitOf ? this.unitOf(pick) : d.unit, customer: list[Math.floor(Math.random() * list.length)],
-      target, progress: 0, reward, minutes, startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, status: 'active',
+      target, progress: 0, base, reward, minutes, startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, status: 'active',
     };
     this.emit('contract', this.s.contract);
   }
