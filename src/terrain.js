@@ -124,7 +124,28 @@ function textures() {
       d[i] = on ? 255 : 40; d[i + 1] = on ? 150 : 36; d[i + 2] = on ? 60 : 34; d[i + 3] = 255;
     }
   });
-  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard };
+  // the Moon: hexagonal tiles of sintered regolith, each a slightly different grey, with
+  // dark seams (3 columns by 5 rows of hexes repeat across the texture)
+  const hex = (() => {
+    const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d');
+    g.fillStyle = '#8a8a8e'; g.fillRect(0, 0, N, N);
+    const sz = N / 9, fy = N / (5 * Math.sqrt(3) * sz);
+    for (let col = -1; col <= 6; col++) for (let row = -1; row <= 6; row++) {
+      const cx = 1.5 * sz * col, cy = (Math.sqrt(3) * sz * (row + 0.5 * (((col % 2) + 2) % 2))) * fy;
+      const v = 212 + Math.floor(hash(((col % 6) + 6) % 6, ((row % 5) + 5) % 5, 17) * 30);
+      g.fillStyle = `rgb(${v},${v},${v + 3})`;
+      g.beginPath();
+      for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; const x = cx + Math.cos(a) * (sz - 1.4), y = cy + Math.sin(a) * (sz - 1.4) * fy; k ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.closePath(); g.fill();
+    }
+    const img = g.getImageData(0, 0, N, N), d = img.data;
+    for (let i = 0; i < N * N; i++) { const n = (hash(i % N, Math.floor(i / N), 23) - 0.5) * 22; for (let k = 0; k < 3; k++) d[i * 4 + k] = Math.max(0, Math.min(255, d[i * 4 + k] + n)); }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  })();
+  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex };
   SHARED.cloudTex.value = cloud;
   return TEX;
 }
@@ -709,8 +730,18 @@ export function buildLand(name, T, blocks) {
     place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 1.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180, tiny: true });
     place(140, (r, h) => S.boulder(r, h, 0x7d7d84), { pad: 7, blob: 0.6 });
-    place(40, S.antenna, { pad: 1, span: 160, blob: 0.6 });
-    place(24, S.solarArray, { pad: 2, span: 180, blob: 0 });
+    place(30, S.antenna, { pad: 1, span: 160, blob: 0.6 });
+    // the moonbase spreading out round the town: solar fields, outpost domes, comms
+    // masts, landing pads, old landers with their flags, and a mass driver on the plain
+    const flatL = (lim = 1.2) => (x, z) => Math.abs(H(x + 2, z) - H(x - 2, z)) + Math.abs(H(x, z + 2) - H(x, z - 2)) < lim;
+    const ring = (lo, hi, lim = 1.2) => (x, z) => townDist(x, z) > lo && townDist(x, z) < hi && flatL(lim)(x, z);
+    place(22, S.solarArray, { pad: 3, span: 170, where: ring(5, 70, 1.0), blob: 0 });
+    place(9, S.outpost, { pad: 3, span: 170, where: ring(8, 70), blob: 1 });
+    place(10, S.commsMast, { pad: 2, span: 170, where: ring(5, 75, 1.6), blob: 0.6 });
+    place(5, S.landingPad, { pad: 3, span: 150, where: ring(8, 60, 0.8), blob: 0 });
+    place(5, S.lander, { pad: 3, span: 150, where: ring(10, 70, 1.2), blob: 0.8 });
+    place(12, S.flag, { pad: 1, span: 140, where: ring(4, 60, 1.5), blob: 0 });
+    place(1, S.massDriver, { pad: 16, span: 160, where: ring(25, 75, 0.7), blob: 0 });
   }
   // boulders fallen from the cliffs round the foot of each mesa, and a few left on top
   if (name === 'desert' || name === 'mars') {
@@ -1022,12 +1053,30 @@ function sceneryKit() {
       dish.rotation.x = 2.2; g.add(dish);
       return g;
     },
-    solarArray(r) {
-      const g = new THREE.Group(), pm = m(0x2a4f8f, { roughness: 0.25, metalness: 0.5, flatShading: false }), fm = m(0xcfd3da);
-      for (let i = 0; i < 4; i++) {
-        g.add(mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), fm, i * 1.6 - 2.4, 0.45, 0));
-        const p = mesh(new THREE.BoxGeometry(1.5, 0.06, 1.1), pm, i * 1.6 - 2.4, 0.95, 0); p.rotation.x = -0.5; g.add(p);
+    // a mass driver: a long launch rail on pylons, with magnet rings glowing along it,
+    // that flings cargo off the Moon
+    massDriver(r) {
+      const g = new THREE.Group(), len = 26, rm = m(0xcfd3da, { metalness: 0.5, roughness: 0.4 }), pm = m(0x5b5f66);
+      const ringM = std(0x9fe8ff, { emissive: 0x4fb8ff, emissiveIntensity: 1.1 });
+      for (let i = 0; i <= 8; i++) {
+        const x = -len / 2 + i * len / 8, h = 0.6 + i * 0.35;
+        g.add(mesh(new THREE.BoxGeometry(0.25, h, 0.6), pm, x, h / 2, 0));
+        const ring = mesh(new THREE.TorusGeometry(0.45, 0.08, 6, 14), ringM, x, h + 0.25, 0); ring.rotation.y = Math.PI / 2; g.add(ring);
       }
+      const rail = mesh(new THREE.BoxGeometry(len, 0.12, 0.3), rm, 0, 0, 0);
+      rail.rotation.z = Math.atan2(8 * 0.35, len); rail.position.set(0, 0.6 + 4 * 0.35 + 0.1, 0); g.add(rail);
+      g.add(mesh(new THREE.BoxGeometry(2.2, 1.2, 1.6), m(0xeef0f3), -len / 2 - 1, 0.6, 0));
+      g.add(mesh(new THREE.BoxGeometry(2.24, 0.12, 1.64), m(0xd9a83a, { metalness: 0.7, roughness: 0.3 }), -len / 2 - 1, 1.1, 0));
+      g.userData.r = 3;
+      return g;
+    },
+    // a flag on the plain, with boot prints round it
+    flag(r) {
+      const g = new THREE.Group(), pm = m(0xdddddd);
+      g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8, 5), pm, 0, 0.9, 0), mesh(new THREE.BoxGeometry(0.75, 0.03, 0.03), pm, 0.37, 1.78, 0));
+      g.add(mesh(new THREE.BoxGeometry(0.72, 0.45, 0.02), m([0xffd23f, 0xf2f2f2, 0x2f6fb5][Math.floor(r() * 3)]), 0.37, 1.55, 0));
+      for (let k = 0; k < 8; k++) g.add(mesh(new THREE.BoxGeometry(0.12, 0.01, 0.22), m(0x6e6e74), Math.cos(k) * (0.5 + k * 0.12), 0.01, Math.sin(k * 1.7) * 0.6));
+      g.userData.r = 0.6;
       return g;
     },
   };
@@ -1052,7 +1101,7 @@ function arcBand(cx, cz, r0, r1, a0, a1, h) {
   return g;
 }
 
-let MARS_GLOW = null;
+let MARS_GLOW = null, LUNA_GLOW = null;
 export function buildRoads(name, T, stateOf) {
   const tx = textures();
   const group = new THREE.Group();
@@ -1069,7 +1118,7 @@ export function buildRoads(name, T, stateOf) {
   const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
   const curbM = west ? std(0x5e4630, { roughness: 0.95 }) : std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
-  const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', moon = name === 'moon' || mars;   // Mars roads are lit like the Moon's, not painted
+  const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', luna = name === 'moon', moon = luna || mars;   // Mars roads are lit like the Moon's, not painted
   // Mars streets: fused basalt slabs, steel grate walkways behind hazard-striped curbs,
   // cyan light lines along both edges and an amber dashed line down the middle
   const slabM = mars ? withClouds(std(0x5a4844, { map: tx.plates, roughness: 0.85 })) : null;
@@ -1089,6 +1138,25 @@ export function buildRoads(name, T, stateOf) {
       along(a0 - (a0 > sp.lo ? 0 : 0), a1, sd * (HW - 0.3), 0.07, 0.08, lineM);
     }
     for (let i = a0 + 0.6; i < a1 - 0.9; i += 1.6) along(i, i + 0.8, 0, 0.12, 0.08, ambM);
+  };
+  // the Moon's streets: pale hexagonal tiles of sintered dust, light slab walks behind
+  // gold-foil curbs, and a line of blue studs down the middle
+  if (luna && !LUNA_GLOW) {
+    LUNA_GLOW = new THREE.MeshStandardMaterial({ color: 0xbfe4ff, emissive: 0x4fa8ff, emissiveIntensity: 0.7, roughness: 0.3 });
+    LUNA_GLOW.userData.baseGlow = 0.7; GLOW.lit.push(LUNA_GLOW);
+  }
+  const hexM = luna ? withClouds(std(0x8e9098, { map: tx.hex, roughness: 0.7, metalness: 0.05 })) : null;
+  const slabWM = luna ? withClouds(std(0xc9cad0, { map: tx.concrete, roughness: 0.8 })) : null;
+  const goldM = luna ? std(0xd9a83a, { roughness: 0.3, metalness: 0.75 }) : null;
+  const studM = LUNA_GLOW;
+  const lunaStreet = (sp, a0, a1) => {
+    const along = (lo, hi, off, w, y, m, uv = 8) => road.add(m, sp.along === 'x' ? rect(lo, sp.line + off - w / 2, hi, sp.line + off + w / 2, y, uv) : rect(sp.line + off - w / 2, lo, sp.line + off + w / 2, hi, y, uv));
+    for (const sd of [-1, 1]) {
+      along(a0, a1, sd * (HW + SW / 2 + 0.06), SW - 0.12, 0.142, slabWM, 3);
+      along(a0, a1, sd * (HW + 0.06), 0.14, 0.163, goldM, 1);
+      along(a0, a1, sd * (HW - 0.2), 0.05, 0.08, studM);
+    }
+    for (let i = a0 + 0.7; i < a1 - 0.5; i += 1.1) road.add(studM, sp.along === 'x' ? boxAt(0.2, 0.03, 0.2, i, 0.075, sp.line) : boxAt(0.2, 0.03, 0.2, sp.line, 0.075, i));
   };
   const edgeM = mars ? new THREE.MeshStandardMaterial({ color: 0xffd7b0, emissive: 0xffa060, emissiveIntensity: 0.3, roughness: 0.4 })
     : new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x4fa8ff, emissiveIntensity: 0.4, roughness: 0.4 });
@@ -1278,7 +1346,7 @@ export function buildRoads(name, T, stateOf) {
     const sp = span(sg);
     // a rounded corner draws its own tarmac, so the road stops at its edge
     const loN = sp.along === 'x' ? isRound(sp.lo, sp.line) : isRound(sp.line, sp.lo), hiN = !sg.exit && (sp.along === 'x' ? isRound(sp.hi, sp.line) : isRound(sp.line, sp.hi));
-    if (!west) strip(mars ? slabM : asphaltM, sp, sp.lo + (loN ? HW : -HW), sp.hi + (hiN ? -HW : HW), 0.075);
+    if (!west) (luna ? (m, sp2, lo, hi, y) => road.add(m, sp2.along === 'x' ? rect(lo, sp2.line - ROAD_W / 2, hi, sp2.line + ROAD_W / 2, y, 5) : rect(sp2.line - ROAD_W / 2, lo, sp2.line + ROAD_W / 2, hi, y, 5)) : strip)(mars ? slabM : luna ? hexM : asphaltM, sp, sp.lo + (loN ? HW : -HW), sp.hi + (hiN ? -HW : HW), 0.075);
     const lo = sp.lo + HW, hi = sp.hi - (sg.exit ? 0 : HW);
     const a0 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.lo : lo, a1 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.hi - HW : hi;
     if (west) westStreet(sp, a0, a1, loN, hiN);
@@ -1292,7 +1360,8 @@ export function buildRoads(name, T, stateOf) {
       }
     }
     if (mars) marsStreet(sp, a0, a1);
-    if (west || mars) {} else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
+    if (luna) lunaStreet(sp, a0, a1);
+    if (west || moon) {} else if (moon) for (let i = a0 + 1.5; i < a1 - 1; i += 3.5) for (const sd of [-1, 1])
       road.add(edgeM, sp.along === 'x' ? boxAt(0.16, 0.1, 0.16, i, 0.075, sp.line + sd * (HW - 0.12)) : boxAt(0.16, 0.1, 0.16, sp.line + sd * (HW - 0.12), 0.075, i));
     else for (let i = a0 + STOP_R - 1.4; i < a1 - STOP_R + 1.8; i += 2.4)
       road.add(paintM, sp.along === 'x' ? boxAt(1.1, 0.02, 0.14, i, 0.08, sp.line) : boxAt(0.14, 0.02, 1.1, sp.line, 0.08, i));
@@ -1308,13 +1377,14 @@ export function buildRoads(name, T, stateOf) {
     if (rc && !west) {
       // the curved corner: tarmac, then the curb and sidewalk following the curve
       const cx = x - rc.sx * HW, cz = z - rc.sz * HW, mid = Math.atan2(rc.sz, rc.sx);
-      road.add(mars ? slabM : asphaltM, pieSlice(cx, cz, ROAD_W, mid - Math.PI / 4, mid + Math.PI / 4, 0.075));
+      road.add(mars ? slabM : luna ? hexM : asphaltM, pieSlice(cx, cz, ROAD_W, mid - Math.PI / 4, mid + Math.PI / 4, 0.075, luna ? 5 : 8));
       road.add(walkM, arcBand(cx, cz, ROAD_W, ROAD_W + SW, mid - Math.PI / 4, mid + Math.PI / 4, 0.14));
       road.add(curbM, arcBand(cx, cz, ROAD_W - 0.01, ROAD_W + 0.12, mid - Math.PI / 4, mid + Math.PI / 4, 0.16));
     }
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (!rc || sx !== rc.sx || sz !== rc.sz) {
       if (!west) road.add(walkM, boxAt(SW, 0.14, SW, x + sx * (HW + SW / 2), 0, z + sz * (HW + SW / 2)));
       if (mars) road.add(grateM, rect(x + sx * HW + sx * 0.06, z + sz * HW + sz * 0.06, x + sx * (HW + SW), z + sz * (HW + SW), 0.142, 2));
+      if (luna) road.add(slabWM, rect(x + sx * HW + sx * 0.12, z + sz * HW + sz * 0.12, x + sx * (HW + SW), z + sz * (HW + SW), 0.142, 3));
     }
     const ways = DIRS.filter(([hx, hz]) => hasRoad(x, z, { x: hx, z: hz }));
     for (const [hx, hz] of DIRS) {
@@ -1322,8 +1392,10 @@ export function buildRoads(name, T, stateOf) {
         if (rc) continue;   // the curve takes the place of the closed sides
         if (west) {}
         else if (hx) { road.add(walkM, boxAt(SW, 0.14, ROAD_W, x + hx * (HW + SW / 2), 0, z)); road.add(curbM, boxAt(0.12, 0.16, ROAD_W, x + hx * (HW + 0.06), 0, z));
+          if (luna) { road.add(slabWM, rect(x + hx * (HW + 0.12), z - HW, x + hx * (HW + SW), z + HW, 0.142, 3)); road.add(goldM, rect(x + hx * HW, z - HW, x + hx * (HW + 0.13), z + HW, 0.163, 1)); }
           if (mars) { road.add(grateM, rect(x + hx * (HW + 0.12), z - HW, x + hx * (HW + SW), z + HW, 0.142, 2)); road.add(hazM, rect(x + hx * HW, z - HW, x + hx * (HW + 0.12), z + HW, 0.162, 1)); road.add(lineM, rect(x + hx * (HW - 0.34), z - HW + 0.3, x + hx * (HW - 0.27), z + HW - 0.3, 0.08)); } }
         else { road.add(walkM, boxAt(ROAD_W, 0.14, SW, x, 0, z + hz * (HW + SW / 2))); road.add(curbM, boxAt(ROAD_W, 0.16, 0.12, x, 0, z + hz * (HW + 0.06)));
+          if (luna) { road.add(slabWM, rect(x - HW, z + hz * (HW + 0.12), x + HW, z + hz * (HW + SW), 0.142, 3)); road.add(goldM, rect(x - HW, z + hz * HW, x + HW, z + hz * (HW + 0.13), 0.163, 1)); }
           if (mars) { road.add(grateM, rect(x - HW, z + hz * (HW + 0.12), x + HW, z + hz * (HW + SW), 0.142, 2)); road.add(hazM, rect(x - HW, z + hz * HW, x + HW, z + hz * (HW + 0.12), 0.162, 1)); road.add(lineM, rect(x - HW + 0.3, z + hz * (HW - 0.34), x + HW - 0.3, z + hz * (HW - 0.27), 0.08)); } }
         continue;
       }
@@ -1339,6 +1411,11 @@ export function buildRoads(name, T, stateOf) {
         if (ax) road.add(paintM, boxAt(0.7, 0.022, 0.26, x - ax * zc, 0.08, z + off));
         else road.add(paintM, boxAt(0.26, 0.022, 0.7, x + off, 0.08, z - az * zc));
       }
+    }
+    if (luna && ways.length >= 3) {
+      // a junction: a glowing hexagon set into the tiles with a gold plate in the middle
+      const ring = new THREE.RingGeometry(1.05, 1.2, 6); ring.rotateX(-Math.PI / 2); ring.translate(x, 0.082, z); road.add(studM, ring);
+      const hub = new THREE.CircleGeometry(0.45, 6); hub.rotateX(-Math.PI / 2); hub.translate(x, 0.081, z); road.add(goldM, hub);
     }
     if (mars && ways.length >= 3) {
       // a junction: a ring of light in the slabs with a hub plate, and chevrons pointing in
@@ -1360,6 +1437,7 @@ export function buildRoads(name, T, stateOf) {
   const poleM = std(0x3a3f48, { roughness: 0.45, metalness: 0.6 });
   const headM = std(0x2a2d33, { roughness: 0.5, metalness: 0.4 });
   const woodM = std(0x6e4a2c, { roughness: 0.95 });
+  const lunaMastM = std(0xe8eaee, { roughness: 0.5, metalness: 0.3 }), lunaPanelM = std(0x223f78, { roughness: 0.25, metalness: 0.4 });
   const lampM = new THREE.MeshStandardMaterial({ color: 0xfff6e2, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.3 });
   const lights = [];
   const lamp = (x, z, ax, az) => {
@@ -1373,6 +1451,18 @@ export function buildRoads(name, T, stateOf) {
       poles.add(edgeM, boxAt(0.1, 0.1, 0.1, x, 2.76, z));
       poles.add(lineM, boxAt(0.08, 0.5, 0.08, x - ux * 0.06, 0.8, z - uz * 0.06));
       lights.push(new THREE.Vector3(x + ux * 0.62, 2.8, z + uz * 0.62));
+      return;
+    }
+    if (luna) {
+      const l = Math.hypot(ax, az), ux = ax / l, uz = az / l, ang = Math.atan2(uz, ux);
+      poles.add(goldM, boxAt(0.32, 0.14, 0.32, x, 0.14, z));
+      const mast = new THREE.CylinderGeometry(0.05, 0.07, 2.7, 8); mast.translate(x, 0.28 + 1.35, z); poles.add(lunaMastM, mast);
+      const ring = new THREE.TorusGeometry(0.09, 0.025, 4, 10); ring.rotateX(Math.PI / 2); ring.translate(x, 1.1, z); poles.add(studM, ring);
+      const arm = new THREE.BoxGeometry(0.6, 0.05, 0.06); arm.rotateY(-ang); arm.translate(x + ux * 0.28, 2.95, z + uz * 0.28); poles.add(lunaMastM, arm);
+      const head = new THREE.CylinderGeometry(0.22, 0.26, 0.1, 12); head.translate(x + ux * 0.55, 2.9, z + uz * 0.55); poles.add(headM, head);
+      const lens = new THREE.CylinderGeometry(0.2, 0.2, 0.03, 12); lens.translate(x + ux * 0.55, 2.84, z + uz * 0.55); poles.add(lampM, lens);
+      const sol = new THREE.BoxGeometry(0.5, 0.03, 0.36); sol.rotateX(-0.5); sol.rotateY(-ang); sol.translate(x, 3.05, z); poles.add(lunaPanelM, sol);
+      lights.push(new THREE.Vector3(x + ux * 0.55, 2.8, z + uz * 0.55));
       return;
     }
     if (moon) {

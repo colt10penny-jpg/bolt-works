@@ -310,8 +310,8 @@ function marsSignMat(text, bg, ink, aspect) {
   return m;
 }
 // a sign facing +z (axis 'z') or +x (axis 'x'), its bottom edge at y, centred on (x, z)
-function marsSign(g, axis, x, y, z, w, h, text, bg = 0x1b222c, ink = CYAN) {
-  const back = box(axis === 'z' ? w + 0.1 : 0.06, h + 0.1, axis === 'z' ? 0.06 : w + 0.1, GUN, x, y - 0.05, z);
+export function marsSign(g, axis, x, y, z, w, h, text, bg = 0x1b222c, ink = CYAN, frame = GUN) {
+  const back = box(axis === 'z' ? w + 0.1 : 0.06, h + 0.1, axis === 'z' ? 0.06 : w + 0.1, frame, x, y - 0.05, z);
   g.add(back);
   const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), marsSignMat(text, bg, ink, w / h));
   if (axis === 'z') p.position.set(x, y + h / 2, z + 0.035); else { p.rotation.y = Math.PI / 2; p.position.set(x + 0.035, y + h / 2, z); }

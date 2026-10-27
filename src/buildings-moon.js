@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl } from './models.js';
 import { DARK, IRON, HAZ, GLASS, PLINTH, shade, mesh, at, rod, onWall, signBoard, railing, pipe, tank, lattice } from './buildings.js';
+import { marsSign } from './buildings-mars.js';
 
 const MW = 0xeef0f3, GOLD = 0xd9a83a, REG = 0x8f8f96, ORANGE = 0xe07b2a;
 const glow = (c = 0x5fe0ff, e = 0x2fc8ff, k = 1.3) => ({ emissive: e, emissiveIntensity: k });
@@ -105,6 +106,14 @@ function beaconMast(g, x, z, h) {
   g.add(box(0.14, 0.14, 0.14, 0x9fe8ff, x, 0.15 + h, z, glow()));
 }
 
+// a name sign: navy with white capitals in a gold frame, standing on two posts (or
+// mounted, with posts: false)
+const NAVY = 0x1c2740, INK = 0xeef4ff;
+function postSign(g, axis, x, z, w, h, text, y = 0.9, posts = true) {
+  if (posts) for (const e of [-1, 1]) g.add(axis === 'z' ? box(0.07, y - 0.1, 0.07, 0xd8dbe2, x + e * (w / 2 - 0.15), 0.15, z - 0.05) : box(0.07, y - 0.1, 0.07, 0xd8dbe2, x - 0.05, 0.15, z + e * (w / 2 - 0.15)));
+  marsSign(g, axis, x, y, z, w, h, text, NAVY, INK, GOLD);
+}
+
 Object.assign(BUILDERS, {
   // ---- Regolith Digger: a bucket-wheel excavator chewing into a dust mound, its boom
   // dropping regolith onto a conveyor to a processing dome
@@ -132,6 +141,7 @@ Object.assign(BUILDERS, {
     rod(g, [0.75, 0.9, -0.55], [1.25, 1.55, -1.6], 0.14, ORANGE);
     g.add(box(0.1, 1.1, 0.1, IRON, 1.0, 0.15, -1.08));
     beaconMast(g, 2.75, 1.6, 2.6);
+    postSign(g, 'x', 1.6, 0.6, 1.3, 0.34, 'REGOLITH', 0.75);
     return { group: g, top: 4.4, anim(t, dt) { wheel.rotation.z += dt * 2.2; ex.rotation.y = -0.65 + Math.sin(t * 0.35) * 0.35; } };
   },
 
@@ -163,6 +173,7 @@ Object.assign(BUILDERS, {
     pipe(g, [[-1.0, 1.4, -1.5], [0.4, 1.4, -1.5], [0.4, 1.4, -0.3], [0.55, 1.4, -0.3]], 0.1, 0xc9ced6);
     pipe(g, [[-1.7, 1.0, 1.9], [0.0, 1.0, 1.9], [0.0, 1.0, -0.3], [0.55, 1.0, -0.3]], 0.08, color);
     pipe(g, [[1.8, 1.4, -2.35], [1.0, 1.4, -2.35], [1.0, 1.4, -0.85]], 0.07, 0xc9ced6);
+    postSign(g, 'z', 2.0, 2.8, 1.4, 0.34, 'HELIUM-3', 0.8);
     return { group: g, top: 7.6 };
   },
 
@@ -184,6 +195,7 @@ Object.assign(BUILDERS, {
       for (let k = 0; k < 5; k++) { const p = box(0.5, 0.06, 0.04, color, x, 0.3 + k * 0.2, z + 0.26, glow(color, color, 1)); p.material = p.material.clone(); g.add(p); cells.push(p); }
     }
     solarWing(g, 0.45, 0.45, 2.6, 1.4);
+    postSign(g, 'z', -2.1, 2.78, 1.7, 0.34, 'FUEL CELLS', 1.45);
     return { group: g, top: 4.4, anim(t) { cells.forEach((c, i) => { c.material.emissiveIntensity = 0.6 + 0.8 * Math.max(0, Math.sin(t * 2.4 - i * 0.45)); }); } };
   },
 
@@ -214,6 +226,7 @@ Object.assign(BUILDERS, {
     for (const [dx, dz] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) g.add(box(0.07, 1.2, 0.07, IRON, 2.55 + dx, 0.15, 2.3 + dz));
     g.add(box(0.8, 0.3, 0.8, MW, 2.55, 1.85, 2.3));
     pipe(g, [[2.55, 1.0, 2.3], [2.55, 0.5, 2.3], [1.5, 0.5, 2.3], [1.5, 0.5, 1.6]], 0.07, 0xc9ced6);
+    postSign(g, 'z', 0.1, 2.32, 2.0, 0.38, 'HAB PRINTER', H - 0.5, false);
     return {
       group: g, top: H + 1.4,
       anim(t) {
@@ -260,6 +273,7 @@ Object.assign(BUILDERS, {
     g.add(rv);
     solarWing(g, 0.7, 0.2, 2.6, 1.4);
     beaconMast(g, -2.75, 2.7, 2.2);
+    postSign(g, 'z', hx, hz + len / 2 + 0.05, 1.3, 0.26, 'ROVER BAY', 1.38, false);
     return {
       group: g, top: 4.0,
       anim(t) {
@@ -301,6 +315,7 @@ Object.assign(BUILDERS, {
     module(g, { x: -1.6, y: 0.75, z: -1.9, len: 2.4, r: 0.55, along: 'x', band: color, windows: 3 });
     pipe(g, [[-0.4, 0.5, -1.9], [mx - 0.9, 0.5, -1.9], [mx - 0.9, 0.5, mz]], 0.06, DARK);
     solarWing(g, 2.6, 2.4, 2.4, 1.3);
+    postSign(g, 'z', -1.2, -1.0, 1.25, 0.32, 'OBSERVATORY', 0.75);
     return { group: g, top: 6.5, anim(t) { mount.rotation.y = Math.sin(t * 0.18) * 1.1; tilt.rotation.x = -0.75 + Math.sin(t * 0.13) * 0.2; } };
   },
 
@@ -331,32 +346,6 @@ Object.assign(BUILDERS, {
     return { group: g, top: 11.0, rocket, scaffold };
   },
 
-  // ---- Fusion Reactor: a tokamak with its glowing plasma ring and magnet coils inside
-  // an open-front hall, radiators to shed heat, and a control module
-  fusion(color) {
-    const g = new THREE.Group();
-    // the hall: three walls and a roof, open at the front so you can see in
-    const hx = -0.5, hz = -0.6, hw = 4.6, hd = 3.6, H = 2.9;
-    g.add(box(hw + 0.2, 0.3, hd + 0.2, PLINTH, hx, 0, hz));
-    g.add(box(hw, H, 0.25, MW, hx, 0.3, hz - hd / 2 + 0.12), box(0.25, H, hd, MW, hx - hw / 2 + 0.12, 0.3, hz));
-    g.add(box(0.25, H, hd * 0.45, MW, hx + hw / 2 - 0.12, 0.3, hz - hd * 0.27));
-    g.add(box(hw + 0.2, 0.25, hd + 0.2, shade(color, -0.2), hx, H + 0.3, hz));
-    g.add(box(hw + 0.26, 0.08, hd + 0.26, GOLD, hx, H + 0.55, hz, { metalness: 0.7, roughness: 0.3 }));
-    for (let k = 0; k < 4; k++) g.add(box(0.2, H, 0.2, shade(color, -0.1), hx - hw / 2 + 0.6 + k * 1.15, 0.3, hz + hd / 2 - 0.1));
-    // the tokamak: a torus, D-shaped coils round it, and the plasma glowing inside
-    const kx = hx, kz = hz + 0.1, ky = 1.45;
-    const ring = mesh(new THREE.TorusGeometry(1.2, 0.42, 14, 32), shade(color, 0.15), { metalness: 0.5, roughness: 0.35 }); ring.rotation.x = Math.PI / 2; ring.position.set(kx, ky, kz); g.add(ring);
-    for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; const c = mesh(new THREE.TorusGeometry(0.52, 0.08, 5, 14), 0xb87333, { metalness: 0.7, roughness: 0.35 }); c.position.set(kx + Math.cos(a) * 1.2, ky, kz + Math.sin(a) * 1.2); c.rotation.y = -a; g.add(c); }
-    const core = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.16, 8, 32), new THREE.MeshBasicMaterial({ color: 0xff7ae0 }));
-    core.rotation.x = Math.PI / 2; core.position.set(kx, ky, kz); g.add(core);
-    g.add(cyl(0.5, 0.6, 0.5, IRON, kx, 0.3, kz, 16));
-    // radiators along the right side and a control module out front
-    for (let k = 0; k < 3; k++) radiator(g, 2.65, -2.4 + k * 0.75, 2.4, 0.6);
-    module(g, { x: 1.4, y: 0.7, z: 2.3, len: 2.2, r: 0.5, along: 'x', band: color, windows: 3 });
-    pipe(g, [[kx + 1.6, 1.0, kz], [2.3, 1.0, kz], [2.3, 1.0, -2.4], [2.6, 1.0, -2.4]], 0.08, 0xc9ced6);
-    return { group: g, top: 4.6, anim(t) { core.material.color.setHSL(0.85 + Math.sin(t * 3) * 0.05, 1, 0.6 + Math.sin(t * 5) * 0.1); core.rotation.z = t * 0.8; } };
-  },
-
   // ---- Mission Control: a big ribbed dome with a glowing window band, a wing module,
   // a comms tower with a turning dish, and a flag
   hqmoon(color) {
@@ -382,42 +371,119 @@ Object.assign(BUILDERS, {
     g.add(box(0.06, 2.2, 0.06, 0xdddddd, -2.6, 0.15, 2.3), box(0.9, 0.04, 0.04, 0xdddddd, -2.15, 2.3, 2.3));
     g.add(box(0.9, 0.55, 0.03, 0xffd23f, -2.15, 1.75, 2.3));
     beaconMast(g, 2.7, 2.6, 1.8);
+    postSign(g, 'z', 0.9, 2.55, 2.1, 0.36, 'MISSION CONTROL', 0.85);
     return { group: g, top: top + 2.0, anim(t) { mast.rotation.y = Math.sin(t * 0.4) * 1.2; } };
   },
 
-  // ---- Quantum Lab: a sleek lab with a glass atrium where the gold 'chandelier'
-  // fridge hangs, spinning rings above it, cryostat tanks and radiators
+  // ---- Fusion Reactor: a tokamak out in the open (there's no air to keep out), its
+  // shell cut away so you can see the pink plasma racing round inside, ringed by copper
+  // coils under a crane ring, with tall radiator wings glowing behind and gold cables
+  // running to a switchyard
+  fusion(color) {
+    const g = new THREE.Group();
+    const cx = -0.35, cz = -0.35, ky = 1.35, R = 1.4;
+    g.add(cyl(2.4, 2.5, 0.3, PLINTH, cx, 0.15, cz, 36));
+    const edge = mesh(new THREE.TorusGeometry(2.42, 0.05, 4, 48), GOLD, { metalness: 0.7, roughness: 0.3 }); edge.rotation.x = Math.PI / 2; edge.position.set(cx, 0.45, cz); g.add(edge);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; g.add(box(0.22, ky - 0.6, 0.5, IRON, cx + Math.cos(a) * R, 0.45, cz + Math.sin(a) * R).rotateY(-a)); }
+    // the shell, cut away toward the camera
+    const ring = new THREE.Group(); ring.position.set(cx, ky, cz); ring.rotation.y = -1.49;
+    const shell = mesh(new THREE.TorusGeometry(R, 0.56, 18, 48, Math.PI * 1.55), shade(color, 0.55), { metalness: 0.55, roughness: 0.3, side: THREE.DoubleSide });
+    shell.rotation.x = Math.PI / 2; ring.add(shell);
+    for (const a of [0, Math.PI * 1.55]) { const cap = mesh(new THREE.TorusGeometry(0.5, 0.07, 6, 18), GOLD, { metalness: 0.7, roughness: 0.3 }); cap.position.set(Math.cos(a) * R, 0, Math.sin(a) * R); cap.rotation.y = -a; ring.add(cap); }
+    for (let k = 0; k < 12; k++) { const a = (k + 0.5) / 12 * Math.PI * 1.55; const c = mesh(new THREE.TorusGeometry(0.72, 0.09, 5, 16), 0xb87333, { metalness: 0.7, roughness: 0.35 }); c.position.set(Math.cos(a) * R, 0, Math.sin(a) * R); c.rotation.y = -a; ring.add(c); }
+    g.add(ring);
+    const plasma = new THREE.Mesh(new THREE.TorusGeometry(R, 0.24, 10, 48), new THREE.MeshBasicMaterial({ color: 0xff7ae0 }));
+    plasma.rotation.x = Math.PI / 2; plasma.position.set(cx, ky, cz); g.add(plasma);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(R, 0.38, 10, 48), new THREE.MeshBasicMaterial({ color: 0xff5ad0, transparent: true, opacity: 0.25, depthWrite: false }));
+    halo.rotation.x = Math.PI / 2; halo.position.copy(plasma.position); g.add(halo);
+    // the central solenoid with pulsing rings
+    g.add(cyl(0.42, 0.48, 3.1, 0xc9ced6, cx, 0.45, cz, 18));
+    const sol = [];
+    for (let k = 0; k < 4; k++) { const r = cyl(0.47, 0.47, 0.1, 0xff9ae8, cx, 0.9 + k * 0.6, cz, 18, { emissive: 0xff5ad0, emissiveIntensity: 1 }); r.material = r.material.clone(); g.add(r); sol.push(r); }
+    g.add(cyl(0.3, 0.45, 0.35, MW, cx, 3.55, cz, 18), box(0.1, 0.1, 0.1, 0xff3b2f, cx, 3.95, cz, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
+    // the crane ring overhead on four masts
+    for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + Math.PI / 4; g.add(box(0.14, 3.4, 0.14, 0xd8dbe2, cx + Math.cos(a) * 2.15, 0.45, cz + Math.sin(a) * 2.15)); }
+    const crane = new THREE.Group(); crane.position.set(cx, 3.85, cz);
+    const rail = mesh(new THREE.TorusGeometry(2.15, 0.07, 6, 48), HAZ); rail.rotation.x = Math.PI / 2; crane.add(rail);
+    crane.add(box(4.3, 0.14, 0.22, HAZ, 0, -0.05, 0), box(0.35, 0.3, 0.35, DARK, 0.9, -0.3, 0), cyl(0.02, 0.02, 1.0, IRON, 0.9, -1.4, 0, 4));
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; crane.add(box(0.08, 0.06, 0.08, 0x9fe8ff, Math.cos(a) * 2.15, 0.08, Math.sin(a) * 2.15, glow())); }
+    g.add(crane);
+    // radiator wings behind, their heat lines glowing red
+    const heat = [];
+    for (const [x, z, ry] of [[-2.75, -0.7, 0], [-2.75, 1.0, 0], [-0.9, -2.75, Math.PI / 2], [0.8, -2.75, Math.PI / 2]]) {
+      const w = new THREE.Group(); w.position.set(x, 0.15, z); w.rotation.y = ry;
+      w.add(box(0.1, 0.5, 0.1, IRON, 0, 0, 0), box(0.06, 2.6, 1.5, 0xf6f7f9, 0, 0.5, 0, { roughness: 0.3 }));
+      for (let k = 0; k < 4; k++) { const h = box(0.08, 2.4, 0.04, 0xff6a4a, 0, 0.6, -0.55 + k * 0.37, { emissive: 0xff3a1a, emissiveIntensity: 0.6 }); h.material = h.material.clone(); w.add(h); heat.push(h); }
+      g.add(w);
+    }
+    // gold power cables to the switchyard and its sign
+    const yx = 1.9, yz = 1.95;
+    g.add(box(1.2, 0.8, 0.8, 0x4a4d55, yx, 0.15, yz - 0.1));
+    for (let k = 0; k < 6; k++) g.add(box(0.03, 0.6, 0.14, IRON, yx - 0.5 + k * 0.2, 0.25, yz + 0.34));
+    for (const dx of [-0.35, 0, 0.35]) { g.add(box(0.06, 0.3, 0.06, IRON, yx + dx, 0.95, yz - 0.1)); for (let j = 0; j < 4; j++) g.add(cyl(0.09, 0.09, 0.05, 0xe6e0d4, yx + dx, 1.25 + j * 0.08, yz - 0.1, 10)); }
+    for (const dz of [-0.15, 0.15]) rod(g, [cx + 1.2, 0.6, cz + 1.2 + dz], [yx - 0.6, 0.6, yz - 0.1 + dz], 0.07, GOLD);
+    postSign(g, 'z', yx, yz + 0.5, 1.3, 0.32, 'FUSION', 0.95);
+    return { group: g, top: 4.6,
+      anim(t) {
+        plasma.material.color.setHSL(0.86 + Math.sin(t * 3) * 0.04, 1, 0.62 + Math.sin(t * 5) * 0.08); plasma.rotation.z = t * 0.8;
+        halo.material.opacity = 0.18 + Math.sin(t * 4) * 0.08;
+        sol.forEach((r, i) => { r.material.emissiveIntensity = 0.4 + 1.2 * Math.max(0, Math.sin(t * 3 - i * 0.8)); });
+        heat.forEach((h, i) => { h.material.emissiveIntensity = 0.4 + 0.4 * Math.sin(t * 1.5 + i * 0.5); });
+        crane.rotation.y = t * 0.15;
+      } };
+  },
+
+  // ---- Quantum Lab: a tall glass rotunda where the gold 'chandelier' fridge hangs in the
+  // cold, glowing qubit rings spinning above it, curved lab modules wrapped round its back,
+  // cryostat tanks, and fibre lines glowing across the ground
   quantum(color) {
     const g = new THREE.Group();
-    const hx = -0.8, hz = -0.7, hw = 4.0, hd = 3.2, H = 2.4;
-    g.add(box(hw + 0.2, 0.3, hd + 0.2, PLINTH, hx, 0, hz));
-    g.add(box(hw, H, hd, 0xf2f3f6, hx, 0.3, hz));
-    g.add(box(hw + 0.1, 0.35, hd + 0.1, color, hx, H - 0.2, hz));
-    g.add(box(hw + 0.16, 0.08, hd + 0.16, GOLD, hx, H + 0.3, hz, { metalness: 0.7, roughness: 0.3 }));
-    g.add(onWall('z', hx - 1.0, 0.5, hz + hd / 2, 1.6, 0.08, 0.04, 0x9fe8ff, glow()));
-    g.add(onWall('x', hz, 0.5, hx + hw / 2, 2.6, 0.08, 0.04, 0x9fe8ff, glow()));
-    signBoard(g, 'x', hz, 1.2, hx + hw / 2, 2.2, color, 5);
-    // glass atrium at the front right with the gold chandelier inside
-    const ax = 1.85, az = 1.7;
-    g.add(box(1.8, 0.2, 1.8, PLINTH, ax, 0.15, az));
-    g.add(box(1.6, 2.0, 1.6, 0xbfe9ff, ax, 0.35, az, { transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.2, depthWrite: false }));
-    for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) g.add(box(0.08, 2.0, 0.08, 0xf2f3f6, ax + dx, 0.35, az + dz));
-    g.add(box(1.7, 0.1, 1.7, 0xf2f3f6, ax, 2.35, az));
+    const ax = 0.35, az = 0.35, H = 2.6;
+    g.add(cyl(1.55, 1.65, 0.3, PLINTH, ax, 0.15, az, 32));
+    const gr = mesh(new THREE.TorusGeometry(1.57, 0.05, 4, 40), GOLD, { metalness: 0.7, roughness: 0.3 }); gr.rotation.x = Math.PI / 2; gr.position.set(ax, 0.45, az); g.add(gr);
+    g.add(mesh(new THREE.CylinderGeometry(1.2, 1.2, H, 32, 1, true), 0xbfe9ff, { transparent: true, opacity: 0.3, roughness: 0.05, metalness: 0.2, depthWrite: false, side: THREE.DoubleSide }).translateX(ax).translateY(0.45 + H / 2).translateZ(az));
+    for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; g.add(box(0.07, H, 0.07, 0xf2f3f6, ax + Math.cos(a) * 1.2, 0.45, az + Math.sin(a) * 1.2)); }
+    g.add(cyl(1.3, 1.3, 0.18, 0xf2f3f6, ax, 0.45 + H, az, 32), cyl(1.32, 1.32, 0.06, color, ax, 0.45 + H + 0.18, az, 32, { emissive: color, emissiveIntensity: 0.4 }));
+    g.add(cyl(0.6, 0.9, 0.3, 0xf2f3f6, ax, 0.69 + H, az, 24));
+    // the chandelier: stacked gold plates, wires and a cold blue glow at the bottom
     const chand = new THREE.Group();
-    for (let k = 0; k < 4; k++) chand.add(cyl(0.42 - k * 0.07, 0.42 - k * 0.07, 0.06, GOLD, 0, -k * 0.38, 0, 18, { metalness: 0.85, roughness: 0.2 }));
-    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; chand.add(box(0.03, 1.2, 0.03, GOLD, Math.cos(a) * 0.25, -1.2, Math.sin(a) * 0.25, { metalness: 0.85, roughness: 0.2 })); }
-    chand.position.set(ax, 2.3, az); g.add(chand);
-    // spinning rings above the roof
-    const ringA = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.07, 8, 30), new THREE.MeshBasicMaterial({ color: 0x6fe3ff }));
-    const ringB = ringA.clone();
-    ringA.position.set(hx, H + 1.6, hz); ringB.position.copy(ringA.position);
-    g.add(ringA, ringB);
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    orb.position.copy(ringA.position); g.add(orb);
-    g.add(cyl(0.1, 0.16, 0.8, IRON, hx, H + 0.38, hz, 10));
-    // cryostat tanks and radiators
-    tank(g, 2.6, -2.4, 0.42, 1.6, 0xd8dbe2); tank(g, 1.6, -2.55, 0.35, 1.3, 0xd8dbe2);
-    radiator(g, -2.75, 2.2, 2.0, 0.7); radiator(g, -2.0, 2.55, 2.0, 0.7);
-    return { group: g, top: H + 2.8, anim(t) { ringA.rotation.x = t * 1.3; ringB.rotation.y = t * 1.7; orb.scale.setScalar(1 + Math.sin(t * 4) * 0.12); chand.rotation.y = t * 0.2; } };
+    for (let k = 0; k < 5; k++) chand.add(cyl(0.55 - k * 0.08, 0.55 - k * 0.08, 0.06, GOLD, 0, -k * 0.38, 0, 20, { metalness: 0.85, roughness: 0.2 }));
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; chand.add(box(0.03, 1.55, 0.03, GOLD, Math.cos(a) * (0.3 - (k % 2) * 0.1), -1.55, Math.sin(a) * (0.3 - (k % 2) * 0.1), { metalness: 0.85, roughness: 0.2 })); }
+    chand.add(cyl(0.12, 0.12, 0.12, 0x9fe8ff, 0, -1.7, 0, 12, glow()));
+    chand.position.set(ax, 0.4 + H, az); g.add(chand);
+    // qubit rings spinning above the roof
+    const ringA = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.07, 8, 32), new THREE.MeshBasicMaterial({ color: 0x6fe3ff }));
+    const ringB = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.06, 8, 32), new THREE.MeshBasicMaterial({ color: 0xc58aff }));
+    ringA.position.set(ax, H + 2.0, az); ringB.position.copy(ringA.position); g.add(ringA, ringB);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 10), new THREE.MeshBasicMaterial({ color: 0xffffff })); orb.position.copy(ringA.position); g.add(orb);
+    g.add(cyl(0.06, 0.1, 0.8, IRON, ax, H + 0.95, az, 8));
+    // lab modules wrapped round the back
+    module(g, { x: 0.0, y: 0.8, z: -2.25, len: 3.0, r: 0.6, along: 'x', band: color, windows: 4 });
+    module(g, { x: -2.25, y: 0.8, z: 0.2, len: 2.6, r: 0.6, along: 'z', band: color, windows: 3 });
+    rod(g, [-1.4, 0.8, -2.25], [-2.25, 0.8, -2.25], 0.4, MW); rod(g, [-2.25, 0.8, -2.25], [-2.25, 0.8, -1.1], 0.4, MW);
+    rod(g, [ax - 0.4, 0.8, az - 1.1], [ax - 0.4, 0.8, -1.65], 0.3, MW); rod(g, [ax - 1.1, 0.8, az - 0.2], [-1.65, 0.8, az - 0.2], 0.3, MW);
+    // cryostat tanks and fibre lines
+    tank(g, 2.45, -1.4, 0.42, 1.6, 0xd8dbe2); tank(g, 2.55, -0.4, 0.34, 1.2, 0xd8dbe2);
+    pipe(g, [[2.45, 1.0, -1.0], [2.45, 1.0, -0.2], [1.5, 1.0, -0.2]], 0.07, 0x9fd6ff);
+    for (const [x0, z0, x1, z1] of [[-1.6, 1.6, ax - 1.0, az + 0.6], [1.9, 2.2, ax + 0.9, az + 0.9]]) {
+      const len = Math.hypot(x1 - x0, z1 - z0), f = box(0.08, 0.02, len, 0x9fe8ff, (x0 + x1) / 2, 0.15, (z0 + z1) / 2, glow()); f.rotation.y = Math.atan2(x1 - x0, z1 - z0); g.add(f);
+    }
+    radiator(g, -2.7, 2.3, 2.0, 0.7);
+    postSign(g, 'z', 1.95, 2.45, 1.6, 0.34, 'QUANTUM LAB', 0.85);
+    return { group: g, top: H + 3.0, anim(t) { ringA.rotation.x = t * 1.3; ringB.rotation.y = t * 1.7; ringB.rotation.x = 0.6; orb.scale.setScalar(1 + Math.sin(t * 4) * 0.12); chand.rotation.y = t * 0.2; } };
   },
 });
+
+// The ones without truck bays are scaled up to fill their lots
+for (const [name, S] of [['fusion', 1.2], ['quantum', 1.2], ['hqmoon', 1.15]]) {
+  const make = BUILDERS[name];
+  BUILDERS[name] = color => {
+    const m = make(color), core = new THREE.Group();
+    core.scale.setScalar(S);
+    for (const c of [...m.group.children]) core.add(c);
+    m.group.add(core);
+    m.top *= S;
+    if (m.smoke) m.smoke = m.smoke.map(v => v.clone().multiplyScalar(S));
+    return m;
+  };
+}
