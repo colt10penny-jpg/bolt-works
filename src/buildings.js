@@ -8,7 +8,7 @@
 // ones in models.js, and replaces the older, plainer version there.
 import * as THREE from 'three';
 import { buildRocket } from './rockets.js';
-import { BUILDERS, box, cyl, mat } from './models.js';
+import { BUILDERS, box, cyl, mat, GLOW } from './models.js';
 
 const TRIM = 0xf1ece0, DARK = 0x2b2f36, STEEL = 0x8a8f99, IRON = 0x5b5f66, HAZ = 0xffc23d, GLASS = 0x9fd6ff, WARM = 0xffb347;
 const PLINTH = 0x9c968a, ROOF = 0x6d7076, RED = 0xd9482b, WHITE = 0xf3efe6;
@@ -64,6 +64,30 @@ function sideDoor(g, axis, a, f, color = 0x3a3f48) {
   g.add(onWall(axis, a, 0, f, 0.75, 1.25, 0.06, color));
   g.add(onWall(axis, a, 1.32, f, 1.0, 0.07, 0.45, DARK));
   g.add(onWall(axis, a, 1.15, f + s * 0.06, 0.12, 0.08, 0.06, 0xfff2c8, { emissive: 0xffd27a, night: 2 }));
+}
+// a board with real lettering on it, facing +z (axis 'z') or +x (axis 'x') at f
+const TSIGNS = new Map();
+function textSign(g, axis, a, y, f, w, h, text, bg, ink) {
+  const key = text + bg + ink + (w / h).toFixed(2);
+  if (!TSIGNS.has(key)) {
+    const H = 96, W = Math.max(96, Math.min(1024, Math.round(H * w / h))), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d'), hex = n => '#' + n.toString(16).padStart(6, '0');
+    c.fillStyle = hex(bg); c.fillRect(0, 0, W, H);
+    c.strokeStyle = hex(ink); c.lineWidth = 4; c.strokeRect(8, 8, W - 16, H - 16);
+    let size = H * 0.56; const font = s => `900 ${s}px "Arial Black", "Helvetica Neue", Arial, sans-serif`; c.font = font(size);
+    const tw = c.measureText(text).width; if (tw > W - 48) { size *= (W - 48) / tw; c.font = font(size); }
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = hex(ink); c.fillText(text, W / 2, H / 2 + size * 0.04);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    const m = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0, roughness: 0.6 });
+    m.userData.night = 0.9; GLOW.night.push(m);
+    TSIGNS.set(key, m);
+  }
+  const s = Math.sign(f) || 1;
+  g.add(onWall(axis, a, y - 0.06, f, w + 0.14, h + 0.12, 0.06, DARK));
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), TSIGNS.get(key));
+  if (axis === 'z') { p.position.set(a, y + h / 2, f + s * 0.07); if (s < 0) p.rotation.y = Math.PI; }
+  else { p.position.set(f + s * 0.07, y + h / 2, a); p.rotation.y = s * Math.PI / 2; }
+  g.add(p);
 }
 // a name board: a dark border, the company colour, and pale 'lettering' blocks
 function signBoard(g, axis, a, y, f, w, color, letters = 5) {
@@ -377,31 +401,80 @@ Object.assign(BUILDERS, {
     };
   },
 
-  // ---- Gear Cutter: a saw-tooth workshop with skylights, a big pair of meshing gears
-  // on the front, and roof vents
+  // ---- Gear Cutter: an old brick machine shop with a saw-tooth roof of glowing
+  // skylights in the company colour, a giant pair of meshing gears turning on a frame up
+  // top, a grinding window throwing sparks, a brick chimney, a little office tower with a
+  // gear-faced clock, a gantry crane over the yard and stacks of finished gears
   gear(color) {
     const g = new THREE.Group();
-    const w = 5.8, d = 4.6, wallTop = hall(g, { x: -0.1, z: 0, w, d, h: 2.3, color, parapet: false, piers: 1.15 });
-    // saw-tooth roof: three bays, each a sloping deck and a glazed vertical face
-    for (let i = 0; i < 3; i++) {
-      const bx = -0.1 - w / 2 + w / 6 + (i * w) / 3;
-      const sh = new THREE.Shape(); sh.moveTo(-w / 6, 0); sh.lineTo(w / 6, 0); sh.lineTo(w / 6, 1.15); sh.closePath();
-      const geo = new THREE.ExtrudeGeometry(sh, { depth: d + 0.2, bevelEnabled: false }); geo.translate(0, 0, -(d + 0.2) / 2);
-      const m = mesh(geo, shade(color, -0.3)); m.position.set(bx, wallTop, 0); g.add(m);
-      g.add(box(0.06, 1.0, d - 0.1, GLASS, bx + w / 6 - 0.04, wallTop + 0.05, 0));
-      for (let k = -2; k <= 2; k++) g.add(box(0.08, 1.05, 0.06, DARK, bx + w / 6 - 0.03, wallTop + 0.03, k * 0.9));
-      g.add(box(w / 3 + 0.04, 0.1, d + 0.3, TRIM, bx, wallTop - 0.05, 0));
+    const BRICK = 0xa4553a, BRICK_D = 0x7e3d29, STEEL = 0x8a8f99;
+    const hx = -0.3, hz = -0.25, w = 4.2, d = 3.7;
+    const top = hall(g, { x: hx, z: hz, w, d, h: 2.4, color: BRICK, parapet: false, piers: 1.05, pierColor: BRICK_D, belt: false });
+    g.add(box(w + 0.22, 0.16, d + 0.22, color, hx, top - 0.62, hz));          // a band in the company colour
+    g.add(box(w + 0.16, 0.08, d + 0.16, TRIM, hx, top - 0.08, hz));
+    // brick courses: thin mortar lines on the two walls the camera sees
+    for (let k = 1; k < 6; k++) { g.add(onWall('z', hx, 0.3 + k * 0.28, hz + d / 2, w - 0.05, 0.02, 0.012, 0xc98a6a)); g.add(onWall('x', hz, 0.3 + k * 0.28, hx + w / 2, d - 0.05, 0.02, 0.012, 0xc98a6a)); }
+    // the saw-tooth roof: four bays, each a sloping deck in the company colour and a glazed face
+    const n = 4;
+    for (let i = 0; i < n; i++) {
+      const bx = hx - w / 2 + w / (2 * n) + (i * w) / n;
+      const sh = new THREE.Shape(); sh.moveTo(-w / (2 * n), 0); sh.lineTo(w / (2 * n), 0); sh.lineTo(w / (2 * n), 0.95); sh.closePath();
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: d + 0.15, bevelEnabled: false }); geo.translate(0, 0, -(d + 0.15) / 2);
+      const m = mesh(geo, i % 2 ? shade(ROOF, 0.08) : ROOF); m.position.set(bx, top, hz); g.add(m);
+      g.add(box(0.05, 0.82, d - 0.15, GLASS, bx + w / (2 * n) - 0.03, top + 0.06, hz));
+      for (let k = -2; k <= 2; k++) g.add(box(0.07, 0.86, 0.05, DARK, bx + w / (2 * n) - 0.02, top + 0.04, hz + k * 0.72));
     }
-    door(g, 'z', -1.7, 2.3, 1.7, 1.75, 0xbfa36a);
-    win(g, 'z', 0.05, 1.15, 2.3, 0.7, 0.75);
-    winRow(g, 'x', 0, 1.15, 2.8, 3, 1.25, 0.7, 0.75);
-    signBoard(g, 'x', 0, 2.05, 2.8, 3.0, 0x2a2f38, 6);
-    // the meshing gears: a big one and a small one turning the other way
-    const big = gearShape(0.95, 14, 0xc9ced6), small = gearShape(0.55, 9, 0x8a8f99);
-    big.position.set(1.15, wallTop + 0.95, 2.48); small.position.set(2.45, wallTop + 0.35, 2.52);
-    g.add(big, small);
-    g.add(box(0.5, wallTop - 0.3, 0.2, shade(color, -0.3), 1.15, 0.3, 2.38));
-    return { group: g, top: wallTop + 2.4, anim(t, dt) { big.rotation.z -= dt * 0.9; small.rotation.z += dt * 0.9 * (14 / 9); } };
+    // windows: tall arched-look factory windows with warm glass on the camera walls
+    for (const a of [hx - 1.55, hx + 1.55]) win(g, 'z', a, 0.85, hz + d / 2, 0.7, 1.1, DARK, WARM);
+    win(g, 'x', hz - 1.4, 0.85, hx + w / 2, 0.7, 1.1, DARK, WARM);
+    // the grinding window: a slot of hot orange light that flickers with sparks
+    const grind = onWall('x', hz + 1.45, 0.75, hx + w / 2, 0.55, 0.45, 0.05, 0xffb060, { emissive: 0xff7a1a, emissiveIntensity: 1.2 }); grind.material = grind.material.clone(); g.add(grind);
+    g.add(onWall('x', hz + 1.45, 0.68, hx + w / 2, 0.7, 0.6, 0.03, DARK));
+    const sparks = [];
+    for (let k = 0; k < 6; k++) { const sp = box(0.04, 0.04, 0.04, 0xffe08a, hx + w / 2 + 0.12, 0.9, hz + 1.45, { emissive: 0xffc040, emissiveIntensity: 2 }); g.add(sp); sparks.push(sp); }
+    // the big gears on a steel frame along the roof, turning together
+    const gy = top + 1.55, gz = hz + 0.25;
+    lattice(g, hx - 1.9, gz - 0.25, hx - 1.9, gz + 0.25, top, 1.0, IRON, 0.5);
+    g.add(box(0.2, 1.4, 0.2, IRON, hx - 0.7, top, gz), box(0.2, 0.9, 0.2, IRON, hx + 0.75, top, gz));
+    const big = gearShape(1.05, 16, color, 0.28), mid = gearShape(0.62, 10, STEEL, 0.26), tiny = gearShape(0.38, 7, shade(color, -0.25), 0.24);
+    big.position.set(hx - 0.7, gy, gz); mid.position.set(hx + 0.95, gy - 0.6, gz + 0.02); tiny.position.set(hx + 1.85, gy - 0.05, gz + 0.04);
+    g.add(big, mid, tiny);
+    // the name board on the right-hand roof edge
+    g.add(box(0.08, 0.3, 0.08, IRON, hx - 1.9, top, hz + d / 2 - 0.12), box(0.08, 0.3, 0.08, IRON, hx + 0.3, top, hz + d / 2 - 0.12));
+    textSign(g, 'z', hx - 0.8, top + 0.22, hz + d / 2 - 0.1, 2.4, 0.5, 'GEAR WORKS', 0x23272e, 0xffc23d);
+    // the brick chimney at the back
+    const smoke = [chimney(g, hx - 1.45, hz - 1.35, top, 2.6, 0.32, BRICK)];
+    // a little office tower on the back corner with a gear-faced clock
+    const ox = 1.95, oz = -1.75, ot = 3.9;
+    g.add(box(1.25, ot, 1.25, shade(BRICK, 0.08), ox, 0.3, oz));
+    g.add(box(1.4, 0.14, 1.4, color, ox, 0.3 + ot - 0.5, oz), box(1.38, 0.2, 1.38, TRIM, ox, 0.3 + ot, oz));
+    for (const y of [1.0, 2.0]) { win(g, 'z', ox, y, oz + 0.625, 0.55, 0.6, DARK, WARM); win(g, 'x', oz, y, ox + 0.625, 0.55, 0.6, DARK, WARM); }
+    const clock = gearShape(0.42, 12, TRIM, 0.08); clock.position.set(ox, 0.3 + ot - 0.95, oz + 0.68); g.add(clock);
+    const hand1 = box(0.04, 0.3, 0.03, DARK, 0, 0, 0), hand2 = box(0.035, 0.22, 0.03, DARK, 0, 0, 0);
+    const hands = new THREE.Group(); hand1.position.y = 0; hand2.position.y = 0; hands.add(hand1, hand2); hand2.rotation.z = 2.1;
+    hands.position.set(ox, 0.3 + ot - 0.95, oz + 0.75); g.add(hands);
+    g.add(box(0.06, 0.8, 0.06, 0xdddddd, ox, 0.3 + ot + 0.2, oz), box(0.1, 0.1, 0.1, 0xff3b2f, ox, 0.3 + ot + 1.0, oz, { emissive: 0xff2a1a, night: 2 }));
+    // a jib crane by the front yard, swinging a gear on its hook
+    const jx = -2.75, jz = 1.75;
+    g.add(cyl(0.22, 0.26, 0.2, PLINTH, jx, 0.15, jz, 12), box(0.16, 2.4, 0.16, HAZ, jx, 0.3, jz));
+    const trolley = new THREE.Group(); trolley.position.set(jx, 2.55, jz);
+    trolley.add(box(1.3, 0.14, 0.16, HAZ, 0.55, 0, 0), box(0.06, 0.4, 0.06, HAZ, 0.15, -0.35, 0), box(0.22, 0.16, 0.22, DARK, 1.0, -0.12, 0), box(0.02, 0.85, 0.02, IRON, 1.0, -1.0, 0));
+    const hung = gearShape(0.28, 8, STEEL, 0.12); hung.position.set(1.0, -1.25, 0); trolley.add(hung);
+    g.add(trolley);
+    // stacks of finished gears on pallets in the front yard
+    for (const [x, z, k] of [[-2.45, 2.75, 3], [-1.75, 2.75, 2]]) {
+      g.add(box(0.8, 0.1, 0.8, 0x8a6a45, x, 0.15, z));
+      for (let j = 0; j < k; j++) { const st = gearShape(0.3, 9, j % 2 ? STEEL : color, 0.11); st.rotation.x = Math.PI / 2; st.position.set(x, 0.32 + j * 0.12, z); g.add(st); }
+    }
+    return { group: g, top: gy + 1.3, smoke,
+      anim(t, dt) {
+        big.rotation.z -= dt * 0.7; mid.rotation.z += dt * 0.7 * (16 / 10); tiny.rotation.z -= dt * 0.7 * (16 / 7);
+        hand1.parent.rotation.z = -t * 0.2; hand2.rotation.z = 2.1 - t * 1.5;
+        trolley.rotation.y = 0.4 + Math.sin(t * 0.35) * 1.1;
+        const on = Math.sin(t * 13) + Math.sin(t * 7.3) > 0;
+        grind.material.emissiveIntensity = on ? 1.8 : 0.7;
+        sparks.forEach((sp, i) => { const f = (t * 1.6 + i / 6) % 1; sp.position.set(hx + w / 2 + 0.12 + f * 0.6, 0.95 + Math.sin(f * Math.PI) * 0.35 - f * 0.3, hz + 1.45 + (i - 2.5) * f * 0.12); sp.visible = on || i % 2 === 0; });
+      } };
   },
 
   // ---- Engine Line: an assembly hall with a stepped roof, a test cell with an exhaust

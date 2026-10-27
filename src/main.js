@@ -205,8 +205,11 @@ function buyRow(d, lv) {
   const n = buyCount(d, lv);
   const cost = upgradeCost(d, lv, n);
   const afford = game.canAfford(cost);
+  // Max: as many levels as the cash on hand pays for, in one go
+  const most = afford ? maxAffordable(d, lv, game.cash) : 0;
+  const max = most >= 2 ? `<button class="btn gold sh-max" data-act="upgrade-max" aria-label="Upgrade ${most} levels to Lv ${lv + most} for $${fmtCost(upgradeCost(d, lv, most))}">Max<small>Lv ${lv + most}</small></button>` : '';
   return `<div class="sh-buy">
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + n} · $${fmtCost(cost)}</button>
+      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + n} · $${fmtCost(cost)}</button>${max}
     </div>
     ${afford ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${Math.min(100, game.cash / cost * 100).toFixed(1)}%"></i></span><small>Saving up: ${Math.floor(Math.min(99, game.cash / cost * 100))}%</small></div>`}
     ${afford ? '' : cashAdButton(cost - game.cash)}`;
@@ -376,6 +379,10 @@ sheet.addEventListener('click', async e => {
   if (act === 'upgrade' && id) {
     const d = def(id), lv = game.level(id);
     if (game.buyLevels(id, buyCount(d, lv))) world.bounce(lot);
+  }
+  if (act === 'upgrade-max' && id) {
+    const d = def(id), lv = game.level(id), n = maxAffordable(d, lv, game.cash);
+    if (n > 0 && game.buyLevels(id, n)) { world.bounce(lot); track('upgrade_max', { levels: n }); }
   }
   if (act === 'develop' && game.develop(lot)) { sfx.build(); toast('Land cleared and roads fixed! Now build something on it.'); track('land_developed', { plots: Object.keys(game.run.land).length }); }
   if (act === 'build') {
@@ -752,18 +759,30 @@ modal.addEventListener('click', e => {
   if (b) { e.stopPropagation(); closeModal(false); doTravel(b.dataset.world); }
 }, true);
 
+// Going to another world: the town eases away into a starry warp, the new world is built
+// while the screen is covered, then it eases in from the warp. (No flashes of the old town.)
+const frames = n => new Promise(r => { const step = () => (n-- <= 0 ? r() : requestAnimationFrame(step)); requestAnimationFrame(step); });
 async function doTravel(id, quiet = false) {
   if ((launching && !quiet) || id === game.s.current) return;
-  const flash = $('flash');
-  flash.hidden = false;
-  await new Promise(r => setTimeout(r, 350));
+  launching = true;
+  const warp = $('warp'), body = document.body;
+  body.classList.remove('warp-in'); body.classList.add('warp-out'); warp.classList.add('on');
+  await sleep(520);
   const res = game.travel(id);
-  if (!res) { flash.hidden = true; return; }
+  if (!res) { warp.classList.remove('on'); body.classList.remove('warp-out'); launching = false; return; }
   track('world_travel', { to: id });
   rebuildTown();
   save();
-  setTimeout(() => { flash.hidden = true; }, 600);
   showTown();
+  // let the new world draw a few frames under the cover before showing it
+  await frames(4);
+  body.classList.remove('warp-out'); body.classList.add('warp-in');
+  await frames(1);
+  body.classList.add('warp-settle');
+  warp.classList.remove('on');
+  await sleep(700);
+  body.classList.remove('warp-in', 'warp-settle');
+  launching = false;
   if (!quiet) toast(`Welcome to ${game.townName()}`);
 }
 $('map-btn').addEventListener('click', openMap);
