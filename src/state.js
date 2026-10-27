@@ -766,15 +766,20 @@ export class Game {
     if (!builtIds.length) { this.s.nextContractAt = Date.now() + 30_000; return; }
     const pick = builtIds[Math.max(0, builtIds.length - 1 - Math.floor(Math.random() * Math.min(2, builtIds.length)))];
     const d = FACTORIES.find(f => f.id === pick);
-    // An order is always something you can fill at the speed you have now (about half to
-    // four fifths of what this factory makes in the time), so there's never a reason to hold
-    // back upgrades until one comes along. What it pays depends on how big your whole town's
-    // income is when it arrives (so getting ahead pays), and delivering early adds a bonus
-    // of up to 100% (so upgrading while it runs pays too).
+    // How hard an order is depends only on how much money you've made in this world. From
+    // that we work out the income a town that has earned that much usually has (playtesting
+    // shows income grows roughly with the square root of what's been earned), and compare it
+    // with your town's real income. A town that's ahead of that finds orders easy; one that
+    // has been holding back upgrades finds them hard. Waiting for an order to come along
+    // before upgrading never helps: the order only gets easier once you've upgraded.
+    // The order is sized in the factory's own goods: k x (expected / actual income) of
+    // what it makes in the time, so a normal town needs about 70% of the time.
     const minutes = [5, 8, 10, 15][Math.floor(Math.random() * 4)];
     const rate = this.typeInfo(pick).made;
-    const share = 0.55 + Math.random() * 0.3;
-    const target = Math.max(5, Math.floor(rate * minutes * 60 * share / 5) * 5);
+    const expected = 3.2 * Math.sqrt(Math.max(0, this.run.runEarned) * priceOf(this.world));
+    const actual = Math.max(1e-9, this.totalRate());
+    const hardness = 0.7 * Math.max(0.35, Math.min(1.6, expected / actual)) * (0.9 + Math.random() * 0.2);
+    const target = Math.max(5, Math.ceil(rate * minutes * 60 * hardness / 5) * 5);
     const base = Math.max(50, this.totalRate() * minutes * 60 * 1.5);   // one and a half times what the town makes in the time
     const reward = base;
     const list = (CUSTOMERS[this.s.current] || CUSTOMERS.colorado)[pick];
