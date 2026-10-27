@@ -537,7 +537,8 @@ export class Game {
   // wallet; the rest fill their storage until you come and tap them.
   tick(dt) { this.finishJobs(); this.#produce(dt, true); this.tickContract(dt); }
   #produce(seconds, live) {
-    const boost = live ? (this.boostLeft() > 0 ? 2 : 1) : 1;
+    // while the app is closed everything earns at half speed (GAME.offlineRate)
+    const boost = live ? (this.boostLeft() > 0 ? 2 : 1) : GAME.offlineRate;
     const direct = {};   // what managers paid into each world's wallet
     for (const [wId, run] of Object.entries(this.s.worlds)) {
       const per = this.flowFor(wId).per;
@@ -590,7 +591,7 @@ export class Game {
     const run = this.s.worlds[worldId];
     return Object.keys(run.managers).filter(id => run.managers[id]).reduce((a, id) => a + this.earnRate(id, worldId) / (this.boostLeft() > 0 ? 2 : 1), 0);
   }
-  vaultCap(worldId = this.s.current) { return Math.max(this.vault(worldId), this.managerRate(worldId) * this.vaultHours(worldId) * 3600); }
+  vaultCap(worldId = this.s.current) { return Math.max(this.vault(worldId), this.managerRate(worldId) * GAME.offlineRate * this.vaultHours(worldId) * 3600); }
   collectVault(mult = 1) {
     const amount = this.vault() * mult;
     if (amount <= 0) return 0;

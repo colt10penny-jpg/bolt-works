@@ -284,7 +284,7 @@ function hqSheet(d) {
   const vault = `<div class="hq-vault">
       <div class="hq-vault-top"><span>Collected while you were away</span><b>$${fmt(v)}</b></div>
       <span class="sh-bar"><i style="width:${cap > 0 ? Math.min(100, v / cap * 100).toFixed(1) : 0}%"></i></span>
-      <small>Holds up to ${fmtHours(hrs)} of your managers' pay${cap >= 1 ? ` ($${fmt(cap)})` : ''}. ${nextHrs > hrs ? `Upgrade to hold ${fmtHours(nextHrs)}.` : ''}</small>
+      <small>While you're away your managers work at half speed. This holds up to ${fmtHours(hrs)} of it${cap >= 1 ? ` ($${fmt(cap)})` : ''}. ${nextHrs > hrs ? `Upgrade to hold ${fmtHours(nextHrs)}.` : ''}</small>
       ${v >= 1 ? `<div class="hq-vault-btns"><button class="btn green" data-act="vault">Collect $${fmt(v)}</button><button class="btn gold" data-act="vault2">${AD} Collect 2×</button></div>` : ''}
     </div>`;
   return head(d, ICON.hq, d.name, sub, lv) + vault + buyRow(d, lv) + `
