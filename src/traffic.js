@@ -26,13 +26,17 @@ const DIRS = [{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }];
 // stretch of road between two junctions is a "segment", and is either in good
 // shape (cars use it), worn out, or not built yet. A few roads lead out of town.
 export const segKey = (a, b) => { const ka = key(a.x, a.z), kb = key(b.x, b.z); return ka < kb ? ka + '|' + kb : kb + '|' + ka; };
+// how far into a lot a truck pulls up to its loading bay (the Wild West's docks stand
+// further out, round its bigger buildings)
+let BAY_IN = 2.6;
+export function setBayIn(v) { BAY_IN = v; }
 export function blockSides(cx, cz) {
-  const h = BLOCK / 2;
+  const h = BLOCK / 2, IN = BAY_IN;
   return [
-    { side: 'x+', road: { x: cx + h, z: cz }, inLot: { x: cx + 2.6, z: cz }, ends: [{ x: cx + h, z: cz - h }, { x: cx + h, z: cz + h }] },
-    { side: 'x-', road: { x: cx - h, z: cz }, inLot: { x: cx - 2.6, z: cz }, ends: [{ x: cx - h, z: cz - h }, { x: cx - h, z: cz + h }] },
-    { side: 'z+', road: { x: cx, z: cz + h }, inLot: { x: cx, z: cz + 2.6 }, ends: [{ x: cx - h, z: cz + h }, { x: cx + h, z: cz + h }] },
-    { side: 'z-', road: { x: cx, z: cz - h }, inLot: { x: cx, z: cz - 2.6 }, ends: [{ x: cx - h, z: cz - h }, { x: cx + h, z: cz - h }] },
+    { side: 'x+', road: { x: cx + h, z: cz }, inLot: { x: cx + IN, z: cz }, ends: [{ x: cx + h, z: cz - h }, { x: cx + h, z: cz + h }] },
+    { side: 'x-', road: { x: cx - h, z: cz }, inLot: { x: cx - IN, z: cz }, ends: [{ x: cx - h, z: cz - h }, { x: cx - h, z: cz + h }] },
+    { side: 'z+', road: { x: cx, z: cz + h }, inLot: { x: cx, z: cz + IN }, ends: [{ x: cx - h, z: cz + h }, { x: cx + h, z: cz + h }] },
+    { side: 'z-', road: { x: cx, z: cz - h }, inLot: { x: cx, z: cz - IN }, ends: [{ x: cx - h, z: cz - h }, { x: cx + h, z: cz - h }] },
   ].map(s => ({ ...s, seg: segKey(s.ends[0], s.ends[1]) }));
 }
 export const NET = { blocks: [], segs: new Map(), good: new Set(), exits: [], adj: new Map(), roads: [] };

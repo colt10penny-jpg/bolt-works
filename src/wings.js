@@ -14,6 +14,7 @@ import { box, cyl, mat } from './models.js';
 import { styledWing } from './upgrades.js';
 import { falseFront, wWin, porch, balcony, barrel } from './buildings-west.js';
 import { westWing as frontierWing } from './west-upgrades.js';
+import { moonWing as lunarWing } from './moon-upgrades.js';
 import { TRIM, DARK, IRON, HAZ, GLASS, WARM, shade, mesh, at, onWall, win, door, sideDoor, hall, tank, railing } from './buildings.js';
 
 const W = 2.3, D = 2.2, FH = 0.8;
@@ -243,7 +244,7 @@ function westWing(g, { color, tier, cx, cz, floors, i }) {
 }
 
 export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
-  if (kind === 'yard' && theme !== 'desert') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
+  if (kind === 'yard' && theme !== 'desert' && theme !== 'moon') return styledWing(kind, cx, cz, color, tier, i);   // the switchyard is fine as it is
   const g = new THREE.Group();
   const floors = 2 + Math.floor(Math.min(9, tier) / 3) + (i === 0 ? 1 : 0) + (tier >= 8 ? 1 : 0);
   const o = { color, tier, cx, cz, floors, theme };
@@ -256,7 +257,7 @@ export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
     
   }
   else if (theme === 'mars') top = marsWing(g, o);
-  else if (theme === 'moon') top = kind === 'silo' ? siloWing(g, o) : moonWing(g, o);
+  else if (theme === 'moon') top = lunarWing(kind, g, { ...o, i });
   else if (kind === 'silo') top = siloWing(g, o);
   else if (kind === 'sawtooth') top = sawWing(g, o);
   else if (kind === 'hangar') top = hangarWing(g, o);

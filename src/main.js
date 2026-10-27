@@ -51,7 +51,7 @@ world.lotsOf = type => game.slotsOf(type).filter(s => game.jobOf(s)?.kind !== 'b
 world.workOf = lot => { const s = slotAt(lot); return s && game.jobOf(s) ? game.jobProgress(s) : null; };
 world.roadInfo = () => ({ good: new Set(Object.keys(game.run.roads)), exits: game.exitsOf(game.s.current), state: k => game.roadState(k) });
 const typeOf = id => game.typeOf(id);
-if (location.search.includes('debug')) import('./traffic.js').then(m => Object.assign(window, { __game: game, __world: world, __net: m.NET, __tm: m }));
+if (location.search.includes('debug')) Promise.all([import('./traffic.js'), import('three'), import('./models.js')]).then(([m, T, M]) => Object.assign(window, { __game: game, __world: world, __net: m.NET, __tm: m, __THREE: T, __BUILDERS: M.BUILDERS }));
 const idx = id => FACTORIES.findIndex(f => f.id === id);
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 const tint = d => hex([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(d.color) ? 0x8a8f99 : d.color);
@@ -207,9 +207,9 @@ function buyRow(d, lv) {
   const afford = game.canAfford(cost);
   // Max: as many levels as the cash on hand pays for, in one go
   const most = afford ? maxAffordable(d, lv, game.cash) : 0;
-  const max = most >= 2 ? `<button class="btn gold sh-max" data-act="upgrade-max" aria-label="Upgrade ${most} levels to Lv ${lv + most} for $${fmtCost(upgradeCost(d, lv, most))}">Max<small>Lv ${lv + most}</small></button>` : '';
+  const max = most >= 2 ? `<button class="btn gold sh-max" data-act="upgrade-max" aria-label="Upgrade ${most} levels to Lv ${lv + most} for $${fmtCost(upgradeCost(d, lv, most))}">Max · Lv ${lv + most}<small>$${fmtCost(upgradeCost(d, lv, most))}</small></button>` : '';
   return `<div class="sh-buy">
-      <button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + n} · $${fmtCost(cost)}</button>${max}
+      ${max}<button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + n} · $${fmtCost(cost)}</button>
     </div>
     ${afford ? '' : `<div class="sh-save"><span class="sh-bar"><i style="width:${Math.min(100, game.cash / cost * 100).toFixed(1)}%"></i></span><small>Saving up: ${Math.floor(Math.min(99, game.cash / cost * 100))}%</small></div>`}
     ${afford ? '' : cashAdButton(cost - game.cash)}`;

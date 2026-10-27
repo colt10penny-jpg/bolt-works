@@ -15,11 +15,12 @@ import './buildings-mars.js';     // and the Mars colony
 import { withDetail } from './surface.js';
 const NIGHT_LIST = () => GLOW.night;
 import { buildLand, buildRoads, withClouds, SHARED } from './terrain.js';
-import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, NET } from './traffic.js';
+import { Traffic, lotRoute, lotDriveways, DRIVEWAYS, setNetwork, setBayIn, NET } from './traffic.js';
 
 import { plotsOf, boundsOf, startView } from './layout.js';
 import { STYLE, PROPS } from './upgrades.js';
 import { WEST_STYLE, westGear } from './west-upgrades.js';
+import { MOON_STYLE, moonGear } from './moon-upgrades.js';
 import { buildWing } from './wings.js';
 import { splitBig } from './chunks.js';
 import { Puff, PuffLayer } from './puffs.js';
@@ -283,6 +284,7 @@ export class World {
     const T = THEME[name] || THEME.colorado;
     this.T = T;
     const info = this.roadInfo();
+    setBayIn(this.themeName === 'desert' ? 3.85 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     for (const g of [this.groundGroup, this.sceneryGroup]) {
@@ -392,6 +394,7 @@ export class World {
   // roads were fixed or built: update the network, the road meshes and the loading bays
   roadsChanged() {
     const info = this.roadInfo();
+    setBayIn(this.themeName === 'desert' ? 3.85 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     this.#roads();
@@ -638,7 +641,7 @@ export class World {
     if (built && look) L.look = look;
     if (built && !L.model) {
       const color = look?.color ?? L.def.color;
-      const m = (BUILDERS[look?.model] || BUILDERS.mine)(color);
+      const m = (BUILDERS[look?.model] || BUILDERS.mine)(color, L.tier || 0);
       const crateColor = color === 0xe8e4da || color === 0xd8d2c4 || color === 0xcfd3da ? 0xb9b4a8 : color;
       L.crates.children.forEach(c => { c.material = mat(crateColor); });
       m.group.position.y = 0.15;
@@ -729,11 +732,13 @@ export class World {
     const style = STYLE[this.typeOf?.(id)] || STYLE.default;
     // the Wild West has its own additions and gear for every kind of building
     const west = this.themeName === 'desert' ? (WEST_STYLE[this.typeOf?.(id)] || WEST_STYLE.default) : null;
+    // and so does the Moon (moon-upgrades.js)
+    const luna = this.themeName === 'moon' ? (MOON_STYLE[this.typeOf?.(id)] || MOON_STYLE.default) : null;
     const later = [], ground = [];   // no room on the main roof: onto a wing, or into the yard
     [2, 4, 6, 7, 9].forEach((need, k) => {
       if (tier < need) return;
-      const name = k < 4 ? (west ? west.props[k] : style.props[k]) : 'beacon';
-      const P = west ? westGear(name, color, this.typeOf?.(id)) : PROPS[name](color, k);
+      const name = k < 4 ? (west ? west.props[k] : luna ? luna.props[k] : style.props[k]) : 'beacon';
+      const P = west ? westGear(name, color, this.typeOf?.(id)) : luna ? moonGear(name, color) : PROPS[name](color, k);
       if (P.ground) { ground.push(P.g); return; }
       const p = roofSpot(P.fw, P.fd, P.minY || 1.8);
       if (p) { P.g.position.copy(p); g.add(P.g); } else later.push(P.g);
@@ -748,7 +753,7 @@ export class World {
     ex.add(shadow);
     // loading bays with garage doors, on each side trucks use
     // (only factories trucks deliver to: no bays on power, compute or the headquarters)
-    if (!['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) ex.add(this.#bay(side, color));
+    if (!['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) { const by = this.#bay(side, color); by.userData.bay = side; ex.add(by); }
     // free corners: an extra wing for each upgrade tier, parked cars in the rest
     let corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8));
@@ -761,7 +766,13 @@ export class World {
       const coreG = m.group.children.find(o => o.userData.core);
       const coreMeshes = []; coreG?.traverse(o => { if (o.isMesh) coreMeshes.push(o); });
       const coreTop = (x, z) => { ray.set(new THREE.Vector3(x, 80, z), down); const h = ray.intersectObjects(coreMeshes, false)[0]; return h ? h.point.y - L.group.position.y : 0; };
+      // (and nothing of the main building that stands taller than a barrel may poke into the
+      // corner at all: a windmill's tower or a flume would end up inside the wing)
+      const coreBoxes = coreMeshes.map(o => new THREE.Box3().setFromObject(o)).filter(b => b.max.y - L.group.position.y > 0.75);
+      const pokes = (cx, cz) => coreBoxes.some(b => b.max.x > lx + cx - 1.05 && b.min.x < lx + cx + 1.05 && b.max.z > lz + cz - 1.05 && b.min.z < lz + cz + 1.05 &&
+        Math.min(b.max.x, lx + cx + 1.05) - Math.max(b.min.x, lx + cx - 1.05) > 0.12 && Math.min(b.max.z, lz + cz + 1.05) - Math.max(b.min.z, lz + cz - 1.05) > 0.12);
       corners = corners.map(([cx, cz]) => [Math.sign(cx) * 3.2, Math.sign(cz) * 3.2]).filter(([cx, cz]) => {
+        if (pokes(cx, cz)) return false;
         let tall = 0;
         for (let a = -1; a <= 1; a += 0.5) for (let b = -1; b <= 1; b += 0.5) if (coreTop(lx + cx + a, lz + cz + b) > 0.6) tall++;
         return tall <= 4;
@@ -774,7 +785,7 @@ export class World {
       for (const o of [...m.group.children]) if (!o.userData.core && Math.abs(o.position.x - cx) < 1.45 && Math.abs(o.position.z - cz) < 1.45) m.group.remove(o);
     };
     const wings = tier >= 5 ? 3 : tier >= 3 ? 2 : tier >= 1 ? 1 : 0;
-    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { clearCorner([cx, cz]); const wg = this.#wing(cx, cz, color, tier, i, west ? west.wings[i] : style.wing); ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
+    const wingTops = corners.slice(0, wings).map(([cx, cz], i) => { clearCorner([cx, cz]); const wg = this.#wing(cx, cz, color, tier, i, west ? west.wings[i] : luna ? luna.wings[i] : style.wing); wg.userData.wing = i + 1; ex.add(wg); return [cx, wg.userData.top + 0.15, cz]; });
     // yard props take the free corners first; anything that didn't fit on the main roof
     // goes on a wing roof, or failing that into a free corner
     let spare = corners.slice(wings);
@@ -917,6 +928,9 @@ export class World {
     }
     L.group.add(ex);
     L.extras = ex;
+    // where the docks and wings stand (kept for checks, see ?debug)
+    L.group.updateMatrixWorld(true);
+    L.blockers = ex.children.filter(o => o.userData.bay || o.userData.wing).map(o => ({ kind: o.userData.bay ? 'bay ' + o.userData.bay : 'wing ' + o.userData.wing, box: new THREE.Box3().setFromObject(o) }));
   }
   // Low levels look old and run down: faded, dusty paint, matte and grimy. High levels
   // look new and sleek: richer colour, smooth satin finishes with a bit of shine.
@@ -987,26 +1001,26 @@ export class World {
   // a frontier freight dock: a raised plank dock with its edge on posts, a big barn door
   // swung open, a little shed roof on brackets, a lantern, and freight waiting to go
   #ramada(side, color) {
+    // an open loading shed: a shingled roof on four posts over a plank floor, open on every
+    // side (a wall standing out here, away from the building, looked like a fence boxing it in)
     const g = new THREE.Group();
-    const W = 2.1, H = 1.75, D = 1.7, PL = 0x8a6a45, DK = 0x5e4630;
-    g.add(box(W + 0.4, H + 0.2, 0.12, 0x7a5a3a, 0, 0, -D / 2 + 0.02));                     // the timber door frame
-    g.add(box(W, H, 0.12, 0x1e1a16, 0, 0, -D / 2 + 0.08));                                   // the dark doorway
-    // the door leaves folded right back flat against the wall, with their white Z-braces
+    const W = 2.1, H = 1.85, D = 1.9, PL = 0x8a6a45, DK = 0x5e4630;
+    g.add(box(W + 0.3, 0.04, D, PL, 0, 0, 0));
+    for (let k = 0; k < 7; k++) g.add(box(0.03, 0.005, D - 0.02, DK, -W / 2 + 0.1 + k * 0.32, 0.04, 0));
+    for (const x of [-W / 2 - 0.05, W / 2 + 0.05]) for (const z of [-D / 2 + 0.1, D / 2 - 0.1]) g.add(box(0.12, H, 0.12, DK, x, 0, z));
+    for (const x of [-W / 2 - 0.05, W / 2 + 0.05]) g.add(box(0.1, 0.12, D, DK, x, H - 0.05, 0));
     for (const sd of [-1, 1]) {
-      g.add(box(0.5, H - 0.1, 0.05, color, sd * (W / 2 + 0.45), 0, -D / 2 + 0.12));
-      const zb = box(0.04, 1.6, 0.02, 0xeee4cc, sd * (W / 2 + 0.45), 0.05, -D / 2 + 0.15); zb.rotation.z = sd * 0.28; g.add(zb);
+      const r = box(W / 2 + 0.35, 0.06, D + 0.3, 0x5e4c3c, sd * (W / 4 + 0.08), H + 0.2, 0); r.rotation.z = -sd * 0.32; g.add(r);
+      for (let k = 0; k < 5; k++) { const sh = box(W / 2 + 0.36, 0.02, 0.05, 0x4a3c30, sd * (W / 4 + 0.08), H + 0.235, -D / 2 + 0.1 + k * (D - 0.2) / 4); sh.rotation.z = -sd * 0.32; g.add(sh); }
     }
-    // the raised plank dock in front of the door, with a step down
-    g.add(box(W + 0.3, 0.3, 0.9, PL, 0, 0, -D / 2 + 0.55));
-    for (let k = 0; k < 7; k++) g.add(box(0.03, 0.005, 0.88, DK, -W / 2 + 0.1 + k * 0.32, 0.3, -D / 2 + 0.55));
-    g.add(box(W + 0.3, 0.06, 0.08, DK, 0, 0.26, -D / 2 + 1.0));
-    // a short shed roof over the door on two brackets
-    const roof = box(W + 0.3, 0.05, 0.6, 0x5e4c3c, 0, H + 0.12, -D / 2 + 0.32); roof.rotation.x = 0.25; g.add(roof);
-    for (const x of [-W / 2 + 0.05, W / 2 - 0.05]) { const br = box(0.06, 0.06, 0.5, DK, x, H - 0.12, -D / 2 + 0.28); br.rotation.x = 0.7; g.add(br); }
-    g.add(box(0.16, 0.22, 0.16, 0xffd9a0, W / 2 + 0.25, H - 0.35, -D / 2 + 0.2, { emissive: 0xffc070, night: 2.5 }));   // a lantern
-    wCrate(g, W / 2 - 0.15, -D / 2 + 0.45, 0.3, 0.38); wBarrel(g, -W / 2 + 0.3, -D / 2 + 0.45, 0.3, 0.8);
+    g.add(box(0.14, 0.14, D + 0.32, 0x4a3c30, 0, H + 0.5, 0));
+    // the company colour on a little sign board up in the gable, a lantern, and freight
+    // waiting at the back corners, clear of the wagon
+    g.add(box(0.9, 0.3, 0.04, color, 0, H + 0.12, D / 2 + 0.12), box(0.96, 0.04, 0.05, 0xeee4cc, 0, H + 0.42, D / 2 + 0.12));
+    g.add(box(0.16, 0.22, 0.16, 0xffd9a0, W / 2 + 0.05, H - 0.45, D / 2 - 0.1, { emissive: 0xffc070, night: 2.5 }));
+    wCrate(g, W / 2 - 0.12, -D / 2 + 0.35, 0.04, 0.36); wCrate(g, W / 2 - 0.12, -D / 2 + 0.35, 0.4, 0.3); wBarrel(g, -W / 2 + 0.2, -D / 2 + 0.35, 0.04, 0.8); wBarrel(g, -W / 2 + 0.2, -D / 2 + 0.8, 0.04, 0.8);
     // further out than elsewhere: the frontier buildings are bigger
-    const dist = 3.2, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    const dist = 3.6, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
     return g;
@@ -1187,12 +1201,14 @@ export class World {
   }
 
   #dust(L) {
-    for (let i = 0; i < 14; i++) {
-      const m = this.#puff(0xcfc3ad, false, 1.6 + Math.random() * 1.6);
+    // a short, light puff of dust round the foot of a building that just levelled up
+    const dc = { desert: 0xd9bf94, mars: 0xc0704a, moon: 0xc4c4ca }[this.themeName] || 0xcfc3ad;
+    for (let i = 0; i < 8; i++) {
+      const m = this.#puff(dc, false, 1.0 + Math.random() * 1.0);
       const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 2;
-      m.position.set(L.group.position.x + Math.cos(a) * r, 0.6 + Math.random(), L.group.position.z + Math.sin(a) * r);
+      m.position.set(L.group.position.x + Math.cos(a) * r, 0.4 + Math.random() * 0.5, L.group.position.z + Math.sin(a) * r);
       this.scene.add(m);
-      this.smoke.push({ m, age: Math.random() * 0.3, life: 1.6 + Math.random(), spread: true });
+      this.smoke.push({ m, age: Math.random() * 0.3, life: 1.1 + Math.random() * 0.6, spread: true });
     }
   }
 
@@ -1273,7 +1289,10 @@ export class World {
   // upgrade tier: the building grows, gains wings and rooftop gear
   setGrowth(id, tier) {
     const L = this.lots[id];
-    L.grow = 1 + Math.min(9, tier) * 0.04;
+    // bigger with each look, but mostly upward: spreading out would push the building into
+    // its own loading docks and wings (and its trains and carts through their walls)
+    L.grow = 1 + Math.min(9, tier) * 0.016;
+    L.growXZ = 1 + Math.min(9, tier) * 0.005;
     if ((L.tier || 0) === tier) return;
     const up = tier > (L.tier || 0);
     L.tier = tier;
@@ -1814,7 +1833,7 @@ export class World {
       if (L.model) {
         L.bounce = Math.max(0, L.bounce - dt * 2.5);
         const b = Math.sin(L.bounce * Math.PI) * 0.12 * L.bounce;
-        L.model.scale.set(L.grow * (1 - b * 0.5), L.grow * (1 + b), L.grow * (1 - b * 0.5));
+        const gx = L.growXZ || L.grow || 1; L.model.scale.set(gx * (1 - b * 0.5), L.grow * (1 + b), gx * (1 - b * 0.5));
         if (L.smokeAt.length && L.speed > 0 && (L.smokeT = (L.smokeT || 0) - dt) <= 0) { L.smokeT = (0.22 + Math.random() * 0.1) / Math.max(0.3, L.speed); this.#emitSmoke(L); }
         // crates pile up when this factory makes more than the next one can use
         const i = FACTORIES.findIndex(d => d.id === type);

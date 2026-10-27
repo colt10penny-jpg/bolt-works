@@ -208,94 +208,161 @@ function timberTower(g, x, z, b, t, h, color = WOOD, levels = 5) {
 }
 
 Object.assign(BUILDERS, {
-  // ---- Gold Mine: a tall timber headframe with a turning sheave wheel over the shaft, a
-  // false-front hoist house, ore carts rolling out on rails to a tailings heap
-  goldmine(color) {
+  // ---- Gold Mine: a rocky hill with a timbered tunnel mouth, ore carts rolling out of it
+  // on rails, a headframe over the main shaft with its sheave wheel turning, a hoist house
+  // and a tailings heap. It grows with the town (t = its look, 0-9): a proper hoist house
+  // with a boiler stack, then an ore bin over the rails, strings of electric lights, a
+  // taller iron-braced headframe with a lit sign, and at the top a second cart and a
+  // glittering pile of gold.
+  goldmine(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    // the headframe over the shaft
-    const hx = -1.35, hz = -1.2, H = 4.6;
-    c.add(box(1.5, 0.2, 1.5, 0x5a4632, hx, 0.05, hz));
-    c.add(box(0.9, 0.04, 0.9, 0x1a1410, hx, 0.25, hz));
-    timberTower(c, hx, hz, 0.75, 0.32, H, WOOD, 4);
-    rod(c, [hx + 1.6, 0.15, hz], [hx + 0.2, H - 0.2, hz], 0.07, WOOD);   // the back leg bracing toward the hoist
-    c.add(box(0.8, 0.12, 0.8, WOOD_D, hx, H, hz));
-    const sheave = new THREE.Group();
-    sheave.add(mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 20), 0x3a3f48));
-    for (let k = 0; k < 6; k++) { const sp = box(0.04, 0.84, 0.04, 0x5a5f66, 0, -0.42, 0); sp.rotation.z = k * Math.PI / 3; sheave.add(sp); }
-    sheave.position.set(hx, H + 0.55, hz); sheave.rotation.y = Math.PI / 2; c.add(sheave);
-    rod(c, [hx, H + 0.55, hz + 0.42], [hx + 2.5, 1.4, hz + 0.42], 0.02, 0x2a2d33);           // the cable to the hoist
-    // the hoist house: a false front with "MINE" sign
-    falseFront(c, { x: 1.85, z: -1.4, w: 2.1, d: 1.7, h: 1.5, fh: 0.8, color: GREY, sign: 0x2a2420, text: 'GOLD MINE', ink: 0xe8c46a });
-    c.add(onWall('z', 1.4, 0.25, -0.55, 0.55, 1.15, 0.05, 0x3a2a1e)); wWin(c, 'z', 2.35, 0.75, -0.55, 0.45, 0.5, TRIM, WARM, 0x6e4a2c);
-    // a rail round the shaft collar, a lantern on the headframe and the shaft bell
-    for (const [x0, z0, x1, z1] of [[-0.6, 0.6, 0.6, 0.6], [0.6, -0.6, 0.6, 0.6], [-0.6, -0.6, -0.6, 0.6]]) { c.add(box(0.06, 0.6, 0.06, WOOD_D, hx + x0, 0.25, hz + z0), box(0.06, 0.6, 0.06, WOOD_D, hx + x1, 0.25, hz + z1)); rod(c, [hx + x0, 0.75, hz + z0], [hx + x1, 0.75, hz + z1], 0.025, 0xb5532a); }
-    c.add(box(0.14, 0.2, 0.14, 0xfff1cf, hx + 0.45, 2.6, hz + 0.45, { emissive: 0xffc070, night: 2.6 }), box(0.18, 0.04, 0.18, 0x2a2d33, hx + 0.45, 2.8, hz + 0.45));
-    c.add(box(0.3, 0.3, 0.06, 0x6e4a2c, hx + 0.9, 1.3, hz + 0.78)); c.add(cyl(0.06, 0.1, 0.12, 0xc9a24a, hx + 0.9, 1.32, hz + 0.84, 8));
-    // a chute from the headframe's ore bin down to the cart
-    const ch = box(0.4, 0.06, 1.2, WOOD_L, hx + 0.6, 1.0, hz + 1.6); ch.rotation.x = 0.55; c.add(ch);
-    for (const e of [-0.2, 0.2]) { const sd = box(0.04, 0.16, 1.2, WOOD_D, hx + 0.6 + e, 1.0, hz + 1.6); sd.rotation.x = 0.55; c.add(sd); }
-    wWin(c, 'x', -1.4, 0.75, 2.9, 0.5, 0.55);
-    const stack = [[2.5, -2.2]]; for (const [sx, sz] of stack) { c.add(cyl(0.12, 0.14, 1.4, 0x3a3f48, sx, 2.1, sz, 10)); }
-    // rails from the shaft out to the tailings, with a cart that rolls along them
-    for (const dz of [-0.22, 0.22]) c.add(box(3.6, 0.05, 0.05, 0x5a5f66, 0.2, 0.17, 1.6 + dz));
-    for (let k = 0; k < 12; k++) c.add(box(0.12, 0.04, 0.62, 0x6e5232, -1.55 + k * 0.32, 0.14, 1.6));
-    const cart = new THREE.Group();
-    cart.add(box(0.6, 0.32, 0.42, 0x6a4a32, 0, 0.12, 0), box(0.62, 0.05, 0.44, 0x3a3f48, 0, 0.42, 0));
-    const ore = mesh(new THREE.DodecahedronGeometry(0.22, 0), 0xc9a24a, { flatShading: true, metalness: 0.4, roughness: 0.4 }); ore.scale.y = 0.5; ore.position.set(0, 0.47, 0); cart.add(ore);
-    for (const [wx, wz] of [[-0.2, -0.22], [0.2, -0.22], [-0.2, 0.22], [0.2, 0.22]]) cart.add(cyl(0.08, 0.08, 0.04, 0x2a2d33, wx, 0.08, wz, 10).rotateX(Math.PI / 2));
-    cart.position.set(0, 0.15, 1.6); c.add(cart);
-    const heap = mesh(new THREE.ConeGeometry(1.0, 0.9, 9), 0xa88a62, { flatShading: true }); heap.position.set(2.55, 0.6, 1.9); g.add(heap);
-    barrel(g, -2.8, 2.6); barrel(g, -2.4, 2.8); crate(g, -2.7, 2.1);
-    for (const [px, pz] of [[0.2, -3.5], [0.9, -3.5]]) { g.add(box(1.2, 0.12, 0.12, WOOD_L, px, 0.15, pz)); g.add(box(1.2, 0.12, 0.12, WOOD_L, px, 0.27, pz + 0.14)); }   // pit props
-    return { group: g, top: (H + 1.2) * S, anim(t) { sheave.rotation.z = t * 1.6; cart.position.x = -1.2 + ((Math.sin(t * 0.45) + 1) / 2) * 3.0; } };
+    const ROCK = 0xa0805c, ROCK_D = 0x7e6246;
+    // the hill, with boulders round its foot
+    const hill = mesh(new THREE.DodecahedronGeometry(1, 1), ROCK, { flatShading: true, roughness: 1 }); hill.scale.set(0.85, 1.1, 0.85); hill.position.set(-1.15, 0.0, -1.15); c.add(hill);
+    const cap = mesh(new THREE.DodecahedronGeometry(0.5, 0), ROCK_D, { flatShading: true, roughness: 1 }); cap.position.set(-1.35, 0.95, -1.35); cap.scale.y = 0.7; c.add(cap);
+    for (const [x, z, r] of [[-0.35, -1.75, 0.2], [-1.7, -0.55, 0.16], [-0.45, -0.55, 0.14], [-1.8, -1.75, 0.22]]) { const b = mesh(new THREE.DodecahedronGeometry(r, 0), ROCK_D, { flatShading: true }); b.position.set(x, 0.2, z); c.add(b); }
+    for (let k = 0; k < 4; k++) { const bush = mesh(new THREE.IcosahedronGeometry(0.12, 0), 0x7a8a4a, { flatShading: true }); bush.position.set(-1.6 + k * 0.35, 0.95 - Math.abs(k - 1.5) * 0.12, -0.75 - k * 0.12); c.add(bush); }
+    // the tunnel mouth: a timber portal set into the hill
+    const ax = -1.15, az = -0.32;
+    c.add(box(0.75, 0.85, 0.06, 0x14100c, ax, 0.15, az));
+    for (const e of [-0.42, 0.42]) c.add(box(0.14, 1.0, 0.14, WOOD, ax + e, 0.15, az + 0.04));
+    c.add(box(1.1, 0.16, 0.2, WOOD_D, ax, 1.12, az + 0.04));
+    wSign(c, 'z', ax, 1.32, az + 0.08, 1.0, 0.24, 0x2a2420, 4, 0xe8c46a, t >= 6 ? 'MOTHER LODE' : 'GOLD MINE');
+    c.add(box(0.12, 0.18, 0.12, 0xfff1cf, ax + 0.52, 0.95, az + 0.15, { emissive: 0xffc070, night: 2.6 }));
+    // the rails: out of the tunnel, then along the front to the hoist house
+    const path = [[ax, az + 0.1], [ax, 0.95], [1.35, 0.95]];
+    const railM = 0x5a5f66, tieM = 0x6e5232;
+    for (let s0 = 0; s0 < path.length - 1; s0++) {
+      const [x0, z0] = path[s0], [x1, z1] = path[s0 + 1], alongX = z0 === z1, len = Math.hypot(x1 - x0, z1 - z0) + 0.22;
+      for (const e of [-0.2, 0.2]) c.add(alongX ? box(len, 0.05, 0.05, railM, (x0 + x1) / 2, 0.17, z0 + e) : box(0.05, 0.05, len, railM, x0 + e, 0.17, (z0 + z1) / 2));
+      for (let k = 0; k <= Math.floor(len / 0.3); k++) c.add(alongX ? box(0.1, 0.04, 0.56, tieM, Math.min(x0, x1) - 0.1 + k * 0.3, 0.14, z0) : box(0.56, 0.04, 0.1, tieM, x0, 0.14, Math.min(z0, z1) - 0.1 + k * 0.3));
+    }
+    c.add(box(0.2, 0.25, 0.5, 0x8a3a2a, 1.6, 0.15, 0.95));   // the buffer stop at the end
+    const mkCart = gold => {
+      const cart = new THREE.Group();
+      cart.add(box(0.55, 0.3, 0.4, 0x6a4a32, 0, 0.12, 0), box(0.57, 0.05, 0.42, 0x3a3f48, 0, 0.4, 0));
+      const ore = mesh(new THREE.DodecahedronGeometry(0.2, 0), gold ? 0xe8c040 : 0xa88a62, gold ? { flatShading: true, metalness: 0.6, roughness: 0.3 } : { flatShading: true }); ore.scale.y = 0.5; ore.position.set(0, 0.45, 0); cart.add(ore);
+      for (const [wx, wz] of [[-0.18, -0.21], [0.18, -0.21], [-0.18, 0.21], [0.18, 0.21]]) cart.add(cyl(0.08, 0.08, 0.04, 0x2a2d33, wx, 0.08, wz, 10).rotateX(Math.PI / 2));
+      c.add(cart); return cart;
+    };
+    const carts = [mkCart(t >= 8)]; if (t >= 8) carts.push(mkCart(true));
+    const lens = []; let total = 0; for (let k = 0; k < path.length - 1; k++) { const l = Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); lens.push(l); total += l; }
+    const along = d => { let k = 0; while (k < lens.length - 1 && d > lens[k]) { d -= lens[k]; k++; } const f = Math.min(1, d / lens[k]); return [path[k][0] + (path[k + 1][0] - path[k][0]) * f, path[k][1] + (path[k + 1][1] - path[k][1]) * f, path[k][1] === path[k + 1][1]]; };
+    // the headframe over the shaft, with the sheave wheel on top
+    const hx = 0.85, hz = -0.95, H = t >= 5 ? 4.3 : 3.4, frameC = t >= 5 ? 0x5a5f66 : WOOD;
+    c.add(box(1.2, 0.2, 1.2, 0x5a4632, hx, 0.05, hz), box(0.7, 0.04, 0.7, 0x1a1410, hx, 0.25, hz));
+    timberTower(c, hx, hz, 0.55, 0.28, H, frameC, t >= 5 ? 5 : 4);
+    if (t >= 5) for (const e of [-1, 1]) rod(c, [hx + e * 0.55, 0.25, hz + 0.55], [hx + e * 0.28, H, hz + 0.28], 0.035, 0x8a3a2a);
+    c.add(box(0.7, 0.12, 0.7, WOOD_D, hx, H, hz));
+    const sheaves = [];
+    for (const e of t >= 7 ? [-0.18, 0.18] : [0]) {
+      const sh = new THREE.Group();
+      sh.add(mesh(new THREE.TorusGeometry(0.38, 0.05, 6, 20), 0x3a3f48));
+      for (let k = 0; k < 6; k++) { const sp = box(0.04, 0.76, 0.04, 0x5a5f66, 0, -0.38, 0); sp.rotation.z = k * Math.PI / 3; sh.add(sp); }
+      sh.position.set(hx + e, H + 0.5, hz); sh.rotation.y = Math.PI / 2; c.add(sh); sheaves.push(sh);
+    }
+    for (const [x0, z0, x1, z1] of [[-0.45, 0.45, 0.45, 0.45], [0.45, -0.45, 0.45, 0.45]]) { c.add(box(0.06, 0.55, 0.06, WOOD_D, hx + x0, 0.25, hz + z0), box(0.06, 0.55, 0.06, WOOD_D, hx + x1, 0.25, hz + z1)); rod(c, [hx + x0, 0.72, hz + z0], [hx + x1, 0.72, hz + z1], 0.025, 0xb5532a); }
+    c.add(box(0.13, 0.2, 0.13, 0xfff1cf, hx + 0.4, 2.2, hz + 0.4, { emissive: 0xffc070, night: 2.6 }));
+    if (t >= 6) { c.add(box(1.0, 0.36, 0.06, 0x2a2420, hx, H - 0.6, hz + 0.32)); textPanel(c, 'z', hx, H - 0.58, hz + 0.36, 0.92, 0.3, 'GOLD', 0x2a2420, 0xffd76a); for (let k = 0; k < 6; k++) c.add(box(0.05, 0.05, 0.04, 0xfff1cf, hx - 0.45 + k * 0.18, H - 0.2, hz + 0.37, { emissive: 0xffd28a, night: 3 })); }
+    if (t >= 8) { c.add(box(0.03, 0.8, 0.03, 0xdddddd, hx, H + 0.9, hz), box(0.45, 0.28, 0.02, 0xd9482b, hx + 0.24, H + 1.4, hz)); }
+    // the hoist house that winds the cage up and down, with the cable running up to the sheave
+    const px = 1.15, pz = 0.15;
+    let roofY;
+    if (t >= 2) roofY = falseFront(c, { x: px, z: pz, w: 1.4, d: 1.1, h: 1.25, fh: 0.5, color: t >= 6 ? BRICK : GREY, sign: 0x2a2420, text: 'HOIST', ink: 0xe8c46a });
+    else { c.add(box(1.3, 1.0, 1.0, WOOD, px, 0.15, pz)); battens(c, px, pz, 1.3, 1.0, 0.15, 1.0, WOOD); const r = box(1.45, 0.06, 1.2, TIN, px, 1.18, pz); r.rotation.x = 0.18; c.add(r); roofY = 1.25; }
+    wWin(c, 'x', pz, 0.65, px + 0.7, 0.36, 0.42, TRIM, WARM);
+    rod(c, [hx, H + 0.5, hz + 0.38], [px - 0.3, 1.1, pz - 0.3], 0.018, 0x2a2d33);
+    const smoke = [];
+    if (t >= 2) { c.add(cyl(0.12, 0.15, 2.0, BRICK, px + 0.45, 0.15, pz - 0.35, 10), cyl(0.17, 0.17, 0.1, 0x3a3f48, px + 0.45, 2.15, pz - 0.35, 10)); smoke.push(new THREE.Vector3(px + 0.45, 2.35, pz - 0.35).multiplyScalar(S)); }
+    // the ore bin on stilts over the rails, with a chute down to the carts
+    if (t >= 3) {
+      const ox = -0.15, oz = 0.35;
+      for (const [dx, dz] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) c.add(box(0.08, 1.2, 0.08, WOOD_D, ox + dx, 0.15, oz + dz));
+      c.add(box(0.8, 0.6, 0.8, WOOD, ox, 1.3, oz)); battens(c, ox, oz, 0.8, 0.8, 1.3, 0.6, WOOD);
+      const r = box(0.95, 0.06, 0.95, TIN, ox, 1.95, oz); r.rotation.x = 0.15; c.add(r);
+      const ch = box(0.3, 0.05, 0.6, WOOD_L, ox, 1.05, oz + 0.5); ch.rotation.x = 0.6; c.add(ch);
+      rod(c, [hx - 0.3, 1.6, hz + 0.3], [ox + 0.35, 1.6, oz - 0.35], 0.06, WOOD);
+    }
+    // strings of electric lights from the headframe to the hoist house and the tunnel
+    if (t >= 4) {
+      const strand = (a, b, n) => { rod(c, a, b, 0.008, 0x2a2d33); for (let k = 1; k < n; k++) { const f = k / n; c.add(box(0.06, 0.06, 0.06, 0xfff1cf, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f - Math.sin(f * Math.PI) * 0.1, a[2] + (b[2] - a[2]) * f, { emissive: 0xffd28a, night: 3 })); } };
+      strand([hx - 0.3, 2.6, hz + 0.3], [px - 0.6, roofY + 0.3, pz + 0.5], 6);
+      strand([hx - 0.4, 2.0, hz + 0.3], [ax + 0.5, 1.2, az + 0.1], 6);
+    }
+    // the tailings heap, glittering with gold at the top level
+    const heap = mesh(new THREE.ConeGeometry(0.45, 0.5, 9), 0xa88a62, { flatShading: true }); heap.position.set(-1.5, 0.15 + 0.25, 1.45); c.add(heap);
+    if (t >= 8) for (let k = 0; k < 6; k++) { const n = mesh(new THREE.DodecahedronGeometry(0.09, 0), 0xffd24a, { flatShading: true, metalness: 0.7, roughness: 0.25, emissive: 0xb88a10, emissiveIntensity: 0.25 }); n.position.set(-1.5 + Math.cos(k) * 0.22, 0.3 + (k % 3) * 0.08, 1.45 + Math.sin(k) * 0.22); c.add(n); }
+    // the life-size clutter in the corners (cleared away when wings go up)
+    barrel(g, -2.95, 2.75); barrel(g, -2.6, 3.0); crate(g, -3.0, 2.3);
+    for (const [qx, qz] of [[2.6, -3.0], [3.1, -3.0]]) { g.add(box(1.0, 0.12, 0.12, WOOD_L, qx, 0.15, qz)); g.add(box(1.0, 0.12, 0.12, WOOD_L, qx, 0.27, qz + 0.14)); }
+    return { group: g, top: (H + 1.2) * S, smoke,
+      anim(tt) {
+        sheaves.forEach(sh => { sh.rotation.z = tt * 1.6; });
+        carts.forEach((cart, i) => {
+          const ph = ((tt * 0.14 + i * 0.5) % 2), d = (ph < 1 ? ph : 2 - ph) * total, [x, z, alongX] = along(d);
+          cart.position.set(x, 0.15, z); cart.rotation.y = alongX ? 0 : Math.PI / 2;
+        });
+      } };
   },
 
-  // ---- Stamp Mill: a tall stepped timber mill on stilts, its row of iron stamps thumping
-  // up and down, a brick smokestack, and a wooden water flume on a trestle
-  stampmill(color) {
+  // ---- Stamp Mill: a tall stepped timber mill, its row of iron stamps thumping up and
+  // down, a brick smokestack and a water tank. As it grows: lamps, then a second battery of
+  // stamps and strings of lights, a taller banded stack with a lit sign, and at the top
+  // red-painted roofs and a second stack.
+  stampmill(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
+    const roofC = t >= 8 ? 0xa8322a : color;
     // three stepped sheds, tallest at the back
-    for (const [x, z, w, d, h] of [[-0.8, -1.5, 3.6, 1.3, 3.6], [-0.6, -0.4, 3.2, 1.1, 2.6], [-0.4, 0.6, 2.8, 1.0, 1.7]]) {
+    for (const [x, z, w, d, h] of [[-0.25, -1.2, 3.2, 1.3, 3.6], [-0.15, -0.2, 3.0, 1.0, 2.6], [-0.05, 0.6, 2.7, 0.8, 1.7]]) {
       c.add(box(w, h, d, GREY, x, 0.15, z)); battens(c, x, z, w, d, 0.15, h, GREY);
-      const r = box(w + 0.2, 0.08, d + 0.3, color, x, 0.15 + h, z - 0.05); r.rotation.x = -0.18; c.add(r);
+      const r = box(w + 0.2, 0.08, d + 0.2, roofC, x, 0.15 + h, z); r.rotation.x = -0.18; c.add(r);
       wWin(c, 'z', x - w / 3, h - 0.75, z + d / 2, 0.42, 0.42, TRIM, WARM); wWin(c, 'z', x + w / 3, h - 0.75, z + d / 2, 0.42, 0.42, TRIM, WARM);
+      wWin(c, 'x', z, h - 0.75, x + w / 2, 0.36, 0.42, TRIM, WARM);
     }
-    // the stamp battery out front: a frame, a camshaft, and five stamps rising and falling
-    const bx = -0.4, bz = 1.45;
-    c.add(box(2.4, 0.4, 0.6, 0x5a4632, bx, 0.15, bz));
-    for (const e of [-1.15, 1.15]) c.add(box(0.14, 2.2, 0.14, WOOD_D, bx + e, 0.15, bz));
-    c.add(box(2.5, 0.16, 0.16, WOOD_D, bx, 2.3, bz));
-    c.add(cyl(0.06, 0.06, 2.3, 0x3a3f48, bx, 1.75 - 1.15, bz + 0.2, 8).rotateZ(Math.PI / 2));
+    // the stamp battery out front: a frame, a camshaft, and a row of stamps
+    const n = t >= 4 ? 10 : 5, bw = t >= 4 ? 3.2 : 2.4, bx = t >= 4 ? -0.4 : -0.3, bz = 1.4;
+    c.add(box(bw, 0.4, 0.55, 0x5a4632, bx, 0.15, bz));
+    for (const e of [-bw / 2 + 0.05, bw / 2 - 0.05]) c.add(box(0.14, 2.2, 0.14, WOOD_D, bx + e, 0.15, bz));
+    if (t >= 4) c.add(box(0.14, 2.2, 0.14, WOOD_D, bx, 0.15, bz));
+    c.add(box(bw + 0.1, 0.16, 0.16, WOOD_D, bx, 2.3, bz));
+    c.add(cyl(0.06, 0.06, bw - 0.1, 0x3a3f48, bx, 1.75 - (bw - 0.1) / 2, bz + 0.2, 8).rotateZ(Math.PI / 2));
     const stamps = [];
-    for (let k = 0; k < 5; k++) {
-      const s = new THREE.Group();
-      s.add(box(0.07, 1.6, 0.07, 0x5a5f66, 0, 0, 0), box(0.2, 0.22, 0.2, 0x3a3f48, 0, -0.05, 0), box(0.16, 0.08, 0.16, 0x6a6e76, 0, 1.2, 0));
-      s.position.set(bx - 0.8 + k * 0.4, 0.55, bz); c.add(s); stamps.push(s);
+    for (let k = 0; k < n; k++) {
+      const st = new THREE.Group();
+      st.add(box(0.07, 1.6, 0.07, 0x5a5f66, 0, 0, 0), box(0.18, 0.22, 0.18, 0x3a3f48, 0, -0.05, 0), box(0.15, 0.08, 0.15, 0x6a6e76, 0, 1.2, 0));
+      st.position.set(bx - bw / 2 + 0.3 + k * (bw - 0.6) / (n - 1), 0.55, bz); c.add(st); stamps.push(st);
     }
-    // the smokestack and the flume bringing water in on a trestle
-    const smoke = [];
-    c.add(box(0.6, 0.5, 0.6, BRICK, 2.3, 0.15, -2.2)); c.add(cyl(0.22, 0.28, 4.6, BRICK, 2.3, 0.65, -2.2, 12)); c.add(cyl(0.3, 0.3, 0.16, 0x3a3f48, 2.3, 5.2, -2.2, 12));
-    smoke.push(new THREE.Vector3(2.3, 5.4, -2.2));
-    for (let k = 0; k < 4; k++) { const x = 2.6, z = 2.4 - k * 1.0, y = 1.3 + k * 0.45; c.add(box(0.08, y, 0.08, WOOD_D, x - 0.2, 0.15, z), box(0.08, y, 0.08, WOOD_D, x + 0.2, 0.15, z)); }
-    const flume = box(0.35, 0.22, 4.0, WOOD_L, 2.6, 2.4, 0.9); flume.rotation.x = -0.23; c.add(flume);
-    const water = box(0.25, 0.02, 4.0, 0x4a8ac8, 2.6, 2.58, 0.9, { emissive: 0x2a5a8a, emissiveIntensity: 0.2 }); water.rotation.x = -0.23; c.add(water);
-    wSign(c, 'z', -0.4, 1.42, 1.1, 1.9, 0.3, 0x2a2420, 5, 0xe8c46a, 'STAMP MILL');
-    for (const lx of [-1.6, 0.8]) c.add(box(0.12, 0.18, 0.12, 0xfff1cf, lx, 1.95, 1.2, { emissive: 0xffc070, night: 2.6 }));
-    // the drive belt from the engine house up to the camshaft, and a catwalk along the top shed
-    const belt = box(0.12, 0.03, 1.4, 0x2a2420, 0.95, 1.7, 1.0); belt.rotation.x = 0.6; c.add(belt);
-    c.add(box(3.6, 0.06, 0.4, 0x8a6a45, -0.8, 3.0, -0.65)); for (let k = 0; k < 8; k++) c.add(box(0.04, 0.4, 0.04, CREAM, -2.5 + k * 0.48, 3.06, -0.47));
-    c.add(box(3.6, 0.04, 0.04, CREAM, -0.8, 3.44, -0.47));
-    hay(g, -2.6, 2.6, 0.15, 0.3); barrel(g, 1.3, 2.7); barrel(g, 0.9, 2.85);
+    wSign(c, 'z', -0.1, 1.42, 1.0, 1.9, 0.3, 0x2a2420, 5, 0xe8c46a, 'STAMP MILL');
+    // the smokestack, taller and banded as the mill grows, and a second one at the top
+    const smoke = [], sh = t >= 6 ? 5.4 : 4.4;
+    const stack = (x, z, h) => {
+      c.add(box(0.55, 0.45, 0.55, BRICK, x, 0.15, z), cyl(0.2, 0.26, h, BRICK, x, 0.6, z, 12), cyl(0.28, 0.28, 0.16, 0x3a3f48, x, 0.6 + h, z, 12));
+      if (t >= 6) for (const k of [0.7, 0.85]) c.add(cyl(0.225, 0.225, 0.12, k === 0.7 ? TRIM : 0x3a3f48, x, 0.6 + h * k, z, 12));
+      smoke.push(new THREE.Vector3(x, 0.8 + h, z));
+    };
+    stack(1.45, -1.45, sh); if (t >= 8) stack(-1.45, -1.45, sh - 0.8);
+    // a water tank on its stilts beside the mill, piped to the battery
+    waterTower(c, 1.5, 0.6, 1.5, 0.4);
+    rod(c, [1.5, 1.6, 0.95], [bx + bw / 2, 1.9, bz], 0.04, 0x5a5f66);
+    // lamps, then strings of electric lights along the front
+    for (const lx of [-1.2, 0.9]) c.add(box(0.12, 0.18, 0.12, 0xfff1cf, lx, 1.95, 1.05, { emissive: 0xffc070, night: 2.6 }));
+    if (t >= 4) { rod(c, [bx - bw / 2, 2.38, bz + 0.1], [bx + bw / 2, 2.38, bz + 0.1], 0.008, 0x2a2d33); for (let k = 0; k < 9; k++) c.add(box(0.06, 0.06, 0.06, 0xfff1cf, bx - bw / 2 + 0.2 + k * (bw - 0.4) / 8, 2.32, bz + 0.12, { emissive: 0xffd28a, night: 3 })); }
+    if (t >= 6) { c.add(box(1.8, 0.5, 0.08, 0x2a2420, -0.25, 3.95, -0.52)); textPanel(c, 'z', -0.25, 4.0, -0.47, 1.65, 0.38, 'GOLD STAMPS', 0x2a2420, 0xffd76a); for (const e of [-0.6, 0.6]) c.add(box(0.06, 0.4, 0.06, WOOD_D, -0.25 + e, 3.75, -0.56)); }
+    // the drive belt up to the camshaft, and a catwalk along the top shed
+    const belt = box(0.12, 0.03, 1.2, 0x2a2420, 0.95, 1.7, 0.9); belt.rotation.x = 0.6; c.add(belt);
+    c.add(box(3.2, 0.06, 0.35, 0x8a6a45, -0.25, 3.0, -0.4)); for (let k = 0; k < 7; k++) c.add(box(0.04, 0.4, 0.04, CREAM, -1.75 + k * 0.5, 3.06, -0.25));
+    c.add(box(3.2, 0.04, 0.04, CREAM, -0.25, 3.44, -0.25));
+    hay(g, -2.9, 2.9, 0.15, 0.3); barrel(g, 2.7, 2.9); barrel(g, 3.0, 2.6);
     smoke.forEach(v => v.multiplyScalar(S));
-    return { group: g, top: 5.6 * S, smoke, anim(t) { stamps.forEach((s, i) => { const p = (t * 1.4 + i * 0.37) % 1; s.position.y = 0.55 + (p < 0.75 ? p / 0.75 : 1 - (p - 0.75) / 0.25) * 0.4; }); } };
+    return { group: g, top: (sh + 1.2) * S, smoke, anim(tt) { stamps.forEach((st, i) => { const p = (tt * 1.4 + i * 0.37) % 1; st.position.y = 0.55 + (p < 0.75 ? p / 0.75 : 1 - (p - 0.75) / 0.25) * 0.4; }); } };
   },
 
   // ---- Frontier Bank: a solid two-storey bank painted slate blue, with a corner entrance,
   // white columns and trim, a gilded BANK sign, barred windows and a balcony
-  bank(color) {
+  bank(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const x = -0.3, z = -0.3, w = 3.8, d = 3.0, h = 2.9;
-    c.add(box(w + 0.24, 0.3, d + 0.24, 0x8a7a65, x, 0, z));
+    const x = -0.15, z = -0.3, w = 3.6, d = 3.0, h = 2.9;
+    c.add(box(w + 0.1, 0.3, d + 0.24, 0x8a7a65, x, 0, z));
     c.add(box(w, h, d, color, x, 0.3, z));
     // horizontal clapboards on the visible faces
     for (let y = 0.45; y < h + 0.2; y += 0.2) { c.add(onWall('z', x, y, z + d / 2, w, 0.025, 0.02, shade(color, -0.2))); c.add(onWall('x', z, y, x + w / 2, d, 0.025, 0.02, shade(color, -0.2))); }
@@ -319,19 +386,45 @@ Object.assign(BUILDERS, {
     for (const e of [-0.55, 0.55]) c.add(cyl(0.08, 0.09, 1.5, TRIM, x + 1.55 + e, 0.3, z + d / 2 + 0.25, 10));
     c.add(box(1.4, 0.12, 0.45, TRIM, x + 1.55, 1.8, z + d / 2 + 0.15));
     c.add(box(1.0, 0.14, 0.5, 0x8a7a65, x + 1.55, 0.15, z + d / 2 + 0.3), box(1.0, 0.14, 0.3, 0x8a7a65, x + 1.55, 0.29, z + d / 2 + 0.2));
-    balcony(c, { axis: 'x', a: z - 0.15, f: x + w / 2, len: 2.2, y: 1.75 });
+    balcony(c, { axis: 'z', a: x - 0.75, f: z + d / 2, len: 2.0, y: 1.75 });
+    // as the town gets rich: striped awnings, then a clock cupola on the roof, then a
+    // gilded dome with a flag, and at the top a gold eagle and a sign ringed with bulbs
+    if (t >= 3) for (const a of [-1.2, 0.6]) for (let k = 0; k < 4; k++) { const st = box(0.19, 0.05, 0.42, k % 2 ? TRIM : 0xa8322a, x + a - 0.28 + k * 0.19, 1.6, z + d / 2 + 0.2); st.rotation.x = 0.35; c.add(st); }
+    let crown = 0.3 + h + 1.6;
+    if (t >= 5) {
+      const ux = x - 0.45, uz = z - 0.55, uy = 0.3 + h;
+      c.add(box(1.0, 0.6, 1.0, TRIM, ux, uy, uz), cyl(0.42, 0.45, 0.7, color, ux, uy + 0.6, uz, 8));
+      const cf = mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.04, 18), CREAM); cf.rotation.x = Math.PI / 2; cf.position.set(ux, uy + 0.95, uz + 0.43); c.add(cf);
+      c.add(box(0.02, 0.16, 0.02, 0x2a2d33, ux, uy + 0.95, uz + 0.46), box(0.12, 0.02, 0.02, 0x2a2d33, ux + 0.05, uy + 0.95, uz + 0.46));
+      const dome = mesh(new THREE.SphereGeometry(0.45, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), t >= 7 ? 0xd9a83a : SHINGLE, t >= 7 ? { metalness: 0.7, roughness: 0.3 } : undefined); dome.position.set(ux, uy + 1.3, uz); c.add(dome);
+      crown = uy + 1.75;
+      if (t >= 7) { c.add(box(0.03, 0.9, 0.03, 0xdddddd, ux, crown, uz), box(0.4, 0.25, 0.02, 0x3a5a9a, ux + 0.21, crown + 0.6, uz)); crown += 0.9; }
+      if (t >= 9) { const eg = new THREE.Group(); eg.add(box(0.14, 0.2, 0.12, 0xd9a83a, 0, 0, 0)); for (const e of [-1, 1]) { const wg = box(0.3, 0.04, 0.12, 0xd9a83a, e * 0.18, 0.15, 0); wg.rotation.z = e * 0.5; eg.add(wg); } eg.position.set(x + 1.4, 0.3 + h + 1.65, z + d / 2 - 0.05); c.add(eg); }
+    }
+    if (t >= 9) for (let k = 0; k < 10; k++) c.add(box(0.05, 0.05, 0.04, 0xfff1cf, x - 1.0 + k * 0.22, h + 1.02, z + d / 2 + 0.06, { emissive: 0xffd28a, night: 3 }));
     // a lamp by the door, a hitching rail and a strongbox wagon waiting out front
     c.add(box(0.12, 0.2, 0.12, 0xfff1cf, x + 0.75, 1.75, z + d / 2 + 0.05, { emissive: 0xffd28a, night: 2.4 }));
     hitchRail(g, -2.5, 2.4, 1.2); horse(g, -2.6, 2.05, 0.1, 0x3a2a1e);
     barrel(g, 2.5, -2.5); crate(g, 2.75, -2.1);
-    return { group: g, top: (h + 2.2) * S };
+    return { group: g, top: Math.max(h + 2.2, crown + 0.3) * S };
   },
 
   // ---- General Store: a green false front with DRY GOODS signs, a deep porch stacked
   // with barrels, sacks and crates, a ramp, and a wagon wheel leaning by the steps
-  genstore(color) {
+  genstore(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const top = falseFront(c, { x: -0.35, z: -0.6, w: 3.6, d: 2.6, h: 2.0, fh: 1.0, color, sign: 0x2a3a2a, text: 'GENERAL STORE' });
+    // as it grows: striped awnings, then an upstairs with dormer windows and a rooftop
+    // billboard, then strings of lights and a flag
+    if (t >= 5) {
+      c.add(box(2.6, 1.0, 1.6, color, -0.3, 2.15, -1.05)); battens(c, -0.3, -1.05, 2.6, 1.6, 2.15, 1.0, color);
+      const rf = mesh(new THREE.CylinderGeometry(0.0, 1.0, 0.7, 4, 1).rotateY(Math.PI / 4), SHINGLE); rf.scale.set(1.95, 1, 1.2); rf.position.set(-0.3, 3.5, -1.05); c.add(rf);
+      for (const a of [-1.0, 0.0, 1.0]) { c.add(box(0.42, 0.42, 0.35, TRIM, -0.3 + a, 2.6, -0.3)); c.add(onWall('z', -0.3 + a, 2.66, -0.12, 0.28, 0.28, 0.02, WARM, { emissive: 0xff9a3a, emissiveIntensity: 0.5 })); }
+      for (const e of [-0.7, 0.7]) c.add(box(0.06, 0.7, 0.06, WOOD_D, -0.3 + e, 3.3, -1.8));
+      c.add(box(1.8, 0.5, 0.08, 0xf1e6c8, -0.3, 3.8, -1.8)); textPanel(c, 'z', -0.3, 3.82, -1.75, 1.7, 0.42, 'SUPPLIES', 0xf1e6c8, 0xa8322a);
+    }
+    const top = falseFront(c, { x: -0.12, z: -0.6, w: 3.3, d: 2.6, h: 2.0, fh: 1.0, color, sign: 0x2a3a2a, text: 'GENERAL STORE' });
+    if (t >= 3) for (const a of [-1.2, 0.5]) for (let k = 0; k < 4; k++) { const st = box(0.19, 0.05, 0.42, k % 2 ? TRIM : 0x3a7a4a, -0.35 + a - 0.28 + k * 0.19, 1.6, 0.92); st.rotation.x = 0.35; c.add(st); }
+    if (t >= 7) { rod(c, [-1.9, 1.75, 1.7], [1.3, 1.75, 1.7], 0.008, 0x2a2d33); for (let k = 0; k < 9; k++) c.add(box(0.06, 0.06, 0.06, 0xfff1cf, -1.75 + k * 0.38, 1.69, 1.7, { emissive: 0xffd28a, night: 3 })); c.add(box(0.03, 1.0, 0.03, 0xdddddd, 1.2, top, -0.5), box(0.4, 0.26, 0.02, 0xa8322a, 1.41, top + 0.7, -0.5)); }
     for (const a of [-1.2, 0.5]) wWin(c, 'z', -0.35 + a, 0.85, 0.7, 0.7, 0.9, TRIM, WARM);
     c.add(onWall('z', -0.05 + 0.6, 0.25, 0.7, 0.75, 1.45, 0.05, 0x3a2a1e));
     wSign(c, 'z', -1.25, 1.95, 0.7, 1.0, 0.28, 0xb5532a, 4, CREAM, 'DRY GOODS');
@@ -343,30 +436,41 @@ Object.assign(BUILDERS, {
     textPanel(c, 'x', -0.35, 1.25, 1.47, 0.9, 0.36, 'COFFEE', 0xb5532a, CREAM);
     for (let k = 0; k < 4; k++) { const br = box(0.04, 0.9, 0.04, k % 2 ? 0xc9a24a : 0x6e5232, 1.2 + k * 0.08, 0.25, 0.85); br.rotation.z = 0.12; c.add(br); }
     wWin(c, 'x', -1.3, 0.85, 1.45, 0.5, 0.7, TRIM, GLASS, 0x6e4a2c); wWin(c, 'x', 0.45, 0.85, 1.45, 0.5, 0.7, TRIM, GLASS, 0x6e4a2c);
-    porch(c, { axis: 'z', a: -0.35, f: 0.7, len: 3.6, depth: 1.0, h: 1.75, color: TRIM });
+    porch(c, { axis: 'z', a: -0.12, f: 0.7, len: 3.3, depth: 1.0, h: 1.75, color: TRIM });
     for (const [bx, bz] of [[-1.9, 1.35], [-1.55, 1.45], [1.15, 1.4]]) barrel(c, bx, bz, 0.25);
     for (const [cx, cz] of [[-1.1, 1.45]]) { crate(c, cx, cz, 0.25); crate(c, cx, cz, 0.65, 0.34); }
     for (let k = 0; k < 3; k++) { const s = mesh(new THREE.SphereGeometry(0.17, 8, 6), 0xd8c49a); s.scale.set(1, 0.75, 0.8); s.position.set(0.95 + k * 0.08, 0.38 + (k === 2 ? 0.2 : 0), 1.25 + (k % 2) * 0.12); c.add(s); }
-    const ramp = box(0.9, 0.06, 1.1, 0x8a6a45, 2.1, 0.2, 0.0); ramp.rotation.z = -0.12; c.add(ramp);
-    wheel(c, 1.7, 0.53, 1.75, 0.38, 0.4);
+    wheel(c, 1.2, 0.53, 1.8, 0.36, 0.4);
     // a delivery wagon out back and a woodpile
     for (let k = 0; k < 4; k++) g.add(cyl(0.09, 0.09, 1.0, 0x8a6a45, 2.6, 0.24 + Math.floor(k / 2) * 0.17 - 0.5, -2.0 + (k % 2) * 0.2, 7).rotateZ(Math.PI / 2));
     hay(g, 2.6, -2.7, 0.15, 0.2); barrel(g, -2.75, -2.6);
-    return { group: g, top: (top + 0.6) * S };
+    return { group: g, top: Math.max(top + 0.6, t >= 5 ? 4.3 : 0) * S };
   },
 
   // ---- Livery Stable: a big barn-fronted stable with tall double doors, a hay loft with a
   // pulley beam, a split-rail corral with horses, hay bales and a water trough
-  livery(color) {
+  livery(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const top = falseFront(c, { x: -0.6, z: -0.9, w: 3.6, d: 2.8, h: 2.5, fh: 1.1, color, sign: 0xb5532a, text: 'LIVERY STABLE' });
+    const top = falseFront(c, { x: -0.25, z: -0.7, w: 3.2, d: 2.4, h: 2.5, fh: 1.1, color, sign: 0xb5532a, text: 'LIVERY STABLE' });
+    // as it grows: a cupola with a horse weathervane, then a carriage shed roof along the
+    // side with a buggy under it, then lanterns strung across the front
+    if (t >= 3) {
+      c.add(box(0.7, 0.6, 0.7, TRIM, -0.4, 2.75, -1.1)); for (const e of [-0.2, 0.2]) c.add(onWall('z', -0.4 + e, 2.85, -0.75, 0.12, 0.38, 0.02, 0x3a2a1e));
+      const cr = mesh(new THREE.ConeGeometry(0.55, 0.45, 4), SHINGLE); cr.rotation.y = Math.PI / 4; cr.position.set(-0.4, 3.57, -1.1); c.add(cr);
+      c.add(box(0.03, 0.4, 0.03, 0x2a2d33, -0.4, 3.75, -1.1), box(0.36, 0.14, 0.03, 0x2a2d33, -0.4, 4.1, -1.1), box(0.08, 0.14, 0.03, 0x2a2d33, -0.25, 4.22, -1.1));
+    }
+    // a smithy's brick chimney at the back, smoking while the farrier works
+    const smoke = [];
+    if (t >= 5) { c.add(box(0.45, 1.6, 0.45, BRICK, 0.85, 2.3, -1.45), box(0.55, 0.08, 0.55, 0x5a3a2a, 0.85, 3.9, -1.45)); smoke.push(new THREE.Vector3(0.85, 4.1, -1.45).multiplyScalar(S));
+      const an = new THREE.Group(); an.add(box(0.36, 0.12, 0.16, 0x2a2d33, 0, 0, 0), box(0.18, 0.12, 0.12, 0x2a2d33, 0, -0.12, 0), box(0.12, 0.06, 0.1, 0x2a2d33, 0.22, 0.03, 0)); an.position.set(1.0, 1.65, 0.75); c.add(an, box(0.03, 0.25, 0.03, 0x2a2d33, 1.0, 1.75, 0.75)); }
+    if (t >= 7) { rod(c, [-2.0, 2.3, 0.62], [1.2, 2.3, 0.62], 0.008, 0x2a2d33); for (let k = 0; k < 8; k++) c.add(box(0.08, 0.1, 0.08, 0xfff1cf, -1.8 + k * 0.42, 2.18, 0.62, { emissive: 0xffc070, night: 3 })); }
     // lanterns either side of the doors and a big horseshoe nailed up over them (for luck)
     for (const e of [-1.2, 1.2]) c.add(box(0.13, 0.2, 0.13, 0xfff1cf, -0.6 + e, 1.6, 0.58, { emissive: 0xffc070, night: 2.6 }));
     const shoe = mesh(new THREE.TorusGeometry(0.2, 0.045, 6, 14, Math.PI * 1.4), 0x8a8f99, { metalness: 0.6, roughness: 0.4 }); shoe.rotation.z = -Math.PI * 0.2; shoe.position.set(-0.6, 2.9, 0.58); c.add(shoe);
     // a saddle on a rail by the door and a feed bin
     c.add(box(0.9, 0.05, 0.05, WOOD_D, 1.1, 0.85, 0.7), box(0.05, 0.6, 0.05, WOOD_D, 0.7, 0.25, 0.7), box(0.05, 0.6, 0.05, WOOD_D, 1.5, 0.25, 0.7));
     c.add(box(0.36, 0.14, 0.3, 0x5a2a1a, 1.1, 0.88, 0.7), box(0.12, 0.1, 0.12, 0x3a2418, 1.0, 1.02, 0.7));
-    c.add(box(0.7, 0.45, 0.4, 0x8a6a45, -2.05, 0.25, 0.75), box(0.75, 0.05, 0.45, 0x6e4a2c, -2.05, 0.7, 0.75));
+    c.add(box(0.6, 0.45, 0.4, 0x8a6a45, -1.55, 0.25, 0.85), box(0.65, 0.05, 0.45, 0x6e4a2c, -1.55, 0.7, 0.85));
     // big double doors with Z-braces, and the loft door above with a hay-hoist beam
     for (const e of [-0.45, 0.45]) { c.add(onWall('z', -0.6 + e, 0.25, 0.5, 0.86, 1.75, 0.06, shade(color, -0.12))); const zb = onWall('z', -0.6 + e, 1.0, 0.56, 0.08, 1.6, 0.03, TRIM); zb.rotation.z = e > 0 ? 0.45 : -0.45; c.add(zb); c.add(onWall('z', -0.6 + e, 0.35, 0.56, 0.8, 0.07, 0.03, TRIM), onWall('z', -0.6 + e, 1.9, 0.56, 0.8, 0.07, 0.03, TRIM)); }
     c.add(onWall('z', -0.6, 2.15, 0.5, 0.7, 0.55, 0.06, 0x3a2a1e));
@@ -374,69 +478,110 @@ Object.assign(BUILDERS, {
     hay(c, -0.6, 1.0, 1.75, 0);
     wWin(c, 'x', -1.6, 1.1, 1.2, 0.5, 0.5, TRIM, GLASS, 0xb5532a); wWin(c, 'x', -0.2, 1.1, 1.2, 0.5, 0.5, TRIM, GLASS, 0xb5532a);
     // the corral: split rails round the front-right corner with two horses
-    const cx0 = 1.75, cx1 = 3.6, cz0 = 1.2, cz1 = 3.6;
+    const cx0 = 1.75, cx1 = 3.6, cz0 = 1.5, cz1 = 3.6;
     for (const [x0, z0, x1, z1] of [[cx0, cz1, cx1, cz1], [cx1, cz0, cx1, cz1], [cx0, cz0, cx0, cz1]]) {
       const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 0.75);
       for (let k = 0; k <= n; k++) g.add(box(0.08, 0.8, 0.08, WOOD_D, x0 + (x1 - x0) * k / n, 0.15, z0 + (z1 - z0) * k / n));
       for (const y of [0.45, 0.78]) g.add(x0 === x1 ? box(0.06, 0.06, len, 0x8a6a45, x0, y, (z0 + z1) / 2) : box(len, 0.06, 0.06, 0x8a6a45, (x0 + x1) / 2, y, z0));
     }
-    const h1 = horse(g, 2.3, 2.6, 0.6, 0x7a4a2a), h2 = horse(g, 3.0, 1.8, 2.3, 0xd8c8b0);
+    const h1 = horse(g, 2.3, 2.6, 0.6, 0x7a4a2a), h2 = horse(g, 3.0, 2.45, 2.3, 0xd8c8b0);
     hitchRail(g, 2.7, 3.15, 0.9);
     hay(g, -3.2, 2.9, 0.15, 0.4); hay(g, -3.1, 3.5, 0.15, 0.1); hay(g, -3.15, 3.2, 0.51, 0.25);
     barrel(g, 2.7, -2.6); wheel(g, 2.75, 0.53, -1.9, 0.38, 0);
-    return { group: g, top: (top + 0.6) * S, anim(t) { h1.rotation.y = 0.6 + Math.sin(t * 0.3) * 0.25; h2.position.x = 3.0 + Math.sin(t * 0.25) * 0.25; } };
+    return { group: g, top: (top + 0.6) * S, smoke, anim(t) { h1.rotation.y = 0.6 + Math.sin(t * 0.3) * 0.25; h2.position.x = 3.0 + Math.sin(t * 0.25) * 0.2; } };
   },
 
-  // ---- Railroad Depot: a long station under a wide bracketed roof, a plank platform, a
-  // track with a little steam locomotive shuffling back and forth, and a water tower
-  depot(color) {
+  // ---- Railroad Depot: a station under a wide bracketed roof, a plank platform, and a
+  // short spur of track with a little steam locomotive shunting up and down it between
+  // buffer stops (it never leaves the yard, so it never runs into the loading docks). As
+  // it grows: a coal tender, then a signal and a baggage cart, then an upstairs for the
+  // stationmaster with a clock, and at the top a brass bell and bunting.
+  depot(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const x = -0.5, z = -1.5, w = 4.0, d = 1.7, h = 1.8;
-    c.add(box(w + 0.2, 0.25, d + 0.2, 0x7a6a55, x, 0, z));
+    const x = -0.2, z = -1.25, w = 3.4, d = 1.5, h = 1.8;
+    c.add(box(w + 0.1, 0.25, d + 0.1, 0x7a6a55, x, 0, z));
     c.add(box(w, h, d, color, x, 0.25, z)); battens(c, x, z, w, d, 0.25, h, color);
     c.add(box(w, 0.12, d, CREAM, x, 0.25 + h * 0.45, z));
-    // a wide hipped roof hanging well out over the platform, on brackets
-    const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), SHINGLE); roof.rotation.y = Math.PI / 4; roof.scale.set((w + 0.5) / 1.41, 0.7, (d + 0.9) / 1.41); roof.position.set(x, 0.25 + h + 0.35, z + 0.1); c.add(roof);
-    for (const a of [-1.6, -0.5, 0.6, 1.7]) { const br = box(0.08, 0.08, 0.7, WOOD_D, x + a, 0.25 + h - 0.15, z + d / 2 + 0.3); br.rotation.x = 0.6; c.add(br); }
-    for (const a of [-1.3, 0.3, 1.4]) wWin(c, 'z', x + a, 0.75, z + d / 2, 0.5, 0.8, TRIM, WARM);
-    c.add(onWall('z', x - 0.5, 0.25, z + d / 2, 0.6, 1.3, 0.05, 0x3a2a1e));
-    wSign(c, 'z', x + 0.85, h - 0.15, z + d / 2 + 0.02, 1.2, 0.3, 0x2a2d33, 5, CREAM, 'DEPOT');
-    // the station name board on two posts at the end of the platform, a bench, a trunk,
-    // and the bay window where the stationmaster watches the line
-    for (const e of [-0.6, 0.6]) c.add(box(0.07, 1.0, 0.07, WOOD_D, x - w / 2 - 0.1 + e, 0.33, z + d / 2 + 0.55));
-    textPanel(c, 'z', x - w / 2 - 0.1, 1.0, z + d / 2 + 0.6, 1.5, 0.32, 'TUMBLEWEED GULCH', 0xf1ece0, 0x2a2d33);
-    c.add(box(1.0, 0.06, 0.28, 0x8a6a45, x + 0.4, 0.62, z + d / 2 + 0.3), box(0.05, 0.3, 0.26, 0x6e5232, x - 0.05, 0.33, z + d / 2 + 0.3), box(0.05, 0.3, 0.26, 0x6e5232, x + 0.85, 0.33, z + d / 2 + 0.3));
-    c.add(box(0.5, 0.3, 0.3, 0x5a3a26, x + 1.55, 0.33, z + d / 2 + 0.35), box(0.52, 0.04, 0.32, 0xc9a24a, x + 1.55, 0.5, z + d / 2 + 0.35));
-    // the platform and the track running past it
-    c.add(box(w + 0.6, 0.18, 0.9, 0x8a6a45, x, 0.15, z + d / 2 + 0.45));
-    const tz = 0.75;
-    for (let k = 0; k < 22; k++) c.add(box(0.14, 0.06, 0.7, 0x5a4632, -3.2 + k * 0.31, 0.14, tz));
-    for (const e of [-0.22, 0.22]) c.add(box(6.6, 0.06, 0.05, 0x8a8f99, 0, 0.2, tz + e));
-    // the locomotive: boiler, smokestack, cab, cowcatcher, wheels
-    const loco = new THREE.Group();
-    loco.add(box(1.7, 0.12, 0.6, 0x2a2d33, 0, 0.32, 0));
-    loco.add(cyl(0.28, 0.28, 1.1, 0x2a2d33, 0.2, 0.67 - 0.55, 0, 14).rotateZ(Math.PI / 2));
-    loco.add(cyl(0.29, 0.29, 0.06, 0xc9a24a, -0.05, 0.67 - 0.03, 0, 14).rotateZ(Math.PI / 2));
-    loco.add(cyl(0.29, 0.29, 0.06, 0xc9a24a, 0.45, 0.67 - 0.03, 0, 14).rotateZ(Math.PI / 2));
-    loco.add(cyl(0.16, 0.09, 0.45, 0x2a2d33, 0.6, 0.9, 0, 10), cyl(0.1, 0.1, 0.12, 0xc9a24a, 0.25, 0.93, 0, 10));
-    loco.add(box(0.55, 0.6, 0.64, color, -0.6, 0.44, 0), box(0.65, 0.06, 0.72, 0x2a2d33, -0.6, 1.04, 0));
-    loco.add(box(0.2, 0.2, 0.05, WARM, -0.55, 0.7, 0.33, { emissive: 0xff9a3a, emissiveIntensity: 0.6 }));
-    const cc = box(0.25, 0.25, 0.55, 0xb5532a, 0.95, 0.15, 0); cc.rotation.z = 0.5; loco.add(cc);
-    loco.add(box(0.12, 0.12, 0.12, 0xfff1cf, 0.88, 0.75, 0, { emissive: 0xffd28a, night: 3 }));
-    for (const wx of [-0.6, -0.1, 0.35, 0.75]) for (const e of [-0.28, 0.28]) loco.add(cyl(wx < 0 ? 0.2 : 0.14, wx < 0 ? 0.2 : 0.14, 0.05, 0xb5532a, wx, wx < 0 ? 0.2 : 0.14, e, 12).rotateX(Math.PI / 2));
-    loco.position.set(0, 0.17, tz); c.add(loco);
-    // a water tower for the engines and a baggage cart
-    waterTower(g, 2.6, -2.5, 2.2, 0.55);
-    const cart = [[-2.6, 2.4]]; for (const [cx, cz] of cart) { g.add(box(0.8, 0.08, 0.5, 0x8a6a45, cx, 0.4, cz)); crate(g, cx - 0.15, cz, 0.48, 0.3); barrel(g, cx + 0.2, cz, 0.48, 0.8); for (const e of [-0.3, 0.3]) g.add(cyl(0.16, 0.16, 0.05, 0x5a3e26, cx + e, 0.16 + 0.16, cz + 0.27, 10).rotateX(Math.PI / 2)); }
-    return { group: g, top: 4.2 * S, smoke: [new THREE.Vector3(0.6, 1.4, tz).multiplyScalar(S)], anim(t) { loco.position.x = Math.sin(t * 0.25) * 1.2; } };
+    let roofTop = 0.25 + h;
+    if (t >= 6) {
+      // the stationmaster's upstairs, with a clock in the gable
+      c.add(box(1.6, 0.9, 1.1, color, x - 0.6, 0.25 + h, z - 0.1)); battens(c, x - 0.6, z - 0.1, 1.6, 1.1, 0.25 + h, 0.9, color);
+      for (const a of [-1.05, -0.15]) wWin(c, 'z', x + a, 0.25 + h + 0.25, z + 0.45, 0.36, 0.45, TRIM, WARM);
+      const gr = mesh(new THREE.ConeGeometry(1, 1, 4, 1).rotateY(Math.PI / 4), SHINGLE); gr.scale.set(1.25, 0.55, 0.85); gr.position.set(x - 0.6, 0.25 + h + 0.9 + 0.27, z - 0.1); c.add(gr);
+      const cf = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 16), CREAM); cf.rotation.x = Math.PI / 2; cf.position.set(x - 0.6, 0.25 + h + 1.2, z + 0.5); c.add(cf);
+      c.add(box(0.02, 0.13, 0.02, 0x2a2d33, x - 0.6, 0.25 + h + 1.2, z + 0.53), box(0.1, 0.02, 0.02, 0x2a2d33, x - 0.56, 0.25 + h + 1.2, z + 0.53));
+      roofTop = 0.25 + h + 1.5;
+    }
+    // a wide hipped roof hanging out over the platform, on brackets
+    const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1).rotateY(Math.PI / 4), SHINGLE); roof.scale.set((w + 0.1) / 2 * 1.41, 0.6, (d + 0.4) / 2 * 1.41); roof.position.set(x, 0.25 + h + 0.3, z + 0.25); c.add(roof);
+    for (const a of [-1.3, -0.4, 0.5, 1.4]) { const br = box(0.08, 0.08, 0.6, WOOD_D, x + a, 0.25 + h - 0.15, z + d / 2 + 0.25); br.rotation.x = 0.6; c.add(br); }
+    for (const a of [-1.15, 0.25, 1.25]) wWin(c, 'z', x + a, 0.75, z + d / 2, 0.45, 0.8, TRIM, WARM);
+    c.add(onWall('z', x - 0.45, 0.25, z + d / 2, 0.55, 1.3, 0.05, 0x3a2a1e));
+    wSign(c, 'z', x + 0.75, h - 0.15, z + d / 2 + 0.02, 1.1, 0.3, 0x2a2d33, 5, CREAM, 'DEPOT');
+    // the platform with a bench, a trunk and the station's name board
+    c.add(box(w + 0.1, 0.18, 0.85, 0x8a6a45, x, 0.15, z + d / 2 + 0.42));
+    c.add(box(0.9, 0.06, 0.26, 0x8a6a45, x + 0.5, 0.62, z + d / 2 + 0.3), box(0.05, 0.3, 0.24, 0x6e5232, x + 0.1, 0.33, z + d / 2 + 0.3), box(0.05, 0.3, 0.24, 0x6e5232, x + 0.9, 0.33, z + d / 2 + 0.3));
+    c.add(box(0.45, 0.28, 0.28, 0x5a3a26, x + 1.35, 0.33, z + d / 2 + 0.35), box(0.47, 0.04, 0.3, 0xc9a24a, x + 1.35, 0.5, z + d / 2 + 0.35));
+    for (const e of [-0.55, 0.55]) c.add(box(0.06, 0.95, 0.06, WOOD_D, x - 1.0 + e, 0.33, z + d / 2 + 0.7));
+    textPanel(c, 'z', x - 1.0, 0.98, z + d / 2 + 0.74, 1.3, 0.28, 'TUMBLEWEED GULCH', 0xf1ece0, 0x2a2d33);
+    // the spur of track between two buffer stops
+    const tz = 0.75, L0 = -1.85, L1 = 1.85;
+    for (let k = 0; k <= 12; k++) c.add(box(0.12, 0.06, 0.7, 0x5a4632, L0 + 0.1 + k * (L1 - L0 - 0.2) / 12, 0.14, tz));
+    for (const e of [-0.22, 0.22]) c.add(box(L1 - L0, 0.06, 0.05, 0x8a8f99, (L0 + L1) / 2, 0.2, tz + e));
+    for (const e of [L0 + 0.08, L1 - 0.08]) { c.add(box(0.16, 0.35, 0.6, 0x8a3a2a, e, 0.2, tz), box(0.18, 0.06, 0.62, 0x3a2a1e, e, 0.55, tz)); }
+    // the locomotive: boiler, smokestack, cab, cowcatcher, wheels (and a coal tender)
+    const train = new THREE.Group(), loco = new THREE.Group();
+    loco.add(box(1.5, 0.12, 0.6, 0x2a2d33, 0, 0.32, 0));
+    loco.add(cyl(0.27, 0.27, 1.0, 0x2a2d33, 0.2, 0.67 - 0.5, 0, 14).rotateZ(Math.PI / 2));
+    for (const bx2 of [-0.05, 0.45]) loco.add(cyl(0.28, 0.28, 0.06, 0xc9a24a, bx2, 0.67 - 0.03, 0, 14).rotateZ(Math.PI / 2));
+    loco.add(cyl(0.15, 0.09, 0.42, 0x2a2d33, 0.55, 0.9, 0, 10), cyl(0.1, 0.1, 0.12, 0xc9a24a, 0.22, 0.93, 0, 10));
+    loco.add(box(0.5, 0.6, 0.62, color, -0.5, 0.44, 0), box(0.6, 0.06, 0.7, 0x2a2d33, -0.5, 1.04, 0));
+    loco.add(box(0.2, 0.2, 0.05, WARM, -0.45, 0.7, 0.32, { emissive: 0xff9a3a, emissiveIntensity: 0.6 }));
+    const cc = box(0.22, 0.24, 0.52, 0xb5532a, 0.82, 0.15, 0); cc.rotation.z = 0.5; loco.add(cc);
+    loco.add(box(0.12, 0.12, 0.12, 0xfff1cf, 0.76, 0.75, 0, { emissive: 0xffd28a, night: 3 }));
+    for (const wx of [-0.5, -0.05, 0.3, 0.62]) for (const e of [-0.28, 0.28]) loco.add(cyl(wx < 0 ? 0.19 : 0.13, wx < 0 ? 0.19 : 0.13, 0.05, 0xb5532a, wx, wx < 0 ? 0.19 : 0.13, e, 12).rotateX(Math.PI / 2));
+    train.add(loco);
+    let back = -0.8, front = 0.95;
+    if (t >= 3) {
+      const td = new THREE.Group();
+      td.add(box(0.7, 0.4, 0.58, 0x2a2d33, 0, 0.3, 0), box(0.6, 0.12, 0.5, 0x1a1a1c, 0, 0.7, 0));
+      for (const e of [-0.28, 0.28]) for (const wx of [-0.2, 0.2]) td.add(cyl(0.13, 0.13, 0.05, 0xb5532a, wx, 0.13, e, 10).rotateX(Math.PI / 2));
+      td.position.x = -1.25; train.add(td); back = -1.62;
+    }
+    train.position.set(0, 0.17, tz); c.add(train);
+    const lo = L0 + 0.2 - back, hi = L1 - 0.2 - front, mid = (lo + hi) / 2, amp = Math.max(0, (hi - lo) / 2);
+    // a signal and a baggage cart, then a bell and bunting
+    if (t >= 5) {
+      c.add(box(0.06, 2.0, 0.06, 0x3a3f48, x + 1.55, 0.33, z + d / 2 + 0.7));
+      const arm = box(0.5, 0.08, 0.03, 0xd9482b, x + 1.75, 2.1, z + d / 2 + 0.72); arm.rotation.z = -0.5; c.add(arm);
+      c.add(box(0.1, 0.1, 0.06, 0x7dff9a, x + 1.55, 2.2, z + d / 2 + 0.74, { emissive: 0x4dff7a, night: 2.5 }));
+      c.add(box(0.7, 0.06, 0.4, 0x8a6a45, x - 1.0, 0.55, z + d / 2 + 0.35)); crate(c, x - 1.15, z + d / 2 + 0.35, 0.58, 0.28); barrel(c, x - 0.8, z + d / 2 + 0.35, 0.58, 0.6);
+    }
+    if (t >= 8) {
+      c.add(box(0.06, 0.5, 0.06, WOOD_D, x + 0.5, roofTop - 0.1, z), box(0.4, 0.06, 0.06, WOOD_D, x + 0.5, roofTop + 0.4, z));
+      c.add(cyl(0.08, 0.16, 0.22, 0xc9a24a, x + 0.5, roofTop + 0.2, z, 10, { metalness: 0.7, roughness: 0.3 }));
+      for (let k = 0; k < 6; k++) c.add(box(0.5, 0.18, 0.02, [0xd9482b, TRIM, 0x3a5a9a][k % 3], x - 1.4 + k * 0.56, h - 0.05, z + d / 2 + 0.03));
+    }
+    // a water tower for the engines and a baggage cart, out in the corners
+    waterTower(g, 2.85, -2.85, 2.2, 0.55);
+    for (const [cx, cz] of [[-2.9, 2.7]]) { g.add(box(0.8, 0.08, 0.5, 0x8a6a45, cx, 0.4, cz)); crate(g, cx - 0.15, cz, 0.48, 0.3); barrel(g, cx + 0.2, cz, 0.48, 0.8); for (const e of [-0.3, 0.3]) g.add(cyl(0.16, 0.16, 0.05, 0x5a3e26, cx + e, 0.16 + 0.16, cz + 0.27, 10).rotateX(Math.PI / 2)); }
+    const smokeAt = new THREE.Vector3(0.55, 1.35, tz).multiplyScalar(S);
+    const smoke = [smokeAt];
+    return { group: g, top: Math.max(4.2, roofTop + 1.2) * S, smoke, anim(tt) {
+      // shunting: ease out to one end, pause, ease back
+      const p = (tt * 0.08) % 1, e = p < 0.4 ? p / 0.4 : p < 0.5 ? 1 : p < 0.9 ? 1 - (p - 0.5) / 0.4 : 0;
+      const k = 0.5 - 0.5 * Math.cos(e * Math.PI);
+      train.position.x = lo + (hi - lo) * k;
+      smokeAt.set((train.position.x + 0.55) * S, 1.35 * S, tz * S);
+    } };
   },
 
   // ---- Rocket Ranch: a red barn with white X doors where the rocket is built, a wooden
   // launch tower like an oil derrick, a brass-banded rocket on the pad, and a windmill
-  rocketranch(color) {
+  rocketranch(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
     // the barn (back left): red boards, a gambrel roof, white X-braced doors
-    const bx = -1.7, bz = -1.6, bw = 2.2, bd = 2.0, bh = 1.5;
+    const bx = -1.0, bz = -1.0, bw = 1.8, bd = 1.8, bh = 1.5;
     c.add(box(bw, bh, bd, 0xa8322a, bx, 0.15, bz)); battens(c, bx, bz, bw, bd, 0.15, bh, 0xa8322a);
     const gs = new THREE.Shape(); gs.moveTo(-bw / 2 - 0.1, 0); gs.lineTo(bw / 2 + 0.1, 0); gs.lineTo(bw / 2 - 0.15, 0.55); gs.lineTo(0, 0.95); gs.lineTo(-bw / 2 + 0.15, 0.55); gs.closePath();
     const gg = new THREE.ExtrudeGeometry(gs, { depth: bd + 0.2, bevelEnabled: false }); gg.translate(0, 0, -(bd + 0.2) / 2);
@@ -453,48 +598,58 @@ Object.assign(BUILDERS, {
     const vt = mesh(new THREE.ConeGeometry(0.05, 0.12, 8), 0xc9a24a); vt.rotation.z = -Math.PI / 2; vt.position.set(bx + 0.21, bh + 1.55, bz); c.add(vt);
     const tri = mesh(new THREE.CircleGeometry(0.28, 3), TRIM); tri.position.set(bx, bh + 0.5, bz + bd / 2 + 0.12); tri.rotation.z = Math.PI / 2; c.add(tri);
     // the launch tower, a timber derrick beside the pad
-    const px = 0.7, pz = 0.4;
-    c.add(cyl(1.25, 1.35, 0.3, 0x8a7a65, px, 0.15, pz, 20));
-    c.add(cyl(1.1, 1.1, 0.03, 0x3a3020, px, 0.45, pz, 20));
+    const px = 0.8, pz = 0.7;
+    c.add(cyl(0.92, 1.0, 0.3, 0x8a7a65, px, 0.15, pz, 20));
+    c.add(cyl(0.82, 0.82, 0.03, 0x3a3020, px, 0.45, pz, 20));
     timberTower(c, px - 1.45, pz - 0.2, 0.42, 0.2, 6.6, WOOD, 6);
     for (const y of [2.4, 4.0, 5.6]) { c.add(box(1.05, 0.1, 0.12, WOOD_D, px - 0.95, y, pz - 0.2)); }
+    // as it grows: floodlights on the tower, a fuel tank by the barn, and lit bulbs up the tower
+    if (t >= 4) for (const e of [-0.25, 0.25]) c.add(box(0.2, 0.16, 0.14, 0xfff1cf, px - 1.45 + e, 6.75, pz, { emissive: 0xffe2a8, night: 3 }));
+    if (t >= 6) { waterTower(c, -1.5, 1.2, 1.4, 0.38); c.add(box(0.5, 0.18, 0.02, 0xd9482b, -1.5, 2.15, 1.58)); }
+    if (t >= 8) for (let k = 0; k < 8; k++) c.add(box(0.06, 0.06, 0.06, 0xfff1cf, px - 1.45 + (k % 2 ? 0.2 : -0.2), 0.8 + k * 0.72, pz - 0.2 + (k % 2 ? 0.2 : -0.2), { emissive: 0xffd28a, night: 3 }));
     c.add(box(0.12, 0.12, 0.12, 0xff3b2f, px - 1.45, 6.8, pz - 0.2, { emissive: 0xff2a1a, emissiveIntensity: 1.5 }));
     const rocket = buildRocket('retro', color);
     rocket.position.set(px, 0.45, pz); c.add(rocket);
     const scaffold = new THREE.Group();
-    for (let i = 0; i < 5; i++) scaffold.add(box(1.5, 0.1, 1.5, 0x8a6a45, px, 0.9 + i * 1.25, pz));
-    for (const [dx, dz] of [[-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7]]) scaffold.add(box(0.1, 6.0, 0.1, WOOD_D, px + dx, 0.45, pz + dz));
+    for (let i = 0; i < 5; i++) scaffold.add(box(1.4, 0.1, 1.4, 0x8a6a45, px, 0.9 + i * 1.25, pz));
+    for (const [dx, dz] of [[-0.65, -0.65], [0.65, 0.65], [-0.65, 0.65], [0.65, -0.65]]) scaffold.add(box(0.1, 6.0, 0.1, WOOD_D, px + dx, 0.45, pz + dz));
     c.add(scaffold);
     // a windmill pumping water and barrels of rocket fuel
     const rotor = windmill(g, 2.6, -2.4, 3.6, 0.6);
-    for (const [x, z] of [[2.4, 2.5], [2.8, 2.3], [2.6, 2.85]]) barrel(g, x, z, 0.15, 1.1);
+    for (const [x, z] of [[2.8, 2.8], [3.2, 2.65], [3.0, 3.15]]) barrel(g, x, z, 0.15, 1.1);
     return { group: g, top: 8.6 * S, rocket, scaffold, anim(t, dt) { rotor.rotation.x += dt * 2.2; } };
   },
 
   // ---- Windmill Farm: farm windmills on lattice towers turning in the prairie wind, a
   // wooden water tank, and a dynamo shed with its lamp lit
-  windmills(color) {
+  windmills(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const rotors = [windmill(c, -2.1, -2.0, 5.0, 0.95, color), windmill(c, 1.6, -2.3, 4.2, 0.8, color), windmill(c, -1.9, 1.9, 3.6, 0.7, color), windmill(c, 2.3, 1.2, 3.2, 0.6, color)];
-    waterTower(c, -0.2, -0.2, 1.4, 0.7);
-    // the dynamo shed
-    c.add(box(1.4, 1.1, 1.0, GREY, 0.6, 0.15, 2.4)); battens(c, 0.6, 2.4, 1.4, 1.0, 0.15, 1.1, GREY);
-    const r = box(1.6, 0.06, 1.3, TIN, 0.6, 1.3, 2.4); r.rotation.x = 0.2; c.add(r);
-    c.add(onWall('z', 0.4, 0.15, 2.9, 0.45, 0.9, 0.04, 0x3a2a1e));
-    textPanel(c, 'z', 0.6, 1.08, 2.94, 1.1, 0.2, 'DYNAMO', 0x2a2d33, 0xe8c46a);
-    // a split-rail fence round the back of the farm
-    for (let k = 0; k <= 6; k++) c.add(box(0.07, 0.6, 0.07, WOOD_D, -3.0 + k, 0.15, -3.1));
-    for (const y of [0.35, 0.6]) c.add(box(6.0, 0.05, 0.05, 0x8a6a45, 0, y, -3.1));
-    c.add(box(0.14, 0.14, 0.14, 0xfff1cf, 0.95, 1.0, 2.95, { emissive: 0xffd28a, night: 2.6 }));
-    for (const [x, z] of [[-0.5, 2.3], [-0.9, 2.6]]) { c.add(box(0.06, 1.8, 0.06, WOOD_D, x, 0.15, z)); }
-    return { group: g, top: 6.0 * S, anim(t, dt) { rotors.forEach((r, i) => { r.rotation.x += dt * (2.4 + i * 0.4); }); } };
+    // four farm windmills (the tallest a big steel one once the farm grows)
+    const big = t >= 5;
+    const rotors = [windmill(c, -1.2, -1.25, big ? 6.0 : 5.0, big ? 1.05 : 0.95, big ? 0x8a8f99 : color), windmill(c, 1.25, -1.25, 4.2, 0.8, color), windmill(c, -1.3, 1.2, 3.6, 0.7, color), windmill(c, 1.35, 0.95, 3.2, 0.6, color)];
+    waterTower(c, 0.0, 0.0, 1.4, 0.6);
+    // the dynamo shed (a brick powerhouse with lit windows later on)
+    const shedC = t >= 7 ? BRICK : GREY;
+    c.add(box(1.3, 1.1, 0.9, shedC, 0.1, 0.15, 1.3)); if (t < 7) battens(c, 0.1, 1.3, 1.3, 0.9, 0.15, 1.1, GREY);
+    const r = box(1.5, 0.06, 1.1, TIN, 0.1, 1.3, 1.3); r.rotation.x = 0.2; c.add(r);
+    c.add(onWall('z', -0.15, 0.15, 1.75, 0.45, 0.9, 0.04, 0x3a2a1e));
+    if (t >= 7) for (const a of [0.4]) wWin(c, 'z', 0.1 + a, 0.7, 1.75, 0.35, 0.45, TRIM, WARM);
+    textPanel(c, 'z', 0.1, 1.08, 1.79, 1.1, 0.2, t >= 7 ? 'POWERHOUSE' : 'DYNAMO', 0x2a2d33, 0xe8c46a);
+    c.add(box(0.14, 0.14, 0.14, 0xfff1cf, 0.6, 1.0, 1.8, { emissive: 0xffd28a, night: 2.6 }));
+    // power poles carrying the current off, then strings of lights between the towers
+    if (t >= 3) {
+      for (const [x, z] of [[0.95, 1.55], [1.6, 0.2]]) { c.add(cyl(0.04, 0.05, 2.2, WOOD_D, x, 0.15, z, 6), box(0.5, 0.05, 0.05, WOOD_D, x, 2.25, z)); }
+      rod(c, [0.7, 2.3, 1.55], [1.35, 2.3, 0.2], 0.008, 0x2a2d33); rod(c, [1.2, 2.3, 1.55], [1.85, 2.3, 0.2], 0.008, 0x2a2d33);
+    }
+    if (t >= 9) for (const [a, b] of [[[-1.2, 3.0, -1.25], [1.25, 3.0, -1.25]], [[-1.3, 2.6, 1.2], [-1.2, 3.0, -1.25]]]) { rod(c, a, b, 0.008, 0x2a2d33); for (let k = 1; k < 7; k++) { const f = k / 7; c.add(box(0.07, 0.07, 0.07, 0xfff1cf, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f - Math.sin(f * Math.PI) * 0.15, a[2] + (b[2] - a[2]) * f, { emissive: 0xffd28a, night: 3 })); } }
+    return { group: g, top: (big ? 7.0 : 6.0) * S, anim(tt, dt) { rotors.forEach((r, i) => { r.rotation.x += dt * (2.4 + i * 0.4); }); } };
   },
 
   // ---- Telegraph Office: a little false-front office with a bay window, telegraph poles
   // marching off with wires on glass insulators, and a key light blinking in Morse
-  telegraph(color) {
+  telegraph(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const top = falseFront(c, { x: -0.5, z: -0.7, w: 3.0, d: 2.4, h: 1.8, fh: 0.85, color: CREAM, sign: color, text: 'TELEGRAPH' });
+    const top = falseFront(c, { x: -0.4, z: -0.7, w: 3.0, d: 2.4, h: 1.8, fh: 0.85, color: CREAM, sign: color, text: 'TELEGRAPH' });
     textPanel(c, 'z', 0.3, 1.6, 0.55, 0.8, 0.2, 'WIRES SENT', 0x2a2d33, CREAM);
     // a lamp by the door and a mail sack waiting for the stage
     c.add(box(0.13, 0.2, 0.13, 0xfff1cf, 0.85, 1.15, 0.55, { emissive: 0xffc070, night: 2.6 }));
@@ -506,16 +661,28 @@ Object.assign(BUILDERS, {
     c.add(onWall('z', 0.3, 0.25, 0.5, 0.6, 1.3, 0.05, 0x3a2a1e));
     wWin(c, 'x', -1.3, 0.8, 1.0, 0.5, 0.6); wWin(c, 'x', -0.1, 0.8, 1.0, 0.5, 0.6);
     porch(c, { axis: 'x', a: -0.7, f: 1.0, len: 2.2, depth: 0.8, h: 1.5, color: TRIM });
-    // the poles: a line of them heading off, each with a crossarm and glass insulators
-    const poles = [[-2.7, -2.6], [-1.0, -2.75], [0.8, -2.75], [2.6, -2.6], [2.75, -0.8]];
+    // the poles: two tall ones behind the office, each with crossarms and glass insulators,
+    // the wires running between them and down to the roof (more arms as the line grows)
+    const poles = [[-1.55, -1.55], [1.45, -1.5]], arms = t >= 4 ? 2 : 1, PH = 3.0;
     const tops = [];
     for (const [px, pz] of poles) {
-      g.add(cyl(0.06, 0.08, 3.4, WOOD_D, px, 0.15, pz, 8));
-      g.add(box(0.9, 0.08, 0.08, WOOD_D, px, 3.3, pz));
-      for (const e of [-0.35, -0.12, 0.12, 0.35]) { g.add(cyl(0.035, 0.03, 0.1, 0x6fd3c0, px + e, 3.38, pz, 6, { transparent: true, opacity: 0.85 })); tops.push([px + e, 3.46, pz]); }
+      c.add(cyl(0.05, 0.07, PH, WOOD_D, px, 0.15, pz, 8));
+      for (let a = 0; a < arms; a++) {
+        const y = PH - a * 0.35;
+        c.add(box(0.8, 0.07, 0.07, WOOD_D, px, y, pz));
+        for (const e of [-0.3, -0.1, 0.1, 0.3]) { c.add(cyl(0.03, 0.025, 0.09, 0x6fd3c0, px + e, y + 0.07, pz, 6, { transparent: true, opacity: 0.85 })); tops.push([px + e, y + 0.15, pz, a]); }
+      }
     }
-    for (let i = 0; i < poles.length - 1; i++) for (const k of [0, 1, 2, 3]) rod(g, tops[i * 4 + k], tops[(i + 1) * 4 + k], 0.008, 0x2a2d33);
-    rod(g, [-2.7 + 0.12, 3.46, -2.6], [-0.9 * S, (top - 0.4) * S, -1.6 * S], 0.01, 0x2a2d33);
+    const per = arms * 4;
+    for (let k = 0; k < per; k++) rod(c, tops[k].slice(0, 3), tops[per + k].slice(0, 3), 0.008, 0x2a2d33);
+    rod(c, tops[0].slice(0, 3), [-1.1, top - 0.1, -0.9], 0.009, 0x2a2d33);
+    rod(c, tops[per + 3].slice(0, 3), [1.6, PH + 0.6, 1.2], 0.008, 0x2a2d33);
+    // later a heliograph on the roof flashing sunlight, then lights and a flag
+    if (t >= 6) {
+      for (let k = 0; k < 3; k++) { const a = k * 2.094; const l = box(0.03, 0.6, 0.03, WOOD_D, -1.0 + Math.cos(a) * 0.15, top - 0.15, -1.2 + Math.sin(a) * 0.15); l.rotation.set(Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25); c.add(l); }
+      const mir = box(0.32, 0.32, 0.03, 0xdff4ff, -1.0, top + 0.45, -1.2, { emissive: 0xffffff, emissiveIntensity: 0.3, metalness: 0.8, roughness: 0.1 }); mir.rotation.set(-0.5, 0.6, 0); c.add(mir);
+    }
+    if (t >= 8) { c.add(box(0.03, 1.0, 0.03, 0xdddddd, 0.6, top - 0.2, -1.4), box(0.42, 0.26, 0.02, 0x3a5a9a, 0.82, top + 0.5, -1.4)); for (let k = 0; k < 7; k++) c.add(box(0.05, 0.05, 0.04, 0xfff1cf, -1.6 + k * 0.4, 1.8 + 0.42, 0.55, { emissive: 0xffd28a, night: 3 })); }
     // the key light, blinking messages
     const key = box(0.16, 0.16, 0.16, 0xffe08a, -0.5, top - 0.1, -0.3, { emissive: 0xffc23d, emissiveIntensity: 1 }); key.material = key.material.clone(); c.add(key);
     barrel(g, 2.6, 2.6); crate(g, 2.3, 2.75);
@@ -525,10 +692,10 @@ Object.assign(BUILDERS, {
 
   // ---- The Saloon: a two-storey corner saloon with a wraparound balcony on turned posts,
   // swinging batwing doors, a big SALOON sign, horses at the rail and barrels by the door
-  saloon(color) {
+  saloon(color, t = 0) {
     const g = new THREE.Group(), c = core(g);
-    const x = -0.35, z = -0.45, w = 3.6, d = 3.0, h = 3.0;
-    c.add(box(w + 0.24, 0.25, d + 0.24, 0x7a6a55, x, 0, z));
+    const x = -0.4, z = -0.45, w = 3.2, d = 3.0, h = t >= 5 ? 3.7 : 3.0;
+    c.add(box(w + 0.1, 0.25, d + 0.24, 0x7a6a55, x, 0, z));
     c.add(box(w, h, d, color, x, 0.25, z)); battens(c, x, z, w, d, 0.25, h, color);
     // a stepped, scalloped false front with the sign
     c.add(box(w + 0.1, 0.8, 0.16, color, x, 0.25 + h, z + d / 2 - 0.05));
@@ -538,19 +705,18 @@ Object.assign(BUILDERS, {
     // upstairs doors onto the balcony, a hanging ROOMS sign, two brick chimneys and a
     // painted advert on the side wall
     for (const a of [-0.6, 0.6]) c.add(onWall('z', x + a, 1.82, z + d / 2, 0.42, 0.95, 0.04, 0x4a2a1a));
-    textPanel(c, 'x', z + d / 2 - 0.2, 1.25, x + w / 2 + 0.86, 0.6, 0.22, 'ROOMS', 0x8a2a1e, CREAM);
+    textPanel(c, 'x', z + d / 2 - 0.2, 1.25, x + w / 2 + 0.72, 0.6, 0.22, t >= 5 ? 'HOTEL' : 'ROOMS', 0x8a2a1e, CREAM);
     for (const [cx2, cz2] of [[x - 1.2, z - 0.9], [x + 1.1, z - 0.9]]) c.add(box(0.4, 0.75, 0.4, BRICK, cx2, 0.25 + h, cz2), box(0.48, 0.08, 0.48, 0x5a3a2a, cx2, 1.0 + h, cz2));
     textPanel(c, 'x', z - 1.05, 0.95, x + w / 2 + 0.035, 0.8, 0.4, 'SARSAPARILLA', 0x8a2a1e, 0xf1e6c8);
     // upstairs windows and the wraparound balcony on turned posts
-    for (const a of [-1.2, 0, 1.2]) wWin(c, 'z', x + a, 2.0, z + d / 2, 0.5, 0.75, TRIM, WARM);
+    for (const a of [-1.1, 0, 1.1]) { wWin(c, 'z', x + a, 2.0, z + d / 2, 0.5, 0.75, TRIM, WARM); if (t >= 5) wWin(c, 'z', x + a, 2.85, z + d / 2, 0.45, 0.6, TRIM, WARM); }
     for (const a of [-0.8, 0.5]) wWin(c, 'x', z + a, 2.0, x + w / 2, 0.5, 0.75, TRIM, WARM);
     balcony(c, { axis: 'z', a: x, f: z + d / 2, len: w + 0.4, y: 1.7, depth: 0.85 });
-    balcony(c, { axis: 'x', a: z + 0.2, f: x + w / 2, len: d + 0.4, y: 1.7, depth: 0.85 });
-    for (const a of [-1.75, -0.6, 0.6, 1.75]) c.add(cyl(0.06, 0.07, 1.5, TRIM, x + a, 0.25, z + d / 2 + 0.8, 8));
-    for (const a of [-1.3, 0, 1.3]) c.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.8, 0.25, z + a, 8));
-    c.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.8, 0.25, z + d / 2 + 0.8, 8));
-    c.add(box(w + 0.6, 0.12, 0.95, 0x8a6a45, x + 0.2, 0.12, z + d / 2 + 0.45));                     // the boardwalk
-    c.add(box(0.95, 0.12, d + 0.6, 0x8a6a45, x + w / 2 + 0.45, 0.12, z + 0.2));
+    balcony(c, { axis: 'x', a: z + 0.2, f: x + w / 2, len: d + 0.4, y: 1.7, depth: 0.7 });
+    for (const a of [-1.55, -0.5, 0.5, 1.55]) c.add(cyl(0.06, 0.07, 1.5, TRIM, x + a, 0.25, z + d / 2 + 0.8, 8));
+    for (const a of [-1.3, 0, 1.3]) c.add(cyl(0.06, 0.07, 1.5, TRIM, x + w / 2 + 0.65, 0.25, z + a, 8));
+    c.add(box(w + 0.5, 0.12, 0.95, 0x8a6a45, x + 0.25, 0.12, z + d / 2 + 0.45));                     // the boardwalk
+    c.add(box(0.8, 0.12, d + 0.6, 0x8a6a45, x + w / 2 + 0.38, 0.12, z + 0.2));
     // downstairs: big windows, and the batwing doors under a lamp
     for (const a of [-1.3, 1.0]) wWin(c, 'z', x + a, 0.65, z + d / 2, 0.8, 0.85, TRIM, WARM);
     c.add(onWall('z', x - 0.15, 0.25, z + d / 2, 0.9, 1.5, 0.04, 0x1a1410));
@@ -561,6 +727,11 @@ Object.assign(BUILDERS, {
     hitchRail(g, -2.9, 3.6, 1.3); horse(g, -3.15, 3.25, 0.15, 0x7a4a2a); horse(g, -2.55, 3.3, -0.1, 0x2a2420);
     barrel(g, 2.75, -2.4); barrel(g, 2.45, -2.75); barrel(g, 2.75, -2.85, 0.15, 0.9);
     c.add(box(1.0, 0.08, 0.3, 0x8a6a45, x + 1.3, 0.55, z + d / 2 + 0.25), box(0.06, 0.3, 0.3, 0x6e5232, x + 0.85, 0.25, z + d / 2 + 0.25), box(0.06, 0.3, 0.3, 0x6e5232, x + 1.75, 0.25, z + d / 2 + 0.25));
+    // as it grows: bulbs round the sign, then (with the hotel floor) a water tank and a
+    // flag on the roof, and at the top a gilded sign
+    if (t >= 3) for (let k = 0; k < 9; k++) c.add(box(0.05, 0.05, 0.04, 0xfff1cf, x - 1.0 + k * 0.25, h + 0.92, z + d / 2 + 0.07, { emissive: 0xffd28a, night: 3 }));
+    if (t >= 7) { for (const [dx, dz] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) c.add(box(0.06, 0.5, 0.06, WOOD_D, x - 0.9 + dx, 0.25 + h, z - 0.6 + dz)); c.add(cyl(0.38, 0.4, 0.55, 0x8a5a32, x - 0.9, 0.75 + h, z - 0.6, 12), cyl(0.05, 0.42, 0.25, SHINGLE, x - 0.9, 1.3 + h, z - 0.6, 12)); c.add(box(0.03, 1.1, 0.03, 0xdddddd, x + 1.1, 0.25 + h, z - 0.9), box(0.45, 0.28, 0.02, 0xd9482b, x + 1.33, 0.25 + h + 0.8, z - 0.9)); }
+    if (t >= 9) c.add(box(2.3, 0.08, 0.06, 0xd9a83a, x, h + 0.86, z + d / 2 + 0.06, { metalness: 0.7, roughness: 0.3 }));
     return { group: g, top: (h + 2.4) * S };
   },
 });
