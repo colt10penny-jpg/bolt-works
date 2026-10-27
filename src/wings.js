@@ -259,7 +259,7 @@ export function buildWing({ kind, theme, cx, cz, color, tier, i }) {
   }
   else if (theme === 'mars') top = marsWing(g, o);
   else if (theme === 'moon') top = lunarWing(kind, g, { ...o, i });
-  else if (theme === 'japan') top = japanWing(kind, g, { ...o, i });
+  else if (theme === 'japan') { top = japanWing(kind, g, { ...o, i }) * 0.88; g.scale.setScalar(0.88); }   // (a corner inside the garden wall)
   else if (kind === 'silo') top = siloWing(g, o);
   else if (kind === 'sawtooth') top = sawWing(g, o);
   else if (kind === 'hangar') top = hangarWing(g, o);

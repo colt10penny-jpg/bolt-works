@@ -23,7 +23,7 @@ import { STYLE, PROPS } from './upgrades.js';
 import { WEST_STYLE, westGear } from './west-upgrades.js';
 import { MOON_STYLE, moonGear } from './moon-upgrades.js';
 import { JAPAN_STYLE, japanGear } from './japan-upgrades.js';
-import { roof as jRoof, noren as jNoren, lantern as jLantern, bamboo as jBamboo, maple as jMaple, pine as jPine, sakura as jSakura, shrub as jShrub, rocks as jRocks, J } from './japan-kit.js';
+import { roof as jRoof, noren as jNoren, chochin,  lantern as jLantern, bamboo as jBamboo, maple as jMaple, pine as jPine, sakura as jSakura, shrub as jShrub, rocks as jRocks, J } from './japan-kit.js';
 import { buildWing } from './wings.js';
 import { splitBig } from './chunks.js';
 import { Puff, PuffLayer } from './puffs.js';
@@ -288,7 +288,7 @@ export class World {
     const T = THEME[name] || THEME.colorado;
     this.T = T;
     const info = this.roadInfo();
-    setBayIn(this.themeName === 'desert' ? 3.85 : 2.6);
+    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.75 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     for (const g of [this.groundGroup, this.sceneryGroup]) {
@@ -398,7 +398,7 @@ export class World {
   // roads were fixed or built: update the network, the road meshes and the loading bays
   roadsChanged() {
     const info = this.roadInfo();
-    setBayIn(this.themeName === 'desert' ? 3.85 : 2.6);
+    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.75 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     this.#roads();
@@ -779,7 +779,25 @@ export class World {
     ex.add(shadow);
     // loading bays with garage doors, on each side trucks use
     // (only factories trucks deliver to: no bays on power, compute or the headquarters)
-    if (!['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) { const by = this.#bay(side, color); by.userData.bay = side; ex.add(by); }
+    // (in Sakura Valley every lot stands inside a garden wall, with a gate onto each road)
+    const walled = this.themeName === 'japan';
+    if (walled || !['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) { const by = this.#bay(side, color); by.userData.bay = side; ex.add(by); }
+    if (walled) {
+      // the garden wall: white plaster over a dark stone footing, under a little tiled cap,
+      // all round the lot with an opening for each gate
+      const gates = this.#baySides(id), E = 4.45, GAP = 1.45;
+      for (const [side, axis, f] of [['z+', 'x', E], ['z-', 'x', -E], ['x+', 'z', E], ['x-', 'z', -E]]) {
+        const runs = gates.has(side) ? [[-E, -GAP], [GAP, E]] : [[-E, E]];
+        for (const [a0, a1] of runs) {
+          const len = a1 - a0, mid = (a0 + a1) / 2, wl = new THREE.Group();
+          wl.add(box(len, 0.22, 0.3, 0x8a867c, 0, 0, 0), box(len, 0.62, 0.2, 0xf2ece0, 0, 0.22, 0));
+          for (let k = 1; k < Math.round(len / 1.1); k++) wl.add(box(0.06, 0.62, 0.22, 0x5a4030, -len / 2 + k * len / Math.round(len / 1.1), 0.22, 0));
+          jRoof(wl, { y: 0.84, w: len + 0.08, d: 0.36, h: 0.1, lift: 0.015, ridge: false });
+          if (axis === 'x') wl.position.set(mid, 0.15, f); else { wl.position.set(f, 0.15, mid); wl.rotation.y = Math.PI / 2; }
+          ex.add(wl);
+        }
+      }
+    }
     // free corners: an extra wing for each upgrade tier, parked cars in the rest
     let corners = [[3.25, 3.3], [-3.25, 3.3], [3.25, -3.3], [-3.25, -3.3]]
       .filter(([cx, cz]) => !L.crates.children.some(c => Math.abs(c.position.x - cx) < 1.8 && Math.abs(c.position.z - cz) < 1.8));
@@ -795,12 +813,17 @@ export class World {
       // (and nothing of the main building that stands taller than a barrel may poke into the
       // corner at all: a windmill's tower or a flume would end up inside the wing)
       const coreBoxes = coreMeshes.map(o => new THREE.Box3().setFromObject(o)).filter(b => b.max.y - L.group.position.y > 0.75);
-      const pokes = (cx, cz) => coreBoxes.some(b => b.max.x > lx + cx - 1.05 && b.min.x < lx + cx + 1.05 && b.max.z > lz + cz - 1.05 && b.min.z < lz + cz + 1.05 &&
-        Math.min(b.max.x, lx + cx + 1.05) - Math.max(b.min.x, lx + cx - 1.05) > 0.12 && Math.min(b.max.z, lz + cz + 1.05) - Math.max(b.min.z, lz + cz - 1.05) > 0.12);
-      corners = corners.map(([cx, cz]) => [Math.sign(cx) * 3.2, Math.sign(cz) * 3.2]).filter(([cx, cz]) => {
+      // (Sakura Valley's big main buildings may reach a little way into a corner: a wing there
+      // tucks in under the main roof's eaves)
+      const PK = this.themeName === 'japan' ? 0.9 : 1.05, POK = this.themeName === 'japan' ? 0.42 : 0.12;
+      const pokes = (cx, cz) => coreBoxes.some(b => b.max.x > lx + cx - PK && b.min.x < lx + cx + PK && b.max.z > lz + cz - PK && b.min.z < lz + cz + PK &&
+        Math.min(b.max.x, lx + cx + PK) - Math.max(b.min.x, lx + cx - PK) > POK && Math.min(b.max.z, lz + cz + PK) - Math.max(b.min.z, lz + cz - PK) > POK);
+      const CK = this.themeName === 'japan' ? 3.4 : 3.2;
+      corners = corners.map(([cx, cz]) => [Math.sign(cx) * CK, Math.sign(cz) * CK]).filter(([cx, cz]) => {
         if (pokes(cx, cz)) return false;
         let tall = 0;
-        for (let a = -1; a <= 1; a += 0.5) for (let b = -1; b <= 1; b += 0.5) if (coreTop(lx + cx + a, lz + cz + b) > 0.6) tall++;
+        const SP = this.themeName === 'japan' ? 0.5 : 1;
+        for (let a = -1; a <= 1; a += 0.5) for (let b = -1; b <= 1; b += 0.5) if (coreTop(lx + cx + a * SP + (SP < 1 ? Math.sign(cx) * 0.3 : 0), lz + cz + b * SP + (SP < 1 ? Math.sign(cz) * 0.3 : 0)) > 0.6) tall++;
         return tall <= 4;
       });
       // the corners the camera sees best fill in first
@@ -1160,21 +1183,23 @@ export class World {
   // dark posts, a small curved tile roof, and sliding wooden doors at the back hung with
   // a noren in the company colour. Open at the sides, so the building still shows.
   #gateBay(side, color) {
+    // a roofed gateway in the garden wall (like a temple's side gate), a path of flat
+    // stones running in to the building, and a paper lantern in the company colour on
+    // each post. Trucks drive in under the roof and stop just inside.
     const g = new THREE.Group();
-    const W = 2.1, D = 1.6, H = 1.2;
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.1, D), mat(0x9a968c)); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; g.add(floor);
-    for (let k = 0; k < 4; k++) g.add(box(W + 0.1, 0.012, 0.025, 0x6e6a62, 0, 0.0, -D / 2 + 0.3 + k * 0.38));
-    // the sliding doors at the back, under a little tiled pent roof
-    g.add(box(W + 0.2, H, 0.12, 0x4a3628, 0, 0, -D / 2 + 0.05));
-    g.add(box(W - 0.3, H - 0.2, 0.04, 0x2a1e18, 0, 0.05, -D / 2 + 0.12));
-    for (const x of [-0.45, 0.45]) g.add(box(0.85, H - 0.3, 0.03, 0x6b4a30, x, 0.1, -D / 2 + 0.15));
-    jNoren(g, 'z', 0, H - 0.08, -D / 2 + 0.15, 1.2, color);
-    jRoof(g, { y: H, z: -D / 2 + 0.2, w: W + 0.5, d: 0.6, h: 0.16, lift: 0.05, ridge: false });
-    // a low gateway at the front: two dark posts on stone footings and a black top beam
-    for (const x of [-W / 2 - 0.05, W / 2 + 0.05]) { g.add(box(0.11, 1.15, 0.11, 0x3e2a1e, x, 0, D / 2 - 0.15), box(0.2, 0.1, 0.2, 0x8a867c, x, 0, D / 2 - 0.15)); }
-    g.add(box(W + 0.55, 0.1, 0.16, 0x2a2624, 0, 1.15, D / 2 - 0.15), box(W + 0.2, 0.07, 0.1, 0x3e2a1e, 0, 0.95, D / 2 - 0.15));
-    g.add(box(0.16, 0.22, 0.16, 0xffe2b0, W / 2 + 0.05, 0.62, D / 2 + 0.0, { emissive: 0xffb050, night: 2.2 }));
-    const dist = 2.75, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    const W = 2.6, H = 1.85;
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.3, 2.3), mat(0x9a968c)); path.rotation.x = -Math.PI / 2; path.position.set(0, 0.012, -0.85); g.add(path);
+    for (let k = 0; k < 6; k++) g.add(box(W - 0.3, 0.012, 0.025, 0x6e6a62, 0, 0.0, -1.9 + k * 0.4));
+    for (const x of [-W / 2, W / 2]) {
+      g.add(box(0.18, H, 0.18, 0x3e2a1e, x, 0, 0), box(0.28, 0.14, 0.28, 0x8a867c, x, 0, 0));
+      g.add(box(0.1, H - 0.4, 0.1, 0x3e2a1e, x, 0, -0.45), box(0.06, 0.06, 0.45, 0x3e2a1e, x, H - 0.45, -0.22));   // the back posts
+      chochin(g, x * 0.85, H - 0.6, 0.18, color, 1.3);
+    }
+    g.add(box(W + 0.3, 0.14, 0.2, 0x3e2a1e, 0, H - 0.14, 0), box(W + 0.1, 0.09, 0.12, 0x3e2a1e, 0, H - 0.5, 0));
+    jRoof(g, { y: H, z: -0.2, w: W + 0.6, d: 1.1, h: 0.36, lift: 0.1 });
+    // the two doors, swung open against the inside of the wall
+    for (const sd of [-1, 1]) { const d = box(0.06, H - 0.35, W / 2 - 0.1, 0x6b4a30, sd * (W / 2 - 0.05), 0.1, -W / 4 - 0.15); g.add(d); for (let r = 0; r < 3; r++) g.add(box(0.08, 0.04, W / 2 - 0.1, 0x2a2420, sd * (W / 2 - 0.05), 0.4 + r * 0.45, -W / 4 - 0.15)); }
+    const dist = 4.45, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
     return g;

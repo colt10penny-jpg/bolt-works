@@ -11,6 +11,10 @@ import { BUILDERS, box, cyl } from './models.js';
 import { J, mesh, at, rod, shade, roof, gable, onWall, hall, engawa, shoji, koshi, noren, plaque, lantern, sakura, maple, pine, bamboo, shrub, rocks, koiPond, swimKoi, torii, chochin } from './japan-kit.js';
 
 const { PLASTER, WOOD, WOOD_D, WOOD_L, VERM, VERM_D, STONE, STONE_D, MOSS, GOLD } = J;
+// Every building stands big in its lot, filling it out to its garden wall: the main
+// building (its 'core') is drawn at a modest size and scaled up by S. (The wings, gates and
+// garden pieces that come with upgrades fill the corners and the middle of each side.)
+const S = 1.4;
 function core(g, s = 1) { const c = new THREE.Group(); c.scale.setScalar(s); c.userData.core = true; g.add(c); return c; }
 const glowOpt = (e, k = 1.4) => ({ emissive: e, emissiveIntensity: k });
 // a gear facing +z (spin it about z)
@@ -22,12 +26,12 @@ function gearWheel(r, teeth, color, thick = 0.08) {
   return g;
 }
 
-Object.assign(BUILDERS, {
+const JAPAN = {
   // ---- Iron Sand Pit (satetsu): a thatched work shed beside a stepped wooden channel
   // where mountain water washes black iron sand out of the crushed hillside, a water wheel
   // turning at the top of it, and heaps of the black sand drying in front
   satetsu(color) {
-    const g = new THREE.Group(), c = core(g);
+    const g = new THREE.Group(), c = core(g, S);
     const sx = -0.75, sz = -0.75;
     const top = hall(c, { x: sx, z: sz, w: 2.0, d: 1.6, h: 1.0, wall: 0x9a7650, frame: WOOD_D, bay: 0.66 });
     koshi(c, 'z', sx - 0.45, 0.42, sz + 0.8, 0.8, 0.65);
@@ -55,7 +59,7 @@ Object.assign(BUILDERS, {
     for (const [x, z, r] of [[-1.35, 0.95, 0.42], [-0.65, 1.35, 0.32], [-1.45, 1.6, 0.25]]) { const h = mesh(new THREE.ConeGeometry(r, r * 0.8, 10), 0x2a2a2e, { roughness: 1, flatShading: true }); h.position.set(x, 0.15 + r * 0.4, z); c.add(h); }
     for (const [x, z] of [[0.05, 1.45], [-0.25, 1.65]]) c.add(cyl(0.16, 0.12, 0.28, 0xa07a4a, x, 0.15, z, 10), cyl(0.15, 0.15, 0.02, 0x2a2a2e, x, 0.42, z, 10));
     lantern(c, 1.55, 1.45, 0.85);
-    pine(g, -2.9, -2.9, 0.9, 0.15, 3); rocks(g, 3.0, 2.8, 1, 0.15, 3, 2); shrub(g, -3.0, 3.0, 1, 0.15, 0xd8579a);
+    pine(g, -3.5, -3.5, 0.9, 0.15, 3); rocks(g, 3.0, 2.8, 1, 0.15, 3, 2); shrub(g, -3.5, 3.5, 1, 0.15, 0xd8579a);
     return { group: g, top: 3.4, anim(t) { wheel.rotation.x = -t * 1.4; foam.forEach(([f, z], i) => { f.position.z = z - 0.3 + ((t * 0.6 + i * 0.3) % 1) * 0.6; }); } };
   },
 
@@ -63,7 +67,7 @@ Object.assign(BUILDERS, {
   // vent on its ridge, the clay furnace glowing orange inside while foot bellows rock to
   // feed it air, a glowing bloom of new steel, and heaps of charcoal
   tatara(color) {
-    const g = new THREE.Group(), c = core(g);
+    const g = new THREE.Group(), c = core(g, S);
     const hx = -0.1, hz = -0.3, w = 3.2, d = 2.8, H = 1.85;
     c.add(box(w + 0.2, 0.15, d + 0.2, STONE, hx, 0.15, hz));
     for (let i = 0; i < 4; i++) for (const zz of [hz - d / 2 + 0.1, hz + d / 2 - 0.1]) c.add(box(0.14, H, 0.14, WOOD_D, hx - w / 2 + 0.1 + i * (w - 0.2) / 3, 0.3, zz));
@@ -85,10 +89,10 @@ Object.assign(BUILDERS, {
     const kera = mesh(new THREE.DodecahedronGeometry(0.28, 0), 0xff8a3a, { flatShading: true, emissive: 0xff5a10, emissiveIntensity: 1.2 }); kera.scale.y = 0.55; kera.position.set(-1.45, 0.45, 1.4); kera.material = kera.material.clone(); c.add(kera);
     c.add(box(0.7, 0.18, 0.5, STONE_D, -1.45, 0.15, 1.4));
     for (let k = 0; k < 7; k++) { const ch = mesh(new THREE.DodecahedronGeometry(0.16 + (k % 3) * 0.04, 0), 0x1c1c1e, { flatShading: true, roughness: 1 }); ch.position.set(1.35 + (k % 3) * 0.22 - 0.2, 0.2 + Math.floor(k / 3) * 0.14, 1.25 + (k % 2) * 0.25); c.add(ch); }
-    for (const [x, z] of [[1.75, 1.45], [1.85, 1.0]]) { const bag = mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.4, 8), 0xb59a64); bag.rotation.z = Math.PI / 2; bag.position.set(x, 0.32, z); c.add(bag); }
+    for (const [x, z] of [[1.5, 1.75], [1.05, 1.8]]) { const bag = mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.4, 8), 0xb59a64); bag.rotation.z = Math.PI / 2; bag.position.set(x, 0.32, z); c.add(bag); }
     plaque(c, 'z', hx + 1.1, 0.3 + H - 0.62, hz + d / 2 - 0.02, 0.24, 0.55, '玉鋼');
     chochin(c, hx - 1.2, 0.3 + H - 0.35, hz + d / 2 - 0.02, color);
-    sakura(g, -3.0, -2.9, 0.85, 0.15, 4); lantern(g, 2.95, 2.9, 0.9); shrub(g, -3.0, 2.95, 1.0);
+    sakura(g, -3.5, -3.5, 0.85, 0.15, 4); lantern(g, 3.5, 3.5, 0.9); shrub(g, -3.5, 3.55, 1.0);
     const smoke = [new THREE.Vector3(hx, rt + 0.3, hz)];
     return { group: g, top: rt + 0.6, smoke, anim(t) {
       fire.material.emissiveIntensity = 1.4 + Math.sin(t * 7) * 0.3 + Math.sin(t * 13) * 0.2;
@@ -101,7 +105,7 @@ Object.assign(BUILDERS, {
   // the smith's hammer ringing on the anvil, a sacred straw rope with paper streamers over
   // the door, a quenching trough, and finished swords on a rack outside
   kajiba(color) {
-    const g = new THREE.Group(), c = core(g);
+    const g = new THREE.Group(), c = core(g, S);
     const sx = -0.35, sz = -0.6, w = 2.7, d = 2.0;
     const top = hall(c, { x: sx, z: sz, w, d, h: 1.35, wall: 0x5a4030, frame: 0x2e2018, bay: 0.68 });
     roof(c, { x: sx, y: top, z: sz, w: w + 0.7, d: d + 0.65, h: 1.0, lift: 0.3 });
@@ -126,7 +130,7 @@ Object.assign(BUILDERS, {
     for (let k = 0; k < 3; k++) { const sw = box(0.62, 0.035, 0.03, k === 1 ? 0x2a2420 : 0xd8dde4, 1.45, 0.58 + k * 0.08, 1.54, { metalness: 0.8, roughness: 0.25 }); sw.rotation.z = 0.06; c.add(sw); }
     c.add(box(0.36, 1.0, 0.36, 0x8a7a6a, sx + 0.9, top + 0.4, sz - 0.4), box(0.44, 0.08, 0.44, 0x3a3d44, sx + 0.9, top + 1.4, sz - 0.4));
     plaque(c, 'z', sx + 0.85, 0.75, sz + d / 2 + 0.01, 0.22, 0.6, '刀匠');
-    pine(g, -2.95, 2.9, 0.85, 0.15, 7); lantern(g, 2.9, 2.95, 0.9); bamboo(g, -2.9, -2.9, 0.9, 0.15, 6, 3);
+    pine(g, -3.5, 3.5, 0.85, 0.15, 7); lantern(g, 3.5, 3.55, 0.9); bamboo(g, -3.5, -3.5, 0.9, 0.15, 6, 3);
     return { group: g, top: top + 2.0, smoke: [new THREE.Vector3(sx + 0.9, top + 1.6, sz - 0.4)], anim(t) {
       const p = (t * 1.1) % 1, k = p < 0.7 ? -1.2 + p / 0.7 * 1.0 : -0.2 - (p - 0.7) / 0.3 * 1.0;
       arm.rotation.z = -k - 0.4;
@@ -140,7 +144,7 @@ Object.assign(BUILDERS, {
   // the company's curtain over the door, a great wooden clock on the upper floor with
   // brass gears turning beside it, and a clockwork tea-serving doll walking the veranda
   karakuri(color) {
-    const g = new THREE.Group(), c = core(g);
+    const g = new THREE.Group(), c = core(g, S);
     const x = -0.2, z = -0.55, w = 3.2, d = 2.3;
     const t1 = hall(c, { x, z, w, d, h: 1.15, wall: 0x6b4a30, frame: WOOD_D, bay: 0.8 });
     koshi(c, 'z', x - 0.85, 0.42, z + d / 2, 1.2, 0.9); koshi(c, 'z', x + 1.05, 0.42, z + d / 2, 0.8, 0.9);
@@ -169,7 +173,7 @@ Object.assign(BUILDERS, {
     doll.position.set(x, 0.3, z + d / 2 + 0.45); c.add(doll);
     for (const e of [-0.2, 0.62]) chochin(c, x + e, 1.25, z + d / 2 + 0.25, 0xf2e6c8);
     plaque(c, 'z', x - 1.45, 0.5, z + d / 2 + 0.01, 0.2, 0.75, 'からくり', { bg: 0xf1e6c8, ink: 0x2a2018, frame: WOOD_D });
-    sakura(g, 2.95, -2.95, 0.9, 0.15, 6); lantern(g, -2.95, 2.95, 0.9); shrub(g, 3.0, 2.95, 1.0, 0xd8579a);
+    sakura(g, 3.5, -3.55, 0.9, 0.15, 6); lantern(g, -3.5, 3.55, 0.9); shrub(g, 3.5, 3.55, 1.0, 0xd8579a);
     return { group: g, top: t2 + 1.3, anim(t) {
       g1.rotation.z = t * 0.8; g2.rotation.z = -t * 0.8 * 12 / 9; hand.rotation.z = -t * 0.3;
       const p = (t * 0.08) % 1, e = p < 0.45 ? p / 0.45 : p < 0.5 ? 1 : p < 0.95 ? 1 - (p - 0.5) / 0.45 : 0;
@@ -181,7 +185,7 @@ Object.assign(BUILDERS, {
   // gantry crane over the track, and a sleek white bullet train with a blue stripe easing
   // in and out of the shed
   shinkansen(color) {
-    const g = new THREE.Group(), c = core(g);
+    const g = new THREE.Group(), c = core(g, S);
     const sx = 0.0, sz = -1.05, w = 3.5, d = 1.5;
     const top = hall(c, { x: sx, z: sz, w, d, h: 1.3, wall: PLASTER, frame: 0x5a5f66, bay: 0.88 });
     c.add(box(w + 0.02, 0.12, d + 0.02, color, sx, 0.9, sz));
@@ -214,7 +218,7 @@ Object.assign(BUILDERS, {
     const cab = mesh(new THREE.SphereGeometry(0.18, 10, 6), 0x1c2430); cab.scale.set(1.3, 0.45, 0.9); cab.position.set(0.95, 0.66, 0); train.add(cab);
     train.add(box(0.1, 0.06, 0.06, 0xfff6d8, 1.5, 0.38, 0.12, { emissive: 0xfff0c0, night: 3 }), box(0.1, 0.06, 0.06, 0xfff6d8, 1.5, 0.38, -0.12, { emissive: 0xfff0c0, night: 3 }));
     train.position.set(-0.15, 0.2, tz); c.add(train);
-    sakura(g, -2.95, 2.95, 0.9, 0.15, 9); lantern(g, 2.95, -2.95, 0.9); shrub(g, 2.95, 2.95, 1.0);
+    sakura(g, -3.5, 3.55, 0.9, 0.15, 9); lantern(g, 3.5, -3.55, 0.9); shrub(g, 3.5, 3.55, 1.0);
     return { group: g, top: 3.4, anim(t) {
       const p = (t * 0.06) % 1, e = p < 0.4 ? p / 0.4 : p < 0.55 ? 1 : p < 0.95 ? 1 - (p - 0.55) / 0.4 : 0, k = 0.5 - 0.5 * Math.cos(e * Math.PI);
       train.position.x = -0.15 - 0.15 + k * 0.4;
@@ -225,7 +229,7 @@ Object.assign(BUILDERS, {
   // ---- Robot Works: a clean white factory hall under a tiled roof with a big glass front
   // where orange robot arms work, and a giant friendly robot statue out front, waving
   robotics(color) {
-    const g = new THREE.Group(), c = core(g);
+    const g = new THREE.Group(), c = core(g, S);
     const x = 0.35, z = -0.55, w = 2.9, d = 2.2;
     const top = hall(c, { x, z, w, d, h: 1.55, wall: PLASTER, frame: 0x6a6e76, bay: 0.95 });
     roof(c, { x, y: top, z, w: w + 0.6, d: d + 0.6, h: 0.9, lift: 0.25 });
@@ -251,7 +255,7 @@ Object.assign(BUILDERS, {
     R.add(box(0.16, 0.55, 0.18, 0xeef0f3, 0.4, 0.75, 0));
     const wave = new THREE.Group(); wave.position.set(-0.4, 1.3, 0); wave.add(box(0.16, 0.55, 0.18, 0xeef0f3, 0, 0, 0), box(0.2, 0.16, 0.2, color, 0, 0.5, 0));
     R.add(wave); c.add(R);
-    sakura(g, 2.95, 2.95, 0.9, 0.15, 11); bamboo(g, -2.95, -2.95, 0.9, 0.15, 6, 5); lantern(g, 2.95, -2.95, 0.9);
+    sakura(g, 3.5, 3.55, 0.9, 0.15, 11); bamboo(g, -3.5, -3.55, 0.9, 0.15, 6, 5); lantern(g, 3.5, -3.55, 0.9);
     return { group: g, top: top + 1.3, anim(t) {
       arms.forEach(([a, up, fore], i) => { a.rotation.y = Math.sin(t * 0.9 + i) * 0.9; up.rotation.z = Math.sin(t * 1.3 + i) * 0.4; fore.rotation.z = 1.1 + Math.sin(t * 1.7 + i) * 0.4; });
       wave.rotation.z = Math.PI + 0.4 + Math.sin(t * 3) * 0.35; head.rotation.y = Math.sin(t * 0.5) * 0.4;
@@ -288,7 +292,7 @@ Object.assign(BUILDERS, {
     for (let i = 0; i < 6; i++) scaffold.add(box(1.7, 0.1, 1.7, 0xb9b4a8, px, 0.95 + i * 1.25, pz));
     for (const [dx, dz] of [[-0.8, -0.8], [0.8, 0.8], [-0.8, 0.8], [0.8, -0.8]]) scaffold.add(box(0.1, 7.6, 0.1, 0xb9b4a8, px + dx, 0.45, pz + dz));
     g.add(scaffold);
-    pine(g, 2.95, 2.9, 1.0, 0.15, 13); pine(g, -2.95, -2.9, 0.9, 0.15, 14);
+    pine(g, 3.5, 3.5, 1.0, 0.15, 13); pine(g, -3.5, -3.5, 0.9, 0.15, 14);
     return { group: g, top: 9.4, rocket, scaffold };
   },
 
@@ -296,7 +300,7 @@ Object.assign(BUILDERS, {
   // turning on its side, fed by a wooden flume from a koi pond, a second smaller wheel,
   // the stream running off in front, maples and stone lanterns
   waterwheel(color) {
-    const g = new THREE.Group(), c = core(g, 1.15);
+    const g = new THREE.Group(), c = core(g, S);
     const mx = 0.55, mz = -0.35;
     const top = hall(c, { x: mx, z: mz, w: 1.9, d: 1.5, h: 1.15, wall: 0xa07a52, frame: WOOD_D, bay: 0.62 });
     shoji(c, 'z', mx + 0.3, 0.55, mz + 0.75, 0.8, 0.6); koshi(c, 'x', mz, 0.5, mx + 0.95, 0.9, 0.6);
@@ -326,16 +330,16 @@ Object.assign(BUILDERS, {
     // copper wires from the dynamo to a pole
     c.add(cyl(0.05, 0.06, 2.4, WOOD_D, 1.75, 0.15, 1.2, 6), box(0.6, 0.05, 0.05, WOOD_D, 1.75, 2.45, 1.2));
     rod(c, [1.5, 2.48, 1.2], [mx + 0.6, top + 0.2, mz + 0.6], 0.01, 0xb87333); rod(c, [2.0, 2.48, 1.2], [mx + 0.9, top + 0.2, mz + 0.6], 0.01, 0xb87333);
-    lantern(c, 1.55, 0.75, 0.75); maple(g, -2.9, 2.9, 0.9, 0.15, 3); maple(g, 2.9, -2.9, 0.85, 0.15, 7); sakura(g, 2.95, 2.95, 0.9, 0.15, 8);
+    lantern(c, 1.55, 0.75, 0.75); maple(g, -3.5, 3.5, 0.9, 0.15, 3); maple(g, 3.5, -3.5, 0.85, 0.15, 7); sakura(g, 3.5, 3.55, 0.9, 0.15, 8);
     rocks(c, 0.5, 1.6, 0.8, 0.15, 3, 8);
-    return { group: g, top: 3.6 * 1.15, anim(t, dt) { big.rotation.z -= dt * 0.9; small.rotation.z -= dt * 1.5; swimKoi(fish, t); } };
+    return { group: g, top: 3.6, anim(t, dt) { big.rotation.z -= dt * 0.9; small.rotation.z -= dt * 1.5; swimKoi(fish, t); } };
   },
 
   // ---- Pagoda Data Center: a five-storey vermilion pagoda on a stone platform, grey roofs
   // sweeping up at every corner, servers humming inside with bands of blue light between
   // the storeys, and a bronze spire of nine rings on top
   pagoda(color) {
-    const g = new THREE.Group(), c = core(g, 1.15);
+    const g = new THREE.Group(), c = core(g, S);
     c.add(box(2.7, 0.18, 2.7, STONE_D, 0, 0.15, 0), box(2.35, 0.18, 2.35, STONE, 0, 0.33, 0));
     for (let k = 0; k < 3; k++) c.add(box(0.9, 0.07, 0.25, STONE, 0, 0.15 + k * 0.12, 1.45 + 0.12 - k * 0.12));
     let y = 0.51;
@@ -362,18 +366,18 @@ Object.assign(BUILDERS, {
     const jewel = mesh(new THREE.SphereGeometry(0.07, 10, 8), GOLD, { metalness: 0.8, roughness: 0.2, emissive: 0xffb040, emissiveIntensity: 0.3 }); jewel.position.y = y + 1.75; c.add(jewel);
     plaque(c, 'z', 0.55, 0.62, 1.18, 0.2, 0.42, '五重塔');
     for (const [x, z] of [[-1.15, 1.6], [1.15, 1.6]]) lantern(c, x, z, 0.8);
-    sakura(g, -2.9, -2.9, 0.9, 0.15, 21); pine(g, 2.9, -2.9, 0.85, 0.15, 22); maple(g, 2.95, 2.9, 0.85, 0.15, 23);
-    return { group: g, top: (y + 2.0) * 1.15, anim(t) { lights.forEach((l, i) => { l.material.emissiveIntensity = 0.5 + 0.6 * Math.max(0, Math.sin(t * 2 - i * 0.7)); }); } };
+    sakura(g, -3.5, -3.5, 0.9, 0.15, 21); pine(g, 3.5, -3.5, 0.85, 0.15, 22); maple(g, 3.5, 3.5, 0.85, 0.15, 23);
+    return { group: g, top: y + 2.0, anim(t) { lights.forEach((l, i) => { l.material.emissiveIntensity = 0.5 + 0.6 * Math.max(0, Math.sin(t * 2 - i * 0.7)); }); } };
   },
 
   // ---- Castle Keep (headquarters): a white castle on sloping stone walls, three tiers of
   // grey roofs with triangular gables, black-boarded lower walls, golden fish on the top
   // ridge, cherry trees in the grounds
   castle(color) {
-    const g = new THREE.Group(), c = core(g, 1.15);
+    const g = new THREE.Group(), c = core(g, S);
     // the stone base: battered walls of fitted stone
-    const base = mesh(new THREE.CylinderGeometry(1.75, 2.15, 1.0, 4, 1), 0x9a968a, { flatShading: true, roughness: 1 }); base.rotation.y = Math.PI / 4; base.position.set(0, 0.65, -0.1); c.add(base);
-    for (let k = 1; k < 5; k++) { const ln = mesh(new THREE.CylinderGeometry(2.15 - k * 0.08 + 0.005, 2.15 - k * 0.08 + 0.005, 0.02, 4, 1, true), 0x6e6a60); ln.rotation.y = Math.PI / 4; ln.position.set(0, 0.15 + k * 0.2, -0.1); c.add(ln); }
+    const base = mesh(new THREE.CylinderGeometry(1.75, 2.15, 1.0, 4, 1).rotateY(Math.PI / 4), 0x9a968a, { flatShading: true, roughness: 1 }); base.position.set(0, 0.65, -0.1); c.add(base);
+    for (let k = 1; k < 5; k++) { const ln = mesh(new THREE.CylinderGeometry(2.15 - k * 0.08 + 0.005, 2.15 - k * 0.08 + 0.005, 0.02, 4, 1, true).rotateY(Math.PI / 4), 0x6e6a60); ln.position.set(0, 0.15 + k * 0.2, -0.1); c.add(ln); }
     const tiers = [[2.3, 1.95, 0.85], [1.75, 1.45, 0.72], [1.25, 1.05, 0.65]];
     let y = 1.15;
     tiers.forEach(([w, d, h], i) => {
@@ -400,8 +404,15 @@ Object.assign(BUILDERS, {
     // the gate and the grounds
     c.add(box(0.7, 0.55, 0.06, 0x2a2420, 0, 0.15, 1.85 - 0.95));
     plaque(c, 'z', 0, 1.62, 0.88, 0.5, 0.2, '本丸', { bg: 0x2a2420, ink: 0xf2d79a });
-    sakura(g, -2.9, 2.9, 0.95, 0.15, 31); sakura(g, 2.9, 2.9, 0.9, 0.15, 32); pine(g, 2.9, -2.9, 0.85, 0.15, 33); lantern(c, -1.5, 1.4, 0.75); lantern(c, 1.5, 1.4, 0.75);
+    sakura(g, -3.5, 3.5, 0.95, 0.15, 31); sakura(g, 3.5, 3.5, 0.9, 0.15, 32); pine(g, 3.5, -3.5, 0.85, 0.15, 33); lantern(c, -1.5, 1.4, 0.75); lantern(c, 1.5, 1.4, 0.75);
     for (const e of [-0.55, 0.55]) chochin(c, e, 1.4, 0.92, color);
-    return { group: g, top: (y + 1.3) * 1.15 };
+    return { group: g, top: y + 1.3 };
   },
-});
+};
+// the core's numbers (the height for the bubble above it, where smoke rises) scale with it
+for (const [name, make] of Object.entries(JAPAN)) BUILDERS[name] = (color, tier) => {
+  const m = make(color, tier), c = m.group.children.find(o => o.userData.core);
+  if (c) { const k = c.scale.x; m.top *= k; if (m.smoke) m.smoke = m.smoke.map(v => v.clone().multiplyScalar(k)); }
+  return m;
+};
+

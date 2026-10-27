@@ -9,7 +9,7 @@ import { box, cyl, mat, GLOW } from './models.js';
 
 export const J = {
   PLASTER: 0xf3eee3, PLASTER2: 0xe9e1d0, WOOD: 0x6b4a30, WOOD_D: 0x3e2a1e, WOOD_L: 0xa07a52, VERM: 0xd2452c, VERM_D: 0xa8321f,
-  TILE: 0x5d6574, TILE_D: 0x3e4450, THATCH: 0x8a6c48, STONE: 0xa8a49a, STONE_D: 0x7d7a72, MOSS: 0x6f8f3a, GOLD: 0xd9a83a,
+  TILE: 0x7c8492, TILE_D: 0x4a505c, THATCH: 0x8a6c48, STONE: 0xa8a49a, STONE_D: 0x7d7a72, MOSS: 0x6f8f3a, GOLD: 0xd9a83a,
   GRAVEL: 0xd8d4c8, KOI: 0xff7a2a, SAKURA: [0xf7c9d6, 0xf2b4c8, 0xfadbe4, 0xf5bfd0], MAPLE: [0xd9452b, 0xe86a2a, 0xc23524, 0xf08a3a],
   PINE: [0x2f5a32, 0x3a6a3a, 0x284e2c], LEAF: [0x4f8f3a, 0x5fa044, 0x3f7f34],
 };
@@ -33,20 +33,40 @@ function canvas(w, h, draw) {
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
 }
-// rows of round clay tiles running down the roof (grey; the material tints them)
-const tileTex = () => TEX.tile ||= canvas(64, 64, (g, w, h) => {
-  for (let x = 0; x < w; x++) {
-    const k = (x % 16) / 16, v = 0.55 + 0.45 * Math.sin(k * Math.PI);   // round tiles: light on top, dark in the gaps
-    g.fillStyle = `rgb(${Math.round(255 * v)},${Math.round(255 * v)},${Math.round(255 * v)})`; g.fillRect(x, 0, 1, h);
+// hongawara clay tiles: rows of round cover tiles over wide, dished pan tiles, laid in
+// overlapping courses (each course's lower lip throws a little shadow on the next), each
+// tile a slightly different shade. Grey; the material tints it. Also used as a bump map.
+const tileTex = () => TEX.tile ||= canvas(128, 128, (g, w, h) => {
+  let sd = 11; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  const COL = 32, ROW = 32;
+  for (let cy = 0; cy < h; cy += ROW) for (let cx = 0; cx < w; cx += COL) {
+    const tint = 0.9 + r() * 0.2;
+    for (let x = 0; x < COL; x++) {
+      // the pan tile (dished: darker in the middle) and the round cover tile on its seam
+      const u = x / COL;
+      const pan = 0.62 - 0.12 * Math.sin(u * Math.PI);
+      const dc = Math.abs(u - 0) < 0.22 ? u / 0.22 : Math.abs(u - 1) < 0.22 ? (1 - u) / 0.22 : -1;
+      for (let y = 0; y < ROW; y++) {
+        const k = y / ROW;
+        let v = pan * (0.86 + 0.14 * k);
+        if (dc >= 0) v = 0.45 + 0.5 * Math.cos((1 - dc) * Math.PI / 2);
+        if (y < 3) v *= 0.55 + y * 0.12;                 // the shadow under the course above
+        if (y > ROW - 3) v = Math.min(1, v * 1.15);      // this course's lip
+        v *= tint * (0.95 + r() * 0.1);
+        const c = Math.round(255 * Math.min(1, v));
+        g.fillStyle = `rgb(${c},${c},${c})`; g.fillRect(cx + x, cy + y, 1, 1);
+      }
+    }
   }
-  g.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = 0; y < h; y += 16) g.fillRect(0, y, w, 2);
+  // a little moss and lichen here and there
+  for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(${90 + r() * 40},${110 + r() * 30},${70},${0.15 + r() * 0.2})`; g.fillRect(r() * w, r() * h, 2 + r() * 4, 1 + r() * 3); }
 });
-// straw thatch: fine streaks running down
-const thatchTex = () => TEX.thatch ||= canvas(64, 64, (g, w, h) => {
-  g.fillStyle = '#c8c8c8'; g.fillRect(0, 0, w, h);
+// straw thatch: dense streaks running down, combed in layers, darker with age at the eaves
+const thatchTex = () => TEX.thatch ||= canvas(128, 128, (g, w, h) => {
+  g.fillStyle = '#bdbdbd'; g.fillRect(0, 0, w, h);
   let s = 3; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 260; i++) { const v = 150 + r() * 105; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(r() * w, r() * h, 1, 5 + r() * 12); }
-  g.fillStyle = 'rgba(0,0,0,0.12)'; for (let y = 0; y < h; y += 21) g.fillRect(0, y, w, 2);
+  for (let i = 0; i < 1400; i++) { const v = 120 + r() * 135; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(r() * w, r() * h, 1, 6 + r() * 18); }
+  for (let y = 0; y < h; y += 32) { const gr = g.createLinearGradient(0, y, 0, y + 32); gr.addColorStop(0, 'rgba(0,0,0,0.28)'); gr.addColorStop(0.25, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(255,255,255,0.08)'); g.fillStyle = gr; g.fillRect(0, y, w, 32); }
 });
 // a shoji screen: white paper in a fine dark wooden grid (glows warm after dark)
 const shojiTex = () => TEX.shoji ||= canvas(64, 96, (g, w, h) => {
@@ -71,37 +91,45 @@ export const gravelTex = () => TEX.gravel ||= canvas(128, 128, (g, w, h) => {
 });
 const MATS = new Map();
 function texMat(key, make) { if (!MATS.has(key)) MATS.set(key, make()); return MATS.get(key); }
-const tileMat = color => texMat('tile' + color, () => new THREE.MeshStandardMaterial({ color, map: tileTex(), roughness: 0.55, metalness: 0.15, side: THREE.DoubleSide }));
-const thatchMat = color => texMat('th' + color, () => new THREE.MeshStandardMaterial({ color, map: thatchTex(), roughness: 1, side: THREE.DoubleSide }));
+const tileMat = color => texMat('tile' + color, () => new THREE.MeshStandardMaterial({ color, map: tileTex(), bumpMap: tileTex(), bumpScale: 2.2, roughness: 0.6, metalness: 0.12, side: THREE.DoubleSide }));
+const thatchMat = color => texMat('th' + color, () => new THREE.MeshStandardMaterial({ color, map: thatchTex(), bumpMap: thatchTex(), bumpScale: 3, roughness: 1, side: THREE.DoubleSide }));
 const shojiMat = () => texMat('shoji', () => { const m = new THREE.MeshStandardMaterial({ map: shojiTex(), emissive: 0xffc070, emissiveMap: shojiTex(), emissiveIntensity: 0, roughness: 0.9 }); m.userData.night = 0.9; GLOW.night.push(m); return m; });
 const koshiMat = () => texMat('koshi', () => new THREE.MeshStandardMaterial({ map: koshiTex(), roughness: 0.85 }));
 
 // ---------- roofs ----------
 // A hip roof over a w x d plan (a = w/2 >= b = d/2): four sweeping faces, concave (steep
 // near the ridge, flattening toward the eaves) and lifting at the corners like a temple
-// roof, with a real thickness so the eave edge shows. Returns [top, underside] geometry.
+// roof, with a real thickness so the eave edge shows. Returns the top and underside
+// geometry, and each face's surface function P(t, s) (t along the eave, s up to the ridge).
 function roofGeo(a, b, H, { lift = 0.3, pow = 1.7, thick = 0.12, tile = 0.3 } = {}) {
-  if (b > a) { const [t, u] = roofGeo(b, a, H, { lift, pow, thick, tile }); t.rotateY(Math.PI / 2); u.rotateY(Math.PI / 2); return [t, u]; }
-  const r = a - b, ST = 10, SS = 7;
+  if (b > a) {
+    const R = roofGeo(b, a, H, { lift, pow, thick, tile });
+    R.T.rotateY(Math.PI / 2); R.U.rotateY(Math.PI / 2);
+    R.faces = R.faces.map(P => (t, s) => { const [x, y, z] = P(t, s); return [z, y, -x]; });
+    return R;
+  }
+  const r = a - b, ST = 12, SS = 8, slope = Math.hypot(H, b);
   const faces = [
     [[-a, b], [a, b], [-r, 0], [r, 0]],
     [[a, -b], [-a, -b], [r, 0], [-r, 0]],
     [[a, b], [a, -b], [r, 0], [r, 0]],
     [[-a, -b], [-a, b], [-r, 0], [-r, 0]],
   ];
-  const tops = [], unders = [];
+  const tops = [], unders = [], fns = [];
   for (const [e0, e1, r0, r1] of faces) {
-    const len = Math.hypot(e1[0] - e0[0], e1[1] - e0[1]);
+    const len = Math.hypot(e1[0] - e0[0], e1[1] - e0[1]), dx = (e1[0] - e0[0]) / len, dz = (e1[1] - e0[1]) / len;
     const P = (t, s) => {
       const ex = e0[0] + (e1[0] - e0[0]) * t, ez = e0[1] + (e1[1] - e0[1]) * t;
       const rx = r0[0] + (r1[0] - r0[0]) * t, rz = r0[1] + (r1[1] - r0[1]) * t;
       const c = Math.pow(Math.abs(2 * t - 1), 6) * (1 - s) * (1 - s);
       return [ex + (rx - ex) * s, H * Math.pow(s, pow) + lift * c, ez + (rz - ez) * s];
     };
+    fns.push(P);
     const pos = [], uv = [], idx = [], pu = [], iu = [];
     for (let i = 0; i <= ST; i++) for (let j = 0; j <= SS; j++) {
       const t = i / ST, s = j / SS, p = P(t, s);
-      pos.push(...p); uv.push(t * len / tile, s * 3);
+      // the tiles run straight down the slope, at the same size on every face
+      pos.push(...p); uv.push((p[0] * dx + p[2] * dz) / tile, s * slope / tile);
       pu.push(p[0], p[1] - thick, p[2]);
     }
     const V = (i, j) => i * (SS + 1) + j;
@@ -113,32 +141,74 @@ function roofGeo(a, b, H, { lift = 0.3, pow = 1.7, thick = 0.12, tile = 0.3 } = 
     for (let i = 0; i < ST; i++) { const a0 = V(i, 0), a1 = V(i + 1, 0), b0 = n + i, b1 = n + i + 1; iu.push(a0, b1, b0, a0, a1, b1); }
     const und = new THREE.BufferGeometry(); und.setAttribute('position', new THREE.Float32BufferAttribute(pu, 3)); und.setIndex(iu);
     und.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((pu.length / 3) * 2), 2));
-    // make sure the top faces up
     top.computeVertexNormals(); und.computeVertexNormals();
     if (top.attributes.normal.getY(V(ST >> 1, SS >> 1)) < 0) { top.setIndex(idx.map((v, k) => k % 3 === 1 ? idx[k + 1] : k % 3 === 2 ? idx[k - 1] : v)); top.computeVertexNormals(); }
     tops.push(top.toNonIndexed()); unders.push(und.toNonIndexed());
   }
   const T = mergeGeometries(tops), U = mergeGeometries(unders);
   T.computeVertexNormals(); U.computeVertexNormals();
-  return [T, U];
+  return { T, U, faces: fns };
 }
+const DETAIL = new Map();
+const plainGeo = g => { const n = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(n.attributes)) if (k !== 'position' && k !== 'normal') n.deleteAttribute(k); return n; };
 // put a roof over g: centre (x, z), eaves at height y, plan w x d (with the overhang);
-// kind 'tile' (grey clay), 'thatch' or 'copper'; returns the ridge height
+// kind 'tile' (grey clay) or 'thatch'; returns the ridge height.
+// A tiled roof gets its trim: raised hip ridges down the four corners with a decorated
+// end tile where each meets the eave, a row of round tile ends along the eaves, a ridge
+// with end tiles (onigawara), and a white-edged fascia under the eaves. A thatched roof
+// gets a thick, trimmed eave and a straw ridge pinned by crossed timbers.
 export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, under = WOOD, ridge = true, rot = 0 }) {
-  const th = kind === 'thatch';
-  const [tg, ug] = roofGeo(w / 2, d / 2, h, { lift: lift ?? (th ? 0.05 : Math.min(w, d) * 0.12), pow: th ? 1.15 : 1.7, thick: th ? 0.28 : 0.11, tile: th ? 0.6 : 0.26 });
+  const th = kind === 'thatch', TS = 0.9;
+  const thick = th ? Math.min(0.32, 0.12 + Math.min(w, d) * 0.06) : 0.11;
+  const R = roofGeo(w / 2, d / 2, h, { lift: lift ?? (th ? 0.05 : Math.min(w, d) * 0.12), pow: th ? 1.15 : 1.7, thick, tile: th ? 1.4 : TS });
   const grp = new THREE.Group();
-  const top = new THREE.Mesh(tg, th ? thatchMat(color ?? J.THATCH) : tileMat(color ?? TILE)); top.castShadow = true; top.receiveShadow = true;
-  const und = new THREE.Mesh(ug, mat(under, { side: THREE.DoubleSide })); und.castShadow = true;
+  const top = new THREE.Mesh(R.T, th ? thatchMat(color ?? J.THATCH) : tileMat(color ?? TILE)); top.castShadow = true; top.receiveShadow = true;
+  const und = new THREE.Mesh(R.U, mat(under, { side: THREE.DoubleSide })); und.castShadow = true;
   grp.add(top, und);
+  const small = Math.min(w, d) < 0.9, trim = [], dark = th ? shade(color ?? J.THATCH, -0.4) : J.TILE_D;
+  const sz = Math.min(w, d), rr = th ? 0 : Math.max(0.022, Math.min(0.065, sz * 0.022));
+  if (!th) {
+    // hip ridges: along the shared edges of the front and back faces
+    for (const P of [R.faces[0], R.faces[1]]) for (const t of [0, 1]) {
+      const pts = []; for (let k = 0; k <= 10; k++) { const [px, py, pz] = P(t, k / 10); pts.push(new THREE.Vector3(px, py + rr * 0.7, pz)); }
+      trim.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 12, rr, 5, false));
+      if (!small) {
+        // the decorated end tile where the hip meets the eave, leaning out
+        const [ex, ey, ez] = P(t, 0), [nx, , nz] = P(t, 0.12);
+        const b = new THREE.BoxGeometry(rr * 3.2, rr * 4.2, rr * 2.2); b.rotateY(Math.atan2(ex - nx, ez - nz)); b.translate(ex, ey + rr * 1.6, ez); trim.push(b);
+      }
+    }
+    // round tile ends along every eave, one per row of cover tiles
+    if (!small) for (const P of R.faces) {
+      const [x0, , z0] = P(0, 0), [x1, , z1] = P(1, 0), L = Math.hypot(x1 - x0, z1 - z0), n = Math.floor(L / (TS / 4));
+      for (let k = 1; k < n; k++) {
+        const t = k / n, [px, py, pz] = P(t, 0), [qx, , qz] = P(t, 0.06);
+        const c = new THREE.CylinderGeometry(rr * 0.85, rr * 0.85, 0.05, 7); c.rotateX(Math.PI / 2); c.rotateY(Math.atan2(px - qx, pz - qz)); c.translate(px, py - 0.015, pz); trim.push(c);
+      }
+    }
+  }
   if (ridge) {
     const r = Math.max(0, Math.max(w, d) / 2 - Math.min(w, d) / 2), along = w >= d;
     if (r > 0.05) {
-      const rb = box(along ? r * 2 + 0.2 : 0.18, th ? 0.22 : 0.16, along ? 0.18 : r * 2 + 0.2, th ? shade(color ?? J.THATCH, -0.35) : J.TILE_D, 0, h - 0.04, 0);
-      grp.add(rb);
-      if (!th) for (const e of [-1, 1]) { const o = box(0.2, 0.28, 0.24, J.TILE_D, along ? e * (r + 0.08) : 0, h - 0.02, along ? 0 : e * (r + 0.08)); o.rotation.y = along ? 0 : Math.PI / 2; grp.add(o); }
-    } else grp.add(cyl(0.05, 0.12, 0.25, th ? J.WOOD_D : J.TILE_D, 0, h - 0.05, 0, 8));
+      const rb = new THREE.BoxGeometry(along ? r * 2 + 0.2 : (th ? 0.36 : 0.2), th ? 0.26 : 0.17, along ? (th ? 0.36 : 0.2) : r * 2 + 0.2); rb.translate(0, h + (th ? 0.02 : 0.02), 0); trim.push(rb);
+      if (!th) {
+        const rb2 = new THREE.BoxGeometry(along ? r * 2 + 0.3 : 0.12, 0.07, along ? 0.12 : r * 2 + 0.3); rb2.translate(0, h + 0.12, 0); trim.push(rb2);
+        for (const e of [-1, 1]) { const o = new THREE.BoxGeometry(0.2, 0.3, 0.26); o.rotateY(along ? 0 : Math.PI / 2); o.translate(along ? e * (r + 0.1) : 0, h + 0.1, along ? 0 : e * (r + 0.1)); trim.push(o); const f = new THREE.ConeGeometry(0.09, 0.2, 5); f.rotateZ(along ? -e * 0.5 : 0); f.rotateX(along ? 0 : e * 0.5); f.translate(along ? e * (r + 0.2) : 0, h + 0.34, along ? 0 : e * (r + 0.2)); trim.push(f); }
+      } else {
+        // crossed timbers pinning the straw ridge
+        for (let k = 0; k <= Math.max(2, Math.round(r * 2 / 0.45)); k++) {
+          const a0 = -r + (2 * r * k) / Math.max(2, Math.round(r * 2 / 0.45));
+          for (const e of [-1, 1]) { const b = new THREE.BoxGeometry(0.05, 0.5, 0.05); b.rotateX(along ? e * 0.6 : 0); b.rotateZ(along ? 0 : e * 0.6); b.translate(along ? a0 : 0, h + 0.18, along ? 0 : a0); trim.push(b); }
+        }
+      }
+    } else trim.push(new THREE.CylinderGeometry(0.05, 0.12, 0.25, 8).translate(0, h - 0.05, 0));
   }
+  if (trim.length) {
+    const tm = new THREE.Mesh(mergeGeometries(trim.map(plainGeo)), mat(th ? J.WOOD_D : dark, { roughness: 0.55, metalness: 0.1 }));
+    tm.castShadow = true; tm.receiveShadow = true; grp.add(tm);
+    trim.forEach(t => t.dispose());
+  }
+  if (th && ridge) { const rr2 = Math.max(0, Math.max(w, d) / 2 - Math.min(w, d) / 2), along = w >= d; if (rr2 > 0.05) grp.add(box(along ? rr2 * 2 + 0.25 : 0.4, 0.2, along ? 0.4 : rr2 * 2 + 0.25, dark, 0, h - 0.06, 0)); }
   grp.position.set(x, y, z); grp.rotation.y = rot;
   g.add(grp);
   return y + h;

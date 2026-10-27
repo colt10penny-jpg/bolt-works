@@ -147,20 +147,47 @@ function textures() {
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     return t;
   })();
-  // grey granite setts (ishidatami) in running courses, each stone its own shade
-  const setts = canvasTex(256, (d, n) => {
-    const RH = 8;
+  // old stone paving (ishidatami): irregular, rounded stones of mixed granite, worn
+  // smooth and set in dark, mossy joints, each a slightly different colour, with broad
+  // patches where the street is cleaner or dirtier. Tiles seamlessly.
+  const setts = (() => {
+    const N = 512, G = 26, cell = N / G, pts = [];
+    for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) pts.push([(gx + 0.15 + hash(gx, gy, 31) * 0.7) * cell, (gy + 0.15 + hash(gx, gy, 37) * 0.7) * cell]);
+    const PAL = [[0.80, 0.78, 0.74], [0.72, 0.72, 0.72], [0.70, 0.71, 0.75], [0.82, 0.77, 0.69], [0.64, 0.63, 0.61], [0.76, 0.74, 0.70]];
+    return canvasTex(N, (d) => {
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+        let d1 = 1e9, d2 = 1e9, id = 0;
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+          const gx = (cx + ox + G) % G, gy = (cy + oy + G) % G, p = pts[gy * G + gx];
+          const px = p[0] + (cx + ox - gx) * cell, py = p[1] + (cy + oy - gy) * cell;
+          const dd = (x - px) ** 2 + (y - py) ** 2;
+          if (dd < d1) { d2 = d1; d1 = dd; id = gy * G + gx; } else if (dd < d2) d2 = dd;
+        }
+        const edge = Math.sqrt(d2) - Math.sqrt(d1);          // distance to the joint
+        const c = PAL[Math.floor(hash(id, 1, 41) * PAL.length)], k = 0.9 + hash(id, 2, 43) * 0.2;
+        const big = 0.92 + (fbm(x / 64, y / 64, 3, 47, N / 64) - 0.5) * 0.3;   // broad cleaner and dirtier patches
+        const dome = Math.min(1, edge / 6);                    // stones rounded off toward their edges
+        let r = c[0] * k * big, g = c[1] * k * big, b = c[2] * k * big;
+        const sh = 0.72 + 0.28 * dome + (hash(x, y, 5) - 0.5) * 0.07;
+        r *= sh; g *= sh; b *= sh;
+        if (edge < 2.2) {                                       // the joint: dark earth, often mossy
+          const moss = fbm(x / 16, y / 16, 2, 53, N / 16) > 0.55;
+          [r, g, b] = moss ? [0.33, 0.4, 0.22] : [0.3, 0.27, 0.23];
+        }
+        const i = (y * N + x) * 4;
+        d[i] = Math.min(255, r * 255); d[i + 1] = Math.min(255, g * 255); d[i + 2] = Math.min(255, b * 255); d[i + 3] = 255;
+      }
+    });
+  })();
+  // fine pale gravel for the walks
+  const gravel = canvasTex(256, (d, n) => {
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-      const i = (y * n + x) * 4, row = Math.floor(y / RH), off = (row % 2) * 6, sw = 11;
-      const col = Math.floor(((x + off) % n) / sw), ex = ((x + off) % n) % sw, ey = y % RH;
-      const edge = Math.min(ex, sw - 1 - ex, ey, RH - 1 - ey);
-      let v = 0.78 + (hash(col, row, 21) - 0.5) * 0.22 + (hash(x, y, 5) - 0.5) * 0.08;
-      if (edge < 1) v = 0.45; else if (edge < 2) v *= 0.85;
-      v = Math.max(0, Math.min(1, v)) * 255;
-      d[i] = v; d[i + 1] = v * 0.99; d[i + 2] = v * 0.96; d[i + 3] = 255;
+      const i = (y * n + x) * 4, h = hash(x, y, 61), v = 0.78 + (h - 0.5) * 0.3 + (fbm(x / 8, y / 8, 2, 63, n / 8) - 0.5) * 0.15 - (hash(x >> 1, y >> 1, 67) > 0.93 ? 0.2 : 0);
+      d[i] = v * 255; d[i + 1] = v * 250; d[i + 2] = v * 238; d[i + 3] = 255;
     }
   });
-  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex, setts };
+  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex, setts, gravel };
   SHARED.cloudTex.value = cloud;
   return TEX;
 }
@@ -1306,7 +1333,7 @@ export function buildRoads(name, T, stateOf) {
   const road = new Batch();
   const west = name === 'desert';   // the Wild West: packed dirt streets and plank boardwalks
   const nihon = name === 'japan';   // Sakura Valley: granite-sett streets, gravel walks, stone lanterns
-  const asphaltM = west ? withClouds(std(0xe0b583, { map: tx.asphalt, roughness: 1 })) : nihon ? withClouds(std(0xc9c5bc, { map: tx.setts, roughness: 0.9 })) : withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
+  const asphaltM = west ? withClouds(std(0xe0b583, { map: tx.asphalt, roughness: 1 })) : nihon ? withClouds(std(0xffffff, { map: tx.setts, roughness: 0.92 })) : withClouds(std(T.road, { map: tx.asphalt, roughness: 0.92 }));
   const rutM = withClouds(std(0xc09668, { roughness: 1 })), seamM = std(0x4e3a26, { roughness: 1 });
   // an old road that's mostly gone back to nature: a strip of dry, yellowing grass
   // with the odd patch of broken tarmac still showing through
@@ -1314,9 +1341,12 @@ export function buildRoads(name, T, stateOf) {
   const tarM = withClouds(std(0x8e8a78, { map: tx.asphalt, roughness: 0.98 }));
   const weedM = std(0x5f8a3a, { flatShading: true, roughness: 1 });
   const mossM = withClouds(std(0x7fb24e, { roughness: 1 }));
-  const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : withClouds(std(T.walk, { roughness: 0.9 }));
+  const walkM = west ? withClouds(std(0x9a7248, { roughness: 0.95 })) : nihon ? withClouds(std(0xe6dfcf, { map: tx.gravel, roughness: 1 })) : withClouds(std(T.walk, { roughness: 0.9 }));
   const curbM = west ? std(0x5e4630, { roughness: 0.95 }) : nihon ? std(0x7d7a72, { roughness: 0.9 }) : std(new THREE.Color(T.walk).multiplyScalar(0.82).getHex(), { roughness: 0.9 });
   const paintM = std(0xf4efe0, { roughness: 0.7 });
+  const stoneMs = [0x8f8b82, 0x7d7a73, 0x9c968a].map(c => std(c, { roughness: 0.95, flatShading: true }));
+  const mossOverM = std(0x6f8a45, { roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const wearM = std(0x4a4640, { roughness: 1, transparent: true, opacity: 0.12, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   const HW = ROAD_W / 2, SW = 0.7, mars = name === 'mars', luna = name === 'moon', moon = luna || mars;   // Mars roads are lit like the Moon's, not painted
   // Mars streets: fused basalt slabs, steel grate walkways behind hazard-striped curbs,
   // cyan light lines along both edges and an amber dashed line down the middle
@@ -1549,6 +1579,28 @@ export function buildRoads(name, T, stateOf) {
     const lo = sp.lo + HW, hi = sp.hi - (sg.exit ? 0 : HW);
     const a0 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.lo : lo, a1 = sg.exit && sg.a.x + sg.a.z > sg.b.x + sg.b.z ? sp.hi - HW : hi;
     if (west) westStreet(sp, a0, a1, loN, hiN);
+    else if (nihon) for (const side of [-1, 1]) {
+      // gravel walks behind a kerb of separate rough granite blocks, no two quite alike
+      const P = (al, ac) => sp.along === 'x' ? [al, sp.line + ac] : [sp.line + ac, al];
+      const [wx, wz] = P((a0 + a1) / 2, side * (HW + SW / 2));
+      road.add(walkM, sp.along === 'x' ? boxAt(a1 - a0, 0.14, SW, wx, 0, wz) : boxAt(SW, 0.14, a1 - a0, wx, 0, wz));
+      for (let t = a0; t < a1 - 0.05;) {
+        const L = Math.min(a1 - t, 0.45 + r() * 0.55), hh = 0.13 + r() * 0.06, ww = 0.13 + r() * 0.05;
+        const g = new THREE.BoxGeometry(sp.along === 'x' ? L - 0.03 : ww, hh, sp.along === 'x' ? ww : L - 0.03);
+        g.rotateY((r() - 0.5) * 0.05);
+        const [bx, bz] = P(t + L / 2, side * (HW + 0.07 + (r() - 0.5) * 0.03)); g.translate(bx, hh / 2, bz);
+        road.add(stoneMs[Math.floor(r() * 3)], g); t += L;
+      }
+      // moss and grass creeping out of the edges, a few weeds, and darker worn tracks
+      for (let t = a0 + 0.3; t < a1 - 0.3; t += 0.6 + r() * 1.4) {
+        if (r() < 0.65) { const g = new THREE.CircleGeometry(0.2 + r() * 0.45, 8); g.rotateX(-Math.PI / 2); g.scale(1.6, 1, 0.7); if (sp.along === 'z') g.rotateY(Math.PI / 2); const [mx, mz] = P(t, side * (HW - 0.15 - r() * 0.25)); g.translate(mx, 0.079 + r() * 0.002, mz); road.add(mossOverM, g); }
+        if (r() < 0.3) for (let b = 0; b < 4; b++) { const g = new THREE.ConeGeometry(0.025, 0.14 + r() * 0.1, 3, 1, true); g.rotateZ((r() - 0.5) * 0.8); const [ex2, ez2] = P(t + (r() - 0.5) * 0.3, side * (HW - 0.08 - r() * 0.12)); g.translate(ex2, 0.13, ez2); road.add(weedM, g); }
+      }
+      for (const lane of [-0.75, 0.75]) for (let t = a0 + 0.5; t < a1 - 0.5; t += 1.2 + r() * 2) {
+        const g = new THREE.CircleGeometry(1, 9); g.rotateX(-Math.PI / 2); g.scale(0.8 + r() * 1.4, 1, 0.22 + r() * 0.12); if (sp.along === 'z') g.rotateY(Math.PI / 2);
+        const [tx2, tz2] = P(t, side * lane + (r() - 0.5) * 0.2); g.translate(tx2, 0.0785, tz2); road.add(wearM, g);
+      }
+    }
     else for (const side of [-1, 1]) {
       if (sp.along === 'x') {
         road.add(walkM, boxAt(a1 - a0, 0.14, SW, (a0 + a1) / 2, 0, sp.line + side * (HW + SW / 2)));
