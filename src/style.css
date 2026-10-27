@@ -589,3 +589,11 @@ body.warp-out #world { transform: scale(1.12); filter: brightness(.7); }
 body.warp-in #world { transition: none; transform: scale(0.9); filter: brightness(.7); }
 body.warp-in.warp-settle #world { transition: transform .7s cubic-bezier(.2,.8,.3,1), filter .7s ease-out; transform: scale(1); filter: none; }
 @media (prefers-reduced-motion: reduce) { #world, .warp i { transition: none !important; animation: none !important; transform: none !important; } }
+
+/* ---- v14: the headquarters panel scrolls as a whole instead of squeezing its manager list ---- */
+#sheet.scrolly { touch-action: pan-y; justify-content: flex-start; }
+#sheet.scrolly::before, #sheet.scrolly .sh-head { touch-action: none; }
+#sheet.scrolly .hq-list { max-height: none; overflow: visible; flex-shrink: 0; }
+#sheet.scrolly > * { flex-shrink: 0; }
+.hq-list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font: 800 15px var(--display); color: var(--ink); margin-bottom: -10px; }
+.hq-list-head small { font: 700 12px var(--body, inherit); color: var(--ink-soft); }

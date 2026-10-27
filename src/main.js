@@ -290,7 +290,7 @@ function hqSheet(d) {
   return head(d, ICON.hq, d.name, sub, lv) + vault + buyRow(d, lv) + `
     <div class="sh-buy"><button class="btn green" data-act="hire" ${afford ? '' : 'disabled'}>${!more ? 'One manager per factory: build more to hire more' : `Hire a manager · $${fmtCost(cost)}`}</button></div>
     ${afford || !more ? '' : cashAdButton(cost - game.cash)}
-    <div class="hq-list">${rows}</div>`;
+    ${rows ? `<div class="hq-list-head">Your factories <small>${staff ? `${game.working()} of ${game.factorySlots().length} have a manager` : ''}</small></div><div class="hq-list">${rows}</div>` : ''}`;
 }
 const fmtHours = h => { const m = Math.round(h * 60); return m < 60 ? `${m} minutes` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m === 60 ? '1 hour' : `${m / 60} hours`; };
 function renderSheet(force = false) {
@@ -334,7 +334,10 @@ function renderSheet(force = false) {
   }
   // update the panel in place, so buttons don't get swapped out from under your finger
   const key = lot + ':' + (id || '');
-  if (sheet.dataset.for !== key) { sheet.innerHTML = html; sheet.dataset.for = key; sheetKey = html; }
+  // the headquarters panel scrolls as a whole (its manager list can be long); swipe it
+  // down by its top edge to close it
+  sheet.classList.toggle('scrolly', id === 'hq' && lv > 0);
+  if (sheet.dataset.for !== key) { sheet.innerHTML = html; sheet.dataset.for = key; sheetKey = html; sheet.scrollTop = 0; }
   else if (force || html !== sheetKey) { const t = document.createElement('div'); t.innerHTML = html; morphKids(sheet, t); sheetKey = html; }
   sheet.hidden = false;
   const h = sheet.offsetHeight, H = window.innerHeight || 1;
@@ -461,8 +464,9 @@ world.onPick = id => {
 {
   let y0 = null, dy = 0, t0 = 0;
   sheet.addEventListener('pointerdown', e => {
-    const list = e.target.closest('.hq-list');
-    if (list && list.scrollTop > 0) return;   // let the list scroll first
+    // a panel that scrolls (the headquarters) is only swiped away by its top edge; the
+    // rest of it scrolls
+    if (sheet.classList.contains('scrolly') && (sheet.scrollTop > 0 || e.clientY - sheet.getBoundingClientRect().top > 70)) return;
     y0 = e.clientY; dy = 0; t0 = performance.now();
   });
   addEventListener('pointermove', e => {
