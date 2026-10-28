@@ -288,7 +288,7 @@ export class World {
     const T = THEME[name] || THEME.colorado;
     this.T = T;
     const info = this.roadInfo();
-    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.9 : 2.6);
+    setBayIn(this.themeName === 'desert' ? 4.25 : this.themeName === 'japan' ? 3.9 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     for (const g of [this.groundGroup, this.sceneryGroup]) {
@@ -398,7 +398,7 @@ export class World {
   // roads were fixed or built: update the network, the road meshes and the loading bays
   roadsChanged() {
     const info = this.roadInfo();
-    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.9 : 2.6);
+    setBayIn(this.themeName === 'desert' ? 4.25 : this.themeName === 'japan' ? 3.9 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     this.#roads();
@@ -782,6 +782,24 @@ export class World {
     // (in Sakura Valley every lot stands inside a garden wall, with a gate onto each road)
     const walled = this.themeName === 'japan';
     if (walled || !['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) { const by = this.#bay(side, color); by.userData.bay = side; ex.add(by); }
+    if (this.themeName === 'desert') {
+      // a plank boardwalk along every street side of the lot, as on a frontier main street,
+      // broken where the wagons drive in to a loading shed, with hitching posts at the ends
+      const road = this.#baySides(id), docks = !['power', 'datacenter', 'hq'].includes(this.typeOf?.(id)), E = 4.6, GAP = 1.4;
+      const plank = [0x9a7248, 0x8a6440, 0xa87e52];
+      for (const [side, axis, f] of [['z+', 'x', E], ['z-', 'x', -E], ['x+', 'z', E], ['x-', 'z', -E]]) {
+        if (!road.has(side)) continue;
+        const runs = docks ? [[-E - 0.3, -GAP], [GAP, E + 0.3]] : [[-E - 0.3, E + 0.3]];
+        for (const [a0, a1] of runs) {
+          const len = a1 - a0, mid = (a0 + a1) / 2, bw = new THREE.Group();
+          bw.add(box(len, 0.1, 0.62, 0x5e4630, 0, 0, 0));
+          for (let k = 0; k < Math.floor(len / 0.2); k++) bw.add(box(0.18, 0.04, 0.6, plank[k % 3], -len / 2 + 0.1 + k * 0.2, 0.1, 0));
+          for (const e of [-len / 2 + 0.08, len / 2 - 0.08]) bw.add(box(0.1, 0.9, 0.1, 0x6e4a2c, e, 0, 0.26), box(0.14, 0.06, 0.14, 0x4a3426, e, 0.9, 0.26));
+          if (axis === 'x') { bw.position.set(mid, 0.15, f); if (f < 0) bw.rotation.y = Math.PI; } else { bw.position.set(f, 0.15, mid); bw.rotation.y = f > 0 ? Math.PI / 2 : -Math.PI / 2; }
+          ex.add(bw);
+        }
+      }
+    }
     if (walled) {
       // the garden wall: white plaster over a dark stone footing, under a little tiled cap,
       // all round the lot with an opening for each gate
@@ -815,14 +833,14 @@ export class World {
       const coreBoxes = coreMeshes.map(o => new THREE.Box3().setFromObject(o)).filter(b => b.max.y - L.group.position.y > 0.75);
       // (Sakura Valley's big main buildings may reach a little way into a corner: a wing there
       // tucks in under the main roof's eaves)
-      const PK = this.themeName === 'japan' ? 0.9 : 1.05, POK = this.themeName === 'japan' ? 0.42 : 0.12;
+      const PK = this.themeName === 'japan' ? 0.9 : this.themeName === 'desert' ? 0.95 : 1.05, POK = this.themeName === 'japan' ? 0.42 : this.themeName === 'desert' ? 0.3 : 0.12;
       const pokes = (cx, cz) => coreBoxes.some(b => b.max.x > lx + cx - PK && b.min.x < lx + cx + PK && b.max.z > lz + cz - PK && b.min.z < lz + cz + PK &&
         Math.min(b.max.x, lx + cx + PK) - Math.max(b.min.x, lx + cx - PK) > POK && Math.min(b.max.z, lz + cz + PK) - Math.max(b.min.z, lz + cz - PK) > POK);
-      const CK = this.themeName === 'japan' ? 3.4 : 3.2;
+      const CK = this.themeName === 'japan' ? 3.4 : this.themeName === 'desert' ? 3.45 : 3.2;
       corners = corners.map(([cx, cz]) => [Math.sign(cx) * CK, Math.sign(cz) * CK]).filter(([cx, cz]) => {
         if (pokes(cx, cz)) return false;
         let tall = 0;
-        const SP = this.themeName === 'japan' ? 0.5 : 1;
+        const SP = this.themeName === 'japan' || this.themeName === 'desert' ? 0.5 : 1;
         for (let a = -1; a <= 1; a += 0.5) for (let b = -1; b <= 1; b += 0.5) if (coreTop(lx + cx + a * SP + (SP < 1 ? Math.sign(cx) * 0.3 : 0), lz + cz + b * SP + (SP < 1 ? Math.sign(cz) * 0.3 : 0)) > 0.6) tall++;
         return tall <= 4;
       });
@@ -1125,7 +1143,7 @@ export class World {
     g.add(box(0.16, 0.22, 0.16, 0xffd9a0, W / 2 + 0.05, H - 0.45, D / 2 - 0.1, { emissive: 0xffc070, night: 2.5 }));
     wCrate(g, W / 2 - 0.12, -D / 2 + 0.35, 0.04, 0.36); wCrate(g, W / 2 - 0.12, -D / 2 + 0.35, 0.4, 0.3); wBarrel(g, -W / 2 + 0.2, -D / 2 + 0.35, 0.04, 0.8); wBarrel(g, -W / 2 + 0.2, -D / 2 + 0.8, 0.04, 0.8);
     // further out than elsewhere: the frontier buildings are bigger
-    const dist = 3.6, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
+    const dist = 4.0, rot = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': Math.PI }[side];
     g.rotation.y = rot;
     g.position.set(side === 'x+' ? dist : side === 'x-' ? -dist : 0, 0.15, side === 'z+' ? dist : side === 'z-' ? -dist : 0);
     return g;

@@ -628,6 +628,14 @@ export function buildLand(name, T, blocks) {
       c.lerp(c2.setHex(0xc8643a), smooth(0.62, 0.8, fbm(x / 9, z / 9, 2, 91)) * 0.45);                // bright dust drifts
       for (const cr of MARS_CRATERS) { const d = Math.hypot(x - cr[0], z - cr[1]); if (d < cr[2] * 0.75) c.lerp(c2.setHex(P.snow), smooth(cr[2] * 0.75, cr[2] * 0.3, d) * 0.85); }
       if (h > 14) c.lerp(c2.setHex(0x5a2a1e), smooth(14, 26, h));
+      // round the colony: ground churned and darkened by traffic, bright orange dust blown
+      // into drifts, and dark sand gathered in the low places
+      const td = townDist(x, z);
+      if (td < 34) {
+        const near = smooth(34, 6, td);
+        c.lerp(c2.setHex(0x6e2e1c), smooth(0.5, 0.65, fbm(x / 7, z / 7, 3, 101)) * 0.45 * near);
+        c.lerp(c2.setHex(0xd27a48), smooth(0.66, 0.78, fbm(x / 5 + 3, z / 11, 2, 103)) * 0.5 * near);
+      }
     }
     if (name === 'moon') {
       // dark lava seas, crater bowls in shadow-grey, bright rims and rays, pale highlands
@@ -643,6 +651,14 @@ export function buildLand(name, T, blocks) {
       c.lerp(c2.setHex(0x6a6b74), mf.bowl * 0.5);
       c.lerp(c2.setHex(0xd8d8de), Math.max(mf.rim * 0.6, mf.ray * 0.55));
       c.lerp(c2.setHex(0xbab4aa), mf.high * 0.55 * (0.7 + 0.6 * n2));
+      // round the base: regolith trampled and graded darker, with fresh bright spoil where
+      // it has been dug, and the blast-scoured light patches round where landers come down
+      const td = townDist(x, z);
+      if (td < 36) {
+        const near = smooth(36, 5, td);
+        c.lerp(c2.setHex(0x7c7c84), smooth(0.48, 0.62, fbm(x / 6, z / 6, 3, 105)) * 0.45 * near);
+        c.lerp(c2.setHex(0xd2d2d8), smooth(0.68, 0.8, fbm(x / 9 - 5, z / 9, 2, 107)) * 0.5 * near);
+      }
     }
     // mesas: layered rock in bands up the cliffs, a paler cap on top
     const ms = (name === 'desert' || name === 'mars') ? mesaAt(name, x, z) : null;
@@ -982,6 +998,20 @@ export function buildLand(name, T, blocks) {
     place(9, S.commsMast, { pad: 2, span: 170, where: outskirts(5, 75, 1.6), maxH: 5, blob: 0.6 });
     place(10, S.pipeline, { pad: 5, span: 170, where: outskirts(6, 70, 0.9), maxH: 4, blob: 0 });
     place(4, S.landingPad, { pad: 3, span: 150, where: outskirts(10, 60, 0.8), maxH: 3, blob: 0 });
+    // the colony's working edge: dust berms shielding habs, stacks of cargo pods, ice drill
+    // rigs, glowing greenhouse domes, parked pressurised rovers, a weather mast, an old
+    // robotic rover left where it stopped, and wind-carved rock ridges further out
+    const CK = colonyKit(true);
+    place(14, CK.berm, { pad: 2, span: 120, where: outskirts(2, 26, 1.4), maxH: 4, blob: 0.6 });
+    place(18, CK.cargo, { pad: 1.2, span: 110, where: outskirts(1.5, 24, 1.6), maxH: 4, blob: 0.5 });
+    place(8, CK.drill, { pad: 2, span: 130, where: outskirts(4, 34, 1.4), maxH: 4, blob: 0.5 });
+    place(7, CK.greenhouse, { pad: 2.5, span: 120, where: outskirts(3, 30, 1.0), maxH: 4, blob: 0.4 });
+    place(10, CK.rover, { pad: 1, span: 110, where: outskirts(1.5, 26, 1.6), maxH: 4, blob: 0.4 });
+    place(6, CK.mast, { pad: 1, span: 120, where: outskirts(3, 30, 2), maxH: 5, blob: 0.2 });
+    place(3, CK.oldRover, { pad: 1.5, span: 130, where: outskirts(12, 40, 2), maxH: 5, blob: 0.4 });
+    place(30, CK.cables, { pad: 0.5, span: 100, where: outskirts(1, 18, 2), maxH: 4, blob: 0, tiny: true });
+    place(40, CK.yardang, { pad: 2, span: 220, where: outskirts(28, 110, 3), maxH: 8, blob: 0.6 });
+    place(260, CK.drift, { pad: 0.5, span: 180, where: outskirts(1, 60, 3), maxH: 6, blob: 0, tiny: true });
   } else {
     place(900, r => S.rock(r, 0, 0x8a8a90), { pad: 1.3, blob: 0.8 });
     place(900, (r, h) => S.pebbles(r, h, 0x8e8e94), { pad: 0.1, blob: 0, span: 180, tiny: true });
@@ -998,6 +1028,18 @@ export function buildLand(name, T, blocks) {
     place(5, S.lander, { pad: 3, span: 150, where: ring(10, 70, 1.2), blob: 0.8 });
     place(12, S.flag, { pad: 1, span: 140, where: ring(4, 60, 1.5), blob: 0 });
     place(1, S.massDriver, { pad: 16, span: 160, where: ring(25, 75, 0.7), blob: 0 });
+    // the base's working edge: regolith berms and bunkers, cargo pods, a digger at its
+    // spoil heap, stacks of sintered bricks, parked rovers, science stations with their
+    // instruments set out, cable runs, and boulder fields
+    const CK = colonyKit(false);
+    place(14, CK.berm, { pad: 2, span: 120, where: ring(2, 26, 1.4), blob: 0.6 });
+    place(18, CK.cargo, { pad: 1.2, span: 110, where: ring(1.5, 24, 1.6), blob: 0.5 });
+    place(6, CK.digger, { pad: 2.5, span: 120, where: ring(4, 30, 1.4), blob: 0.6 });
+    place(10, CK.bricks, { pad: 1, span: 110, where: ring(2, 24, 1.6), blob: 0.3 });
+    place(10, CK.rover, { pad: 1, span: 110, where: ring(1.5, 26, 1.6), blob: 0.4 });
+    place(6, CK.science, { pad: 1.5, span: 140, where: ring(6, 40, 1.6), blob: 0.2 });
+    place(30, CK.cables, { pad: 0.5, span: 100, where: ring(1, 18, 2), blob: 0, tiny: true });
+    place(30, CK.boulders, { pad: 2, span: 200, where: ring(14, 90, 3), blob: 0.6 });
   }
   // boulders fallen from the cliffs round the foot of each mesa, and a few left on top
   if (name === 'desert' || name === 'mars') {
@@ -1020,6 +1062,7 @@ export function buildLand(name, T, blocks) {
       }
     }
   }
+  if (name === 'moon' || name === 'mars') scenery.add(tracks(H, name === 'mars', r));
   near.build(scenery, { cast: true });
   far.build(scenery, { cast: false });
   const detail = new THREE.Group(); detail.name = 'detail';
@@ -1439,6 +1482,153 @@ function rivers(H, water) {
     }
   }
   return g;
+}
+// Tyre tracks: rovers have driven out from the town in every direction, leaving pairs of
+// wandering ruts (darker in the Moon's grey dust, darker red on Mars) that fade with distance
+function tracks(H, mars, r) {
+  const geos = [], N = 34;
+  for (let n = 0; n < N; n++) {
+    // start at the edge of town and head out, turning gently as it goes
+    const a0 = r() * Math.PI * 2;
+    let x = Math.cos(a0) * 40, z = Math.sin(a0) * 40;
+    for (let k = 0; k < 40 && townDist(x, z) > 2; k++) { x *= 0.97; z *= 0.97; }
+    let a = a0 + (r() - 0.5) * 0.8, turn = (r() - 0.5) * 0.05;
+    const len = 30 + r() * 70, step = 0.8, pts = [];
+    for (let t = 0; t < len; t += step) {
+      turn += (r() - 0.5) * 0.02; turn = Math.max(-0.06, Math.min(0.06, turn)); a += turn;
+      x += Math.cos(a) * step; z += Math.sin(a) * step;
+      if (townDist(x, z) < 0.5) break;
+      pts.push([x, z, a, t / len]);
+    }
+    for (const off of [-0.45, 0.45]) {
+      const pos = [], idx = [], col = [];
+      pts.forEach(([px, pz, pa, f], i) => {
+        const nx = -Math.sin(pa), nz = Math.cos(pa);
+        for (const e of [-0.11, 0.11]) { const qx = px + nx * (off + e), qz = pz + nz * (off + e); pos.push(qx, H(qx, qz) + 0.05, qz); col.push(1 - f, 1 - f, 1 - f); }
+        if (i < pts.length - 1) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+      });
+      if (pts.length < 2) continue;
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+      geos.push(g.toNonIndexed());
+    }
+  }
+  const m = new THREE.MeshBasicMaterial({ color: mars ? 0x3a140c : 0x3a3a40, transparent: true, opacity: mars ? 0.32 : 0.38, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+  m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.a *= vColor.r; diffuseColor.rgb = diffuse;'); };
+  m.vertexColors = true;
+  const mesh = new THREE.Mesh(mergeGeometries(geos), m); mesh.renderOrder = 1;
+  return mesh;
+}
+// things round the edge of the Moon base and the Mars colony
+function colonyKit(mars) {
+  const M = new Map(), m = (color, o = {}) => { const k = color + JSON.stringify(o); if (!M.has(k)) M.set(k, std(color, { flatShading: true, ...o })); return M.get(k); };
+  const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); return o; };
+  const DUST = mars ? 0x9c4a2e : 0x8f8f96, WH = 0xe8e4dc, DK = 0x3a3d44, OR = 0xff8a3a, GOLD = 0xc9a24a;
+  const glow = (c, k = 1) => std(c, { emissive: c, emissiveIntensity: k });
+  return {
+    // a curved bank of bulldozed dust shielding something, with sandbags along the top
+    berm(r) {
+      const g = new THREE.Group(), R = 3 + r() * 2, arc = 1.2 + r() * 1.2;
+      for (let k = 0; k <= 10; k++) { const a = -arc / 2 + arc * k / 10, b = mesh(new THREE.SphereGeometry(0.75, 8, 5), m(DUST, { roughness: 1 }), Math.cos(a) * R, 0, Math.sin(a) * R); b.scale.set(1.1, 0.55, 1.1); g.add(b); }
+      for (let k = 0; k <= 14; k++) { const a = -arc / 2 + arc * k / 14; g.add(mesh(new THREE.BoxGeometry(0.4, 0.18, 0.25), m(mars ? 0xc9b49a : 0xd8d4c8), Math.cos(a) * R, 0.42, Math.sin(a) * R)); }
+      // what it shields: a little hab with a lit window
+      g.add(mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.6, 12), m(WH), R - 2.2, 0.8, 0).rotateZ(Math.PI / 2));
+      g.add(mesh(new THREE.BoxGeometry(0.3, 0.12, 0.04), glow(0x9fe8ff, 0.8), R - 2.2, 1.1, 0.88));
+      g.userData.r = R * 0.6; return g;
+    },
+    // cargo pods stacked as they came off the lander, one opened up
+    cargo(r) {
+      const g = new THREE.Group(), cols = mars ? [WH, OR, 0xb9b4a8, 0x5a6a7a] : [WH, GOLD, 0xb9b4a8, 0x3f6fa8];
+      const n = 2 + Math.floor(r() * 4);
+      for (let k = 0; k < n; k++) {
+        const top = k >= 3, x = top ? (k - 3) * 1.3 : (k - 1) * 1.3, y = top ? 0.85 : 0;
+        const c = mesh(new THREE.BoxGeometry(1.2, 0.85, 0.85), m(cols[Math.floor(r() * cols.length)], { metalness: 0.3, roughness: 0.5 }), x, y + 0.42, 0); g.add(c);
+        g.add(mesh(new THREE.BoxGeometry(1.22, 0.08, 0.87), m(DK), x, y + 0.6, 0));
+      }
+      g.userData.r = 1.6; return g;
+    },
+    // a small excavator at its spoil heap of fresh, brighter regolith
+    digger(r) {
+      const g = new THREE.Group();
+      const heap = mesh(new THREE.ConeGeometry(1.4, 1.1, 9), m(0xb4b4ba, { roughness: 1 }), 1.4, 0.55, 0.4); g.add(heap);
+      g.add(mesh(new THREE.BoxGeometry(1.3, 0.35, 0.9), m(DK), -0.6, 0.35, 0));
+      for (const e of [-0.42, 0.42]) g.add(mesh(new THREE.BoxGeometry(1.4, 0.3, 0.22), m(0x2a2d33), -0.6, 0.15, e));
+      g.add(mesh(new THREE.BoxGeometry(0.7, 0.55, 0.7), m(OR), -0.8, 0.8, 0), mesh(new THREE.BoxGeometry(0.4, 0.3, 0.02), glow(0x9fe8ff, 0.5), -0.55, 0.9, 0.36));
+      const boom = mesh(new THREE.BoxGeometry(1.5, 0.12, 0.14), m(OR), 0.1, 1.2, 0); boom.rotation.z = -0.5; g.add(boom);
+      g.add(mesh(new THREE.BoxGeometry(0.4, 0.3, 0.45), m(DK), 0.75, 0.75, 0));
+      g.userData.r = 1.6; return g;
+    },
+    // stacks of sintered regolith bricks on pallets
+    bricks(r) { const g = new THREE.Group(); for (let k = 0; k < 3; k++) { g.add(mesh(new THREE.BoxGeometry(0.9, 0.08, 0.9), m(0x8a6a45), k * 1.1, 0.04, 0)); g.add(mesh(new THREE.BoxGeometry(0.8, 0.3 + r() * 0.4, 0.8), m(0x9a948a), k * 1.1, 0.25, 0)); } g.userData.r = 1.3; return g; },
+    // a parked rover: pressurised cabin on Mars, an open buggy on the Moon
+    rover(r) {
+      const g = new THREE.Group();
+      if (mars) {
+        g.add(mesh(new THREE.BoxGeometry(2.0, 0.75, 1.0), m(WH), 0, 0.75, 0), mesh(new THREE.BoxGeometry(2.02, 0.12, 1.02), m(OR), 0, 0.9, 0));
+        g.add(mesh(new THREE.BoxGeometry(0.5, 0.35, 0.9), glow(0x9fe8ff, 0.5), 0.85, 0.95, 0));
+        for (const x of [-0.7, 0, 0.7]) for (const z of [-0.55, 0.55]) g.add(mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.22, 10), m(0x2a2d33), x, 0.3, z).rotateX(Math.PI / 2));
+      } else {
+        g.add(mesh(new THREE.BoxGeometry(1.6, 0.1, 0.95), m(0xc9ced6), 0, 0.45, 0), mesh(new THREE.BoxGeometry(0.5, 0.35, 0.6), m(WH), -0.4, 0.6, 0));
+        for (const x of [-0.6, 0.6]) for (const z of [-0.5, 0.5]) g.add(mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.14, 10), m(0x8a8f99), x, 0.26, z).rotateX(Math.PI / 2));
+        const dish = mesh(new THREE.CylinderGeometry(0.28, 0.05, 0.08, 10), m(WH), 0.5, 1.05, 0.2); g.add(dish, mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), m(DK), 0.5, 0.75, 0.2));
+      }
+      g.userData.r = 1.2; return g;
+    },
+    // a science station: a seismometer under a foil blanket, a laser reflector, a mast and a flag
+    science(r) {
+      const g = new THREE.Group();
+      g.add(mesh(new THREE.CylinderGeometry(0.3, 0.35, 0.3, 8), m(GOLD, { metalness: 0.7, roughness: 0.35 }), 0, 0.15, 0));
+      const refl = mesh(new THREE.BoxGeometry(0.7, 0.04, 0.6), m(0x5a6a7a, { metalness: 0.7, roughness: 0.2 }), 1.1, 0.35, 0.3); refl.rotation.x = -0.5; g.add(refl, mesh(new THREE.BoxGeometry(0.05, 0.3, 0.05), m(DK), 1.1, 0.15, 0.3));
+      g.add(mesh(new THREE.BoxGeometry(0.04, 1.4, 0.04), m(WH), -0.9, 0.7, 0.4), mesh(new THREE.BoxGeometry(0.5, 0.3, 0.02), m(0xf2f2f2), -0.65, 1.2, 0.4), mesh(new THREE.BoxGeometry(0.5, 0.08, 0.025), m(0xd9482b), -0.65, 1.3, 0.41));
+      for (let k = 0; k < 3; k++) { const p = mesh(new THREE.ConeGeometry(0.06, 0.25, 5), m(OR), -0.2 + k * 0.4, 0.12, -0.6); g.add(p); }   // survey markers
+      g.userData.r = 1; return g;
+    },
+    // power cables snaking over the ground between two stakes
+    cables(r) { const g = new THREE.Group(), L = 3 + r() * 4; for (let k = 0; k < 8; k++) { const t = k / 8; const c = mesh(new THREE.BoxGeometry(L / 8 + 0.05, 0.05, 0.06), m(mars ? 0x2a2d33 : OR), -L / 2 + L * (t + 0.5 / 8), 0.03, Math.sin(t * 6 + r()) * 0.25); c.rotation.y = Math.cos(t * 6) * 0.25; g.add(c); } g.add(mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), m(DK), -L / 2, 0.2, 0), mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), m(DK), L / 2, 0.2, 0)); return g; },
+    // a field of boulders kicked out by an old impact
+    boulders(r) { const g = new THREE.Group(); for (let k = 0; k < 6 + Math.floor(r() * 6); k++) { const s = 0.2 + r() * r() * 1.4; const b = new THREE.Mesh(rockGeo(r, 1), m(r() < 0.5 ? 0x86868d : 0x6e6e76)); b.scale.set(s, s * 0.7, s); b.position.set((r() - 0.5) * 6, s * 0.2, (r() - 0.5) * 6); b.rotation.y = r() * 6; g.add(b); } g.userData.r = 2; return g; },
+    // Mars: an ice drill rig on a derrick, its pipe running off to the colony
+    drill(r) {
+      const g = new THREE.Group();
+      for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [0, 0.55]]) { const l = mesh(new THREE.CylinderGeometry(0.05, 0.07, 3.2, 5), m(0xb9b4a8), x * 0.6, 1.5, z * 0.6); l.rotation.set(-z * 0.25, 0, x * 0.25); g.add(l); }
+      g.add(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), m(OR), 0, 2.9, 0), mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.9, 6), m(0x8a8f99), 0, 1.45, 0));
+      g.add(mesh(new THREE.BoxGeometry(1.2, 0.8, 0.9), m(WH), 1.2, 0.4, 0.3), mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.9, 12), m(0x6fc3e0, { roughness: 0.2 }), -1.1, 0.45, 0.2));
+      g.userData.r = 1.4; return g;
+    },
+    // Mars: a greenhouse dome glowing green with crops, on a white ring
+    greenhouse(r) {
+      const g = new THREE.Group(), R = 1.4 + r() * 0.6;
+      g.add(mesh(new THREE.CylinderGeometry(R + 0.1, R + 0.15, 0.3, 20), m(WH), 0, 0.15, 0));
+      for (let k = -2; k <= 2; k++) g.add(mesh(new THREE.BoxGeometry(R * 1.5 * Math.sqrt(1 - (k / 2.8) ** 2), 0.25, 0.25), glow(0x5cc04a, 0.35), 0, 0.42, k * R * 0.34));
+      g.add(mesh(new THREE.SphereGeometry(R, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0xd8fff0, { transparent: true, opacity: 0.3, roughness: 0.08, depthWrite: false, emissive: 0x7dff9a, emissiveIntensity: 0.18 }), 0, 0.3, 0));
+      for (let k = 0; k < 4; k++) { const rib = mesh(new THREE.TorusGeometry(R, 0.03, 4, 20, Math.PI), m(WH), 0, 0.3, 0); rib.rotation.y = k / 4 * Math.PI; g.add(rib); }
+      g.userData.r = R; return g;
+    },
+    // Mars: a weather mast with a wind vane, cups and a little solar panel
+    mast(r) {
+      const g = new THREE.Group();
+      g.add(mesh(new THREE.CylinderGeometry(0.04, 0.05, 3, 6), m(0xb9b4a8), 0, 1.5, 0), mesh(new THREE.BoxGeometry(0.6, 0.04, 0.04), m(DK), 0, 2.9, 0));
+      for (let k = 0; k < 3; k++) { const a = k * 2.09; g.add(mesh(new THREE.SphereGeometry(0.06, 6, 4), m(WH), Math.cos(a) * 0.2, 3.05, Math.sin(a) * 0.2)); }
+      const p = mesh(new THREE.BoxGeometry(0.7, 0.04, 0.5), m(0x1d3550, { metalness: 0.5, roughness: 0.25 }), 0, 1.2, 0.3); p.rotation.x = -0.6; g.add(p);
+      g.userData.r = 0.5; return g;
+    },
+    // Mars: an old robotic rover from the first missions, dusty, parked where it stopped
+    oldRover(r) {
+      const g = new THREE.Group();
+      g.add(mesh(new THREE.BoxGeometry(1.4, 0.4, 0.9), m(0xc9b49a), 0, 0.75, 0), mesh(new THREE.BoxGeometry(1.5, 0.05, 1.1), m(0x6a5a50), 0, 0.98, 0));
+      for (const x of [-0.6, 0, 0.6]) for (const z of [-0.6, 0.6]) g.add(mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.18, 10), m(0x8a8f99), x, 0.22, z).rotateX(Math.PI / 2));
+      g.add(mesh(new THREE.BoxGeometry(0.06, 0.9, 0.06), m(0xd8d4c8), 0.55, 1.4, 0.25), mesh(new THREE.BoxGeometry(0.3, 0.18, 0.2), m(0xd8d4c8), 0.55, 1.9, 0.25));
+      const arm = mesh(new THREE.BoxGeometry(0.8, 0.06, 0.06), m(0xd8d4c8), 1.0, 0.7, -0.2); arm.rotation.z = -0.4; g.add(arm);
+      g.userData.r = 1.2; return g;
+    },
+    // Mars: a long wind-carved rock ridge (yardang), streamlined along the wind
+    yardang(r) {
+      const g = new THREE.Group(), L = 4 + r() * 6, H2 = 0.8 + r() * 1.6;
+      for (let k = 0; k < 5; k++) { const t = k / 4; const b = mesh(new THREE.SphereGeometry(1, 8, 5), m([0x7a3420, 0x8e3a22, 0x5a2a1e][k % 3]), (t - 0.5) * L * 0.8, 0, 0); b.scale.set(L * 0.22, H2 * (1 - Math.abs(t - 0.3)), 0.8 + r() * 0.4); g.add(b); }
+      g.rotation.y = 0.6; g.userData.r = L * 0.3; return g;
+    },
+    // Mars: a little drift of bright dust in the lee of a stone
+    drift(r) { const g = new THREE.Group(); const st = new THREE.Mesh(rockGeo(r, 1), m(0x3a2420)); st.scale.setScalar(0.2 + r() * 0.2); g.add(st); const d = mesh(new THREE.SphereGeometry(0.5, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2), m(0xa8502e, { roughness: 1 }), 0.9, -0.03, 0); d.scale.set(3.2, 0.05, 1.3); g.add(d); return g; },
+  };
 }
 function japanKit() {
   const M = new Map();

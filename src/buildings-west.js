@@ -14,7 +14,7 @@ const WOOD = 0x9a6b42, WOOD_D = 0x6e4a2c, WOOD_L = 0xc29a66, GREY = 0x8f8574, TR
 
 // The main building of each lot is built at this scale (in a group of its own) so it fills
 // the lot; the barrels, horses and poles round the corners stay life size.
-const S = 1.3;
+const S = 1.5;
 function core(g) { const c = new THREE.Group(); c.scale.setScalar(S); c.userData.core = true; g.add(c); return c; }
 
 // ---- frontier parts ----
