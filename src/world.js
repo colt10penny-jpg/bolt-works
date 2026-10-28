@@ -783,21 +783,45 @@ export class World {
     const walled = this.themeName === 'japan';
     if (walled || !['power', 'datacenter', 'hq'].includes(this.typeOf?.(id))) for (const side of this.#baySides(id)) { const by = this.#bay(side, color); by.userData.bay = side; ex.add(by); }
     if (this.themeName === 'desert') {
-      // a plank boardwalk along every street side of the lot, as on a frontier main street,
-      // broken where the wagons drive in to a loading shed, with hitching posts at the ends
-      const road = this.#baySides(id), docks = !['power', 'datacenter', 'hq'].includes(this.typeOf?.(id)), E = 4.6, GAP = 1.4;
-      const plank = [0x9a7248, 0x8a6440, 0xa87e52];
-      for (const [side, axis, f] of [['z+', 'x', E], ['z-', 'x', -E], ['x+', 'z', E], ['x-', 'z', -E]]) {
+      // An old plank boardwalk out front, as on a frontier street: only in front of the
+      // building on its street sides (not round the whole lot), built of separate weathered
+      // boards of odd lengths, some sprung or missing, sagging a little on low stumps, with
+      // sand drifted over the ends, and the odd barrel, bench or hitching post along it.
+      // All of it is one merged mesh, coloured board by board.
+      const road = this.#baySides(id), docks = !['power', 'datacenter', 'hq'].includes(this.typeOf?.(id));
+      const WOODS = [0x9a7248, 0x8a6440, 0xa8835a, 0x7e6450, 0x9c8a74, 0x6e5a48];
+      const byHex = new Map();
+      const piece = (w, h, d, x, y, z, ry, rz, hex) => {
+        const g = new THREE.BoxGeometry(w, h, d); g.rotateZ(rz); g.rotateY(ry); g.translate(x, y, z);
+        if (!byHex.has(hex)) byHex.set(hex, []); byHex.get(hex).push(g);
+      };
+      for (const [side, axis, f] of [['z+', 'x', 4.45], ['x+', 'z', 4.45], ['z-', 'x', -4.45], ['x-', 'z', -4.45]]) {
         if (!road.has(side)) continue;
-        const runs = docks ? [[-E - 0.3, -GAP], [GAP, E + 0.3]] : [[-E - 0.3, E + 0.3]];
+        // a run or two of boardwalk in front of the building, ragged at the ends
+        const runs = docks ? [[-3.0 - rnd() * 0.8, -1.5 - rnd() * 0.3], [1.5 + rnd() * 0.3, 2.6 + rnd() * 1.0]] : [[-2.8 - rnd() * 0.8, 2.6 + rnd() * 0.8]];
         for (const [a0, a1] of runs) {
-          const len = a1 - a0, mid = (a0 + a1) / 2, bw = new THREE.Group();
-          bw.add(box(len, 0.1, 0.62, 0x5e4630, 0, 0, 0));
-          for (let k = 0; k < Math.floor(len / 0.2); k++) bw.add(box(0.18, 0.04, 0.6, plank[k % 3], -len / 2 + 0.1 + k * 0.2, 0.1, 0));
-          for (const e of [-len / 2 + 0.08, len / 2 - 0.08]) bw.add(box(0.1, 0.9, 0.1, 0x6e4a2c, e, 0, 0.26), box(0.14, 0.06, 0.14, 0x4a3426, e, 0.9, 0.26));
-          if (axis === 'x') { bw.position.set(mid, 0.15, f); if (f < 0) bw.rotation.y = Math.PI; } else { bw.position.set(f, 0.15, mid); bw.rotation.y = f > 0 ? Math.PI / 2 : -Math.PI / 2; }
-          ex.add(bw);
+          if (rnd() < 0.25) continue;   // not every stretch has one
+          const P = (a, o) => axis === 'x' ? [a, f - Math.sign(f) * o] : [f - Math.sign(f) * o, a];
+          // stumps it rests on, then the boards across them
+          for (let a = a0 + 0.25; a < a1; a += 1.1) { const [x, z] = P(a, 0.25); piece(0.12, 0.16, 0.12, x, 0.07, z, 0, 0, 0x5e4630, 0.9 + rnd() * 0.2); }
+          for (let a = a0; a < a1; a += 0.19 + rnd() * 0.03) {
+            if (rnd() < 0.06) continue;   // a missing board
+            const len = 0.52 + (rnd() - 0.5) * 0.14, sag = Math.sin((a - a0) / (a1 - a0) * Math.PI) * -0.025;
+            const [x, z] = P(a, 0.25 + (rnd() - 0.5) * 0.06);
+            const spr = rnd() < 0.07 ? (rnd() - 0.5) * 0.25 : 0;   // a sprung board
+            piece(axis === 'x' ? 0.17 : len, 0.035, axis === 'x' ? len : 0.17, x, 0.2 + sag + (rnd() - 0.5) * 0.012, z, (rnd() - 0.5) * 0.06, spr, WOODS[Math.floor(rnd() * WOODS.length)], 0.85 + rnd() * 0.25);
+          }
+          // something along it now and then
+          const k = rnd(), [px, pz] = P(a0 + (a1 - a0) * (0.2 + rnd() * 0.6), 0.25);
+          if (k < 0.3) wBarrel(ex, px, pz, 0.37, 0.8);
+          else if (k < 0.5) { piece(axis === 'x' ? 0.8 : 0.25, 0.05, axis === 'x' ? 0.25 : 0.8, px, 0.42, pz, 0, 0, 0x7e5a38, 1); for (const e of [-0.32, 0.32]) { const [bx, bz] = axis === 'x' ? [px + e, pz] : [px, pz + e]; piece(0.06, 0.22, 0.2, bx, 0.3, bz, 0, 0, 0x5e4630, 1); } }
+          else if (k < 0.7) { const [hx, hz] = P(a0 - 0.35, 0.05); piece(0.09, 0.85, 0.09, hx, 0.42, hz, 0, (rnd() - 0.5) * 0.12, 0x6e4a2c, 1); }
         }
+      }
+      for (const [hex, list] of byHex) {
+        const bm = new THREE.Mesh(mergeGeometries(list), mat(hex, { roughness: 0.95 }));
+        bm.position.y = 0.15; bm.castShadow = true; bm.receiveShadow = true; ex.add(bm);
+        list.forEach(g => g.dispose());
       }
     }
     if (walled) {
@@ -810,7 +834,7 @@ export class World {
           const len = a1 - a0, mid = (a0 + a1) / 2, wl = new THREE.Group();
           wl.add(box(len, 0.22, 0.3, 0x8a867c, 0, 0, 0), box(len, 0.62, 0.2, 0xf2ece0, 0, 0.22, 0));
           for (let k = 1; k < Math.round(len / 1.1); k++) wl.add(box(0.07, 0.62, 0.22, 0xc8402a, -len / 2 + k * len / Math.round(len / 1.1), 0.22, 0));
-          jRoof(wl, { y: 0.84, w: len + 0.08, d: 0.36, h: 0.1, lift: 0.015, ridge: false });
+          jRoof(wl, { y: 0.84, w: len + 0.08, d: 0.36, h: 0.1, lift: 0.015, ridge: false, trim: false });
           if (axis === 'x') wl.position.set(mid, 0.15, f); else { wl.position.set(f, 0.15, mid); wl.rotation.y = Math.PI / 2; }
           ex.add(wl);
         }
@@ -2094,6 +2118,7 @@ export class World {
     this.renderer.shadowMap.autoUpdate = !this.shadowSkip;
     this.camera.updateMatrixWorld();
     this.puffLayer?.update(this.camera);
+    this.look.adapt(dt);
     if (!this.contextLost) this.look.render();   // (nothing to draw with while the phone has taken the graphics away)
     this.#labels(dt, labelFor);
   }

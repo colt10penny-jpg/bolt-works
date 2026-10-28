@@ -217,9 +217,16 @@ export class Look {
     this._night = A[6] + (B[6] - A[6]) * u;
     if (this.sun) {
       this.sun.color.copy(T.sun); this.sun.intensity = sunI * this.sunScale;
-      // the sun swings across the sky through the day, so shadows move
-      const a = (t - 0.4) * Math.PI * 1.1;
+      // the sun swings across the sky through the day, so shadows move. It moves in small
+      // steps (a few a second at most), not a little every frame: a light that turns a
+      // hair each frame re-draws every shadow edge slightly differently each frame, which
+      // made shadows and small details like windows shimmer, most of all while panning
+      const ts = Math.round(t * 960) / 960;
+      if (this._ts === ts && this.sunDir) { /* unchanged */ } else {
+      this._ts = ts;
+      const a = (ts - 0.4) * Math.PI * 1.1;
       this.sunDir = new THREE.Vector3(-18 + Math.sin(a) * 26, 40 - Math.abs(Math.sin(a)) * 14, 22 - Math.sin(a) * 10);
+      }
     }
     if (this.hemi) { this.hemi.color.copy(T.sky); this.hemi.groundColor.copy(T.gnd); this.hemi.intensity = skyI * this.skyScale; }
     // haze matches the ground colour by day, and the sky by night
@@ -238,6 +245,22 @@ export class Look {
       this.grade.uniforms.tint.value.setRGB(1 + (1 - n) * 0.02 - n * 0.17 * cool, 1 - n * 0.07 * cool, 1 + n * 0.12 * cool);
       this.grade.uniforms.sat.value = 1.22 - n * 0.2;   // rich colour in every look
     }
+  }
+
+  // Keep the frame rate up: if frames keep taking too long (a busy view on a slower phone),
+  // draw at a slightly lower resolution until things are smooth again, then step back up.
+  // It only moves in small steps, and only after several seconds either way.
+  adapt(dt) {
+    if (!(dt > 0) || dt > 0.25) return;   // (a hitch from switching apps doesn't count)
+    const A = this._ad ||= { t: 0, sum: 0, n: 0, scale: 1 };
+    A.t += dt; A.sum += dt; A.n++;
+    if (A.t < 3) return;
+    const avg = A.sum / A.n; A.t = A.sum = A.n = 0;
+    const max = Math.min(2, window.devicePixelRatio || 1);
+    let s = A.scale;
+    if (avg > 1 / 40 && s > 0.65) s = Math.max(0.65, s - 0.12);
+    else if (avg < 1 / 56 && s < 1) s = Math.min(1, s + 0.06);
+    if (s !== A.scale) { A.scale = s; this.r.setPixelRatio(Math.max(1, max * s)); this.resize(); }
   }
 
   render() {

@@ -3,7 +3,7 @@
 // scenery (trees, aspens, bushes, flowers, cactus, rocks...). Everything static is
 // baked into a few big meshes so it stays fast on phones.
 import * as THREE from 'three';
-import { J, roof as jRoof, hall as jHall, shoji as jShoji, engawa as jEngawa, lantern as jLantern, pine as jPine, shrub as jShrub, torii as jTorii, rod as jRod, at as jAt } from './japan-kit.js';
+import { J, roof as jRoof, hall as jHall, shoji as jShoji, engawa as jEngawa, lantern as jLantern, pine as jPine, shrub as jShrub, torii as jTorii, rod as jRod, at as jAt, sakura as jSakura, maple as jMaple } from './japan-kit.js';
 import { box as jBox } from './models.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RANGE } from './buildings-west.js';
@@ -856,10 +856,10 @@ export function buildLand(name, T, blocks) {
       if (name === 'desert' || name === 'mars') { const m = mesaAt(name, x, z); if (m.h > 0.4) continue; }
       // low ground only matters where there's water: Colorado's hollows away from the lake get trees too
       if (h > maxH || h < minH && ((name !== 'colorado' && name !== 'japan') || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 14)) continue;
-      const obj = make(r, h);
+      const isNear = Math.abs(x) < NEAR && Math.abs(z) < NEAR;
+      const obj = make(r, h, undefined, !isNear);   // (far away, some things are drawn with fewer faces)
       obj.position.set(x, h, z);
       obj.rotation.y = r() * Math.PI * 2;
-      const isNear = Math.abs(x) < NEAR && Math.abs(z) < NEAR;
       (tiny ? (isNear ? tinyNear : tinyFar) : (isNear ? near : far)).addObject(obj);
       if (blob && h < 4) blobs.push([x, h, z, (obj.userData.r || 1) * blob]);
       n++;
@@ -899,12 +899,14 @@ export function buildLand(name, T, blocks) {
     // round the town: cherry trees and maples, clipped azaleas, bamboo groves; tall cedars
     // and umbrella pines closing in, and dark cedar forest up every ridge
     const JK = japanKit();
-    const blossom = (x, z) => fbm(x / 20, z / 20, 2, 88) > 0.5;
-    place(520, JK.sakura, { where: blossom, maxH: 12 });
-    place(260, JK.maple, { maxH: 14 });
-    place(420, JK.azalea, { pad: 0.6, blob: 0.5, maxH: 8 });
-    place(140, JK.bamboo, { where: (x, z) => fbm(x / 16, z / 16, 2, 51) > 0.56, maxH: 10, pad: 0.8 });
-    place(300, JK.kasa, { maxH: 18 });
+    // (the wild trees keep back from the town: what's round the town is laid out, below)
+    const wild = (x, z) => townDist(x, z) > 11;
+    const blossom = (x, z) => wild(x, z) && fbm(x / 20, z / 20, 2, 88) > 0.5;
+    place(480, JK.sakura, { where: blossom, maxH: 12 });
+    place(240, JK.maple, { where: wild, maxH: 14 });
+    place(320, JK.azalea, { where: wild, pad: 0.6, blob: 0.5, maxH: 8 });
+    place(140, JK.bamboo, { where: (x, z) => wild(x, z) && fbm(x / 16, z / 16, 2, 51) > 0.56, maxH: 10, pad: 0.8 });
+    place(280, JK.kasa, { where: wild, maxH: 18 });
     place(1300, (r, h) => S.tuft(r, h, [0x5f9e3c, 0x6fae44, 0x4f8c36, 0x86b84c]), { pad: 0.1, blob: 0, span: 180, maxH: 10, tiny: true });
     place(380, S.flowers, { pad: 0.6, blob: 0, maxH: 6, tiny: true });
     place(140, r => S.rock(r, 0, 0x8f8c84), { pad: 1.3, blob: 0.7 });
@@ -940,21 +942,33 @@ export function buildLand(name, T, blocks) {
     place(4, JK.shrine, { pad: 4, span: 150, where: okJ((x, z) => townDist(x, z) > 6, 1.0), maxH: 5, blob: 1 });
     place(14, JK.lantern, { pad: 1.5, span: 120, where: okJ((x, z) => townDist(x, z) > 3, 2), maxH: 6, blob: 0.4 });
     place(2, JK.pagoda, { pad: 6, span: 200, where: okJ((x, z) => townDist(x, z) > 18, 2.2), minH: 1.5, maxH: 14, blob: 1.4 });
-    // the edge of town: an avenue of cherry trees along the roads with stone lanterns
-    // between them, little moss gardens, vegetable plots behind bamboo fences, rice drying
-    // on racks, stone jizo statues in red bibs, wells, stacked firewood, stepping stones
+    // The edge of town, laid out rather than scattered: an avenue of cherry trees at even
+    // spacing down both sides of the roads out of town and round the town's outer roads,
+    // a stone lantern in every other gap; a few farmsteads (a thatched house with its
+    // vegetable plot, rice drying rack, well, woodpile and stepping-stone path, inside a
+    // bamboo fence); small shrine gardens with their torii and lanterns in pairs; and rows
+    // of jizo statues under little roofs by the roadside.
     const edge = (lo, hi) => (x, z) => { const t = townDist(x, z); return t > lo && t < hi && !inField(x, z) && Math.hypot(x - LAKE.x, z - LAKE.z) > LAKE.r + 8; };
     const byRoad = (lo, hi) => (x, z) => { const d = roadDist(x, z); return d > lo && d < hi && townDist(x, z) > 1.5; };
-    place(160, JK.sakura, { pad: 0.6, span: 120, where: byRoad(HW + SW + 1.0, HW + SW + 2.0), maxH: 4, blob: 1 });
-    place(45, JK.lantern, { pad: 0.3, span: 110, where: byRoad(HW + SW + 0.4, HW + SW + 0.9), maxH: 4, blob: 0.3 });
-    place(26, JK.garden, { pad: 2, span: 110, where: okJ(edge(2, 22), 1.2), maxH: 4, blob: 0 });
-    place(18, JK.veg, { pad: 2.5, span: 120, where: okJ(edge(3, 28), 0.9), maxH: 4, blob: 0 });
-    place(16, JK.hasa, { pad: 2, span: 120, where: okJ(edge(3, 30), 1.2), maxH: 4, blob: 0.4 });
-    place(22, JK.jizo, { pad: 0.6, span: 110, where: byRoad(HW + SW + 0.6, HW + SW + 1.6), maxH: 4, blob: 0.2 });
-    place(14, JK.well, { pad: 1.5, span: 110, where: okJ(edge(2, 22), 1.5), maxH: 4, blob: 0.4 });
-    place(30, JK.woodpile, { pad: 1, span: 110, where: okJ(edge(2, 24), 1.5), maxH: 4, blob: 0.3 });
-    place(60, JK.steps, { pad: 0.2, span: 100, where: edge(1, 18), maxH: 4, blob: 0, tiny: true });
-    place(40, JK.fence, { pad: 1, span: 120, where: okJ(edge(2, 26), 1.5), maxH: 4, blob: 0 });
+    {
+      const OFF = HW + SW + 1.5, STEP = 5, seen = new Set();
+      for (const rd of NET.roads) {
+        const alongX = rd.z0 === rd.z1, a0 = alongX ? rd.x0 : rd.z0, a1 = alongX ? rd.x1 : rd.z1, line = alongX ? rd.z0 : rd.x0;
+        let k = 0;
+        for (let a = Math.ceil(a0 / STEP) * STEP + 2.5; a < a1; a += STEP, k++) for (const sd of [-1, 1]) {
+          const x = alongX ? a : line + sd * OFF, z = alongX ? line + sd * OFF : a, key = Math.round(x) + ',' + Math.round(z);
+          if (seen.has(key) || townDist(x, z) < 1.2 || roadDist(x, z) < OFF - 0.2 || blocked(x, z, 0.3)) continue;
+          if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 8 || inField(x, z) || Math.abs(x) > 115 || Math.abs(z) > 115) continue;
+          seen.add(key);
+          const h = H(x, z), isNear = Math.abs(x) < NEAR && Math.abs(z) < NEAR;
+          const t = JK.sakura(r, h, undefined, !isNear); t.position.set(x, h, z); t.rotation.y = r() * 6.3; (isNear ? near : far).addObject(t); if (h < 4) blobs.push([x, h, z, 1.1]);
+          if (k % 2) { const lx = alongX ? x + STEP / 2 : line + sd * (HW + SW + 0.7), lz = alongX ? line + sd * (HW + SW + 0.7) : z + STEP / 2; if (!blocked(lx, lz, 0.1) && roadDist(lx, lz) > HW + SW + 0.4) { const L2 = JK.lantern(r); L2.position.set(lx, H(lx, lz), lz); (isNear ? near : far).addObject(L2); } }
+        }
+      }
+    }
+    place(8, (...a) => JK.homestead(...a), { pad: 6.5, span: 130, where: okJ(edge(6, 34), 1.2), maxH: 4, blob: 0 });
+    place(4, (...a) => JK.shrineGarden(...a), { pad: 4.5, span: 120, where: okJ(edge(4, 30), 1.0), maxH: 4, blob: 0 });
+    place(6, (...a) => JK.jizoRow(...a), { pad: 0.8, span: 110, where: byRoad(HW + SW + 0.8, HW + SW + 1.4), maxH: 4, blob: 0.3 });
   } else if (name === 'desert') {
     place(420, S.saguaro, { pad: 0.5 });
     place(260, S.joshua, { pad: 1.2 });
@@ -1486,18 +1500,19 @@ function rivers(H, water) {
 // Tyre tracks: rovers have driven out from the town in every direction, leaving pairs of
 // wandering ruts (darker in the Moon's grey dust, darker red on Mars) that fade with distance
 function tracks(H, mars, r) {
-  const geos = [], N = 34;
+  const geos = [], N = 18, EDGE = ROAD_W / 2 + 0.7;
   for (let n = 0; n < N; n++) {
     // start at the edge of town and head out, turning gently as it goes
     const a0 = r() * Math.PI * 2;
     let x = Math.cos(a0) * 40, z = Math.sin(a0) * 40;
-    for (let k = 0; k < 40 && townDist(x, z) > 2; k++) { x *= 0.97; z *= 0.97; }
+    // come in to the outer edge of the road round town, so each track starts right at it
+    for (let k = 0; k < 400 && roadDist(x, z) > EDGE + 0.05 && townDist(x, z) > 0.8; k++) { x *= 0.995; z *= 0.995; }
     let a = a0 + (r() - 0.5) * 0.8, turn = (r() - 0.5) * 0.05;
     const len = 30 + r() * 70, step = 0.8, pts = [];
     for (let t = 0; t < len; t += step) {
       turn += (r() - 0.5) * 0.02; turn = Math.max(-0.06, Math.min(0.06, turn)); a += turn;
       x += Math.cos(a) * step; z += Math.sin(a) * step;
-      if (townDist(x, z) < 0.5) break;
+      if (roadDist(x, z) < EDGE) break;
       pts.push([x, z, a, t / len]);
     }
     for (const off of [-0.45, 0.45]) {
@@ -1512,7 +1527,7 @@ function tracks(H, mars, r) {
       geos.push(g.toNonIndexed());
     }
   }
-  const m = new THREE.MeshBasicMaterial({ color: mars ? 0x3a140c : 0x3a3a40, transparent: true, opacity: mars ? 0.32 : 0.38, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+  const m = new THREE.MeshBasicMaterial({ color: mars ? 0x3a140c : 0x3a3a40, transparent: true, opacity: mars ? 0.38 : 0.45, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
   m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.a *= vColor.r; diffuseColor.rgb = diffuse;'); };
   m.vertexColors = true;
   const mesh = new THREE.Mesh(mergeGeometries(geos), m); mesh.renderOrder = 1;
@@ -1643,25 +1658,25 @@ function japanKit() {
   const keep = g => g;
   return {
     // a tall, narrow Japanese cedar: a straight trunk and a dark, layered spire
-    sugi(r) {
+    sugi(r, h, _, far) {
       const g = new THREE.Group(), s = 1.0 + r() * 1.1, col = [0x234f2e, 0x2a5a34, 0x1e4628, 0x31613a][Math.floor(r() * 4)];
       g.add(mesh(new THREE.CylinderGeometry(0.1 * s, 0.16 * s, 1.4 * s, 5, 1, true), m(0x6a4a34), 0, 0.7 * s, 0));
-      const lm = m(col, {}, 1);
-      for (let i = 0; i < 5; i++) g.add(mesh(new THREE.ConeGeometry((0.72 - i * 0.12) * s, 1.0 * s, 7, 1, true), lm, 0, (1.3 + i * 0.55) * s, 0));
+      const lm = m(col, {}, 1), n = far ? 4 : 5;
+      for (let i = 0; i < n; i++) g.add(mesh(new THREE.ConeGeometry((0.72 - i * 0.12 * 5 / n) * s, 1.0 * s * 5 / n * 0.9, far ? 6 : 7, 1, true), lm, 0, (1.3 + i * 0.55 * 5 / n) * s, 0));
       g.userData.r = s * 0.8; return g;
     },
     // an umbrella pine: a leaning bare trunk with flat, layered crowns up top
-    kasa(r) {
-      const g = new THREE.Group(), s = 0.9 + r() * 0.9, lean = (r() - 0.5) * 0.5;
+    kasa(r, h, _, far) {
+      const g = new THREE.Group(), s = 0.9 + r() * 0.9, lean = (r() - 0.5) * 0.5, sw = far ? 5 : 7, sh = far ? 3 : 4;
       const tr = mesh(new THREE.CylinderGeometry(0.1 * s, 0.17 * s, 3.2 * s, 6, 1, true), m(0x5a4030), lean * 0.8 * s, 1.6 * s, 0); tr.rotation.z = -lean * 0.5; g.add(tr);
       const lm = m(r() < 0.5 ? 0x2f5a32 : 0x3a6a3a, {}, 1);
-      for (let i = 0; i < 4; i++) { const a = r() * 6.3, d = i ? (0.5 + r() * 0.5) * s : 0; const pad = mesh(new THREE.SphereGeometry((0.95 - i * 0.12) * s, 9, 5), lm, Math.cos(a) * d + lean * 1.6 * s, (3.0 + i * 0.32 - (i ? 0.5 : 0)) * s, Math.sin(a) * d); pad.scale.y = 0.32; g.add(pad); }
+      for (let i = 0; i < 4; i++) { const a = r() * 6.3, d = i ? (0.5 + r() * 0.5) * s : 0; const pad = mesh(new THREE.SphereGeometry((0.95 - i * 0.12) * s, sw, sh), lm, Math.cos(a) * d + lean * 1.6 * s, (3.0 + i * 0.32 - (i ? 0.5 : 0)) * s, Math.sin(a) * d); pad.scale.y = 0.32; g.add(pad); }
       g.userData.r = s; return g;
     },
-    sakura(r) {
+    sakura(r, h, _, far) {
       const g = new THREE.Group(), s = 0.75 + r() * 0.6;
       const tr = mesh(new THREE.CylinderGeometry(0.1 * s, 0.17 * s, 1.3 * s, 6, 1, true), m(0x4a3428), 0, 0.65 * s, 0); tr.rotation.z = (r() - 0.5) * 0.3; g.add(tr);
-      for (let i = 0; i < 7; i++) { const a = r() * 6.3, d = (0.3 + r() * 0.6) * s, p = mesh(new THREE.IcosahedronGeometry((0.5 + r() * 0.25) * s, 1), m(PINK[Math.floor(r() * PINK.length)], { roughness: 0.9 }, 1), Math.cos(a) * d, (1.7 + r() * 0.6) * s, Math.sin(a) * d); p.scale.y = 0.72; g.add(p); }
+      for (let i = 0; i < (far ? 5 : 7); i++) { const a = r() * 6.3, d = (0.3 + r() * 0.6) * s, p = mesh(new THREE.IcosahedronGeometry((0.5 + r() * 0.25) * s * (far ? 1.12 : 1), far ? 0 : 1), m(PINK[Math.floor(r() * PINK.length)], { roughness: 0.9 }, 1), Math.cos(a) * d, (1.7 + r() * 0.6) * s, Math.sin(a) * d); p.scale.y = 0.72; g.add(p); }
       g.userData.r = s * 1.2; return g;
     },
     maple(r) {
@@ -1670,10 +1685,10 @@ function japanKit() {
       for (let i = 0; i < 6; i++) { const a = r() * 6.3, d = (0.25 + r() * 0.5) * s, p = mesh(new THREE.IcosahedronGeometry((0.42 + r() * 0.2) * s, 0), m(r() < 0.75 ? c : RED[Math.floor(r() * 5)], {}, 1), Math.cos(a) * d, (1.3 + r() * 0.6) * s, Math.sin(a) * d); p.scale.y = 0.65; g.add(p); }
       g.userData.r = s; return g;
     },
-    azalea(r) {
+    azalea(r, h, _, far) {
       const g = new THREE.Group(), s = 0.5 + r() * 0.5, col = [0xd8579a, 0xe86aa8, 0xf2f0ea, 0x4f8f3a, 0x5a9a40, 0xd84a6a][Math.floor(r() * 6)];
-      const b = mesh(new THREE.SphereGeometry(0.55 * s, 10, 6), m(col, { roughness: 0.95 }), 0, 0.3 * s, 0); b.scale.y = 0.7; g.add(b);
-      if (r() < 0.5) { const b2 = mesh(new THREE.SphereGeometry(0.4 * s, 9, 5), m(col, { roughness: 0.95 }), 0.5 * s, 0.22 * s, 0.2 * s); b2.scale.y = 0.7; g.add(b2); }
+      const b = mesh(new THREE.SphereGeometry(0.55 * s, far ? 7 : 9, far ? 4 : 5), m(col, { roughness: 0.95 }), 0, 0.3 * s, 0); b.scale.y = 0.7; g.add(b);
+      if (r() < 0.5) { const b2 = mesh(new THREE.SphereGeometry(0.4 * s, far ? 6 : 8, far ? 3 : 4), m(col, { roughness: 0.95 }), 0.5 * s, 0.22 * s, 0.2 * s); b2.scale.y = 0.7; g.add(b2); }
       g.userData.r = s; return g;
     },
     bamboo(r) {
@@ -1745,6 +1760,40 @@ function japanKit() {
       for (let k = 0; k <= Math.round(L / 0.12); k++) g.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.9, 4), m(0xb8a46a), -L / 2 + k * 0.12, 0.45, 0));
       for (const y of [0.3, 0.7]) g.add(mesh(new THREE.BoxGeometry(L, 0.05, 0.06), m(0x5a4a30), 0, y, 0));
       g.userData.r = 0.5; return g;
+    },
+    // a farmstead: the thatched house, its vegetable plot, a rice drying rack, a well, a
+    // woodpile and a stepping-stone path to the door, all inside a bamboo fence
+    homestead(r, h, _, far) {
+      const g = new THREE.Group(), K = this;
+      const house = K.minka(r); g.add(house);
+      const plot = K.veg(r); plot.position.set(4.3, 0, 0.4); g.add(plot);
+      const rack = K.hasa(r); rack.position.set(0.2, 0, -3.2); g.add(rack);
+      const well = K.well(r); well.position.set(-3.2, 0, -1.6); g.add(well);
+      const wood = K.woodpile(r); wood.position.set(-3.4, 0, 1.0); wood.rotation.y = Math.PI / 2; g.add(wood);
+      for (let k = 0; k < 5; k++) g.add(mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.06, 7), m(0x9a968c), 0.3 + (k % 2) * 0.25, 0.03, 1.9 + k * 0.55));
+      for (const [x, z, len, rot] of [[0.8, 4.4, 6.4, 0], [0.8, -4.3, 6.4, 0], [-4.3, 0, 8.6, 1]]) { const f = K.fence(r); f.scale.x = len / 3.5; f.position.set(x, 0, z); if (rot) f.rotation.y = Math.PI / 2; g.add(f); }
+      jSakura(g, 3.2, -3.0, 0.9, 0, Math.floor(r() * 90));
+      g.userData.r = 3.2; return g;
+    },
+    // a little shrine garden: the shrine and its torii on a stone path, lanterns in a pair,
+    // a moss garden to one side and a red maple
+    shrineGarden(r) {
+      const g = new THREE.Group(), K = this;
+      const sh = K.shrine(r); sh.position.set(0, 0, -1.2); g.add(sh);
+      for (let k = 0; k < 6; k++) g.add(mesh(new THREE.BoxGeometry(0.7, 0.05, 0.38), m(0x9a968c), 0, 0.025, 1.4 + k * 0.48));
+      for (const e of [-1, 1]) jLantern(g, e * 0.95, 2.9, 0.9, 0);
+      const gd = K.garden(r); gd.position.set(2.6, 0, 1.4); g.add(gd);
+      jMaple(g, -2.4, 0.8, 1.0, 0, Math.floor(r() * 90));
+      g.userData.r = 2.4; return g;
+    },
+    // a row of jizo statues under a little wooden roof, flowers set out before them
+    jizoRow(r) {
+      const g = new THREE.Group(), K = this, n = 3 + Math.floor(r() * 3), W = n * 0.45 + 0.3;
+      g.add(mesh(new THREE.BoxGeometry(W, 0.12, 0.6), m(0x8f8c84), 0, 0.06, 0));
+      for (let k = 0; k < n; k++) { const j = K.jizo(r); j.position.set(-W / 2 + 0.38 + k * 0.45, 0.12, 0); g.add(j); }
+      for (const e of [-W / 2 + 0.05, W / 2 - 0.05]) g.add(mesh(new THREE.BoxGeometry(0.07, 1.1, 0.07), m(0x3e2a1e), e, 0.6, -0.22));
+      jRoof(g, { y: 1.12, z: 0, w: W + 0.4, d: 0.9, h: 0.25, lift: 0.04, trim: false });
+      g.userData.r = W * 0.5; return g;
     },
     // a clump of purple iris by the water
     iris(r) { const g = new THREE.Group(); for (let k = 0; k < 5; k++) { const lf = mesh(new THREE.ConeGeometry(0.04, 0.6, 3, 1, true), m(0x4f8f3a, {}, 1), (r() - 0.5) * 0.3, 0.3, (r() - 0.5) * 0.3); lf.rotation.z = (r() - 0.5) * 0.4; g.add(lf); if (k % 2 === 0) g.add(mesh(new THREE.IcosahedronGeometry(0.07, 0), m(r() < 0.7 ? 0x6a4fc0 : 0xf2f0ea), lf.position.x, 0.62, lf.position.z)); } return g; },

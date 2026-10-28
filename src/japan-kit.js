@@ -115,7 +115,9 @@ function roofGeo(a, b, H, { lift = 0.3, pow = 1.7, thick = 0.12, tile = 0.3 } = 
     R.faces = R.faces.map(P => (t, s) => { const [x, y, z] = P(t, s); return [z, y, -x]; });
     return R;
   }
-  const r = a - b, ST = 12, SS = 8, slope = Math.hypot(H, b);
+  // (as many segments as the curve needs: a big temple roof gets 12 x 8, a wall cap 3 x 2)
+  const slope = Math.hypot(H, b), r = a - b;
+  const ST = Math.max(3, Math.min(12, Math.round(lift * 30 + a * 1.5))), SS = Math.max(2, Math.min(8, Math.round(slope * 5)));
   const faces = [
     [[-a, b], [a, b], [-r, 0], [r, 0]],
     [[a, -b], [-a, -b], [r, 0], [-r, 0]],
@@ -164,7 +166,7 @@ const plainGeo = g => { const n = g.index ? g.toNonIndexed() : g; for (const k o
 // end tile where each meets the eave, a row of round tile ends along the eaves, a ridge
 // with end tiles (onigawara), and a white-edged fascia under the eaves. A thatched roof
 // gets a thick, trimmed eave and a straw ridge pinned by crossed timbers.
-export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, under = WOOD, ridge = true, rot = 0, phoenix = false }) {
+export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, under = WOOD, ridge = true, rot = 0, phoenix = false, trim: trimOn = true }) {
   const th = kind === 'thatch', TS = 0.9;
   const thick = th ? Math.min(0.32, 0.12 + Math.min(w, d) * 0.06) : 0.11;
   const R = roofGeo(w / 2, d / 2, h, { lift: lift ?? (th ? 0.05 : Math.min(w, d) * 0.12), pow: th ? 1.15 : 1.7, thick, tile: th ? 1.4 : TS });
@@ -174,7 +176,7 @@ export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, 
   grp.add(top, und);
   const small = Math.min(w, d) < 0.9, trim = [], dark = th ? shade(color ?? J.THATCH, -0.4) : J.TILE_D;
   const sz = Math.min(w, d), rr = th ? 0 : Math.max(0.022, Math.min(0.065, sz * 0.022));
-  if (!th) {
+  if (!th && trimOn) {
     // hip ridges: along the shared edges of the front and back faces
     for (const P of [R.faces[0], R.faces[1]]) for (const t of [0, 1]) {
       const pts = []; for (let k = 0; k <= 10; k++) { const [px, py, pz] = P(t, k / 10); pts.push(new THREE.Vector3(px, py + rr * 0.7, pz)); }
@@ -186,11 +188,11 @@ export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, 
       }
     }
     // round tile ends along every eave, one per row of cover tiles
-    if (!small) for (const P of R.faces) {
+    if (!small) for (const P of R.faces.filter(P => { const [ax, , az] = P(0.5, 0), [bx, , bz] = P(0.5, 1); return (ax - bx) + (az - bz) > -0.01; })) {   // (only the eaves facing the camera)
       const [x0, , z0] = P(0, 0), [x1, , z1] = P(1, 0), L = Math.hypot(x1 - x0, z1 - z0), n = Math.floor(L / (TS / 4));
       for (let k = 1; k < n; k++) {
         const t = k / n, [px, py, pz] = P(t, 0), [qx, , qz] = P(t, 0.06);
-        const c = new THREE.CylinderGeometry(rr * 0.85, rr * 0.85, 0.05, 7); c.rotateX(Math.PI / 2); c.rotateY(Math.atan2(px - qx, pz - qz)); c.translate(px, py - 0.015, pz); trim.push(c);
+        const c = new THREE.CylinderGeometry(rr * 0.85, rr * 0.85, 0.05, 6, 1, true); c.rotateX(Math.PI / 2); c.rotateY(Math.atan2(px - qx, pz - qz)); c.translate(px, py - 0.015, pz); trim.push(c);
       }
     }
   }

@@ -1219,7 +1219,9 @@ function perfCheck(now) {
   const fps = perf.frames / secs; perf.t0 = 0;
   const q = world.look.quality;
   let to = null;
-  if (q === 'high') { perf.lows = fps < 40 ? perf.lows + 1 : 0; if (perf.lows >= 2) to = 'low'; }
+  // (first the picture is drawn a little smaller to keep up, see Look.adapt; only if that
+  // isn't enough do the effects get switched off)
+  if (q === 'high') { perf.lows = fps < 40 && (world.look._ad?.scale ?? 0) <= 0.66 ? perf.lows + 1 : 0; if (perf.lows >= 2) to = 'low'; }
   else { perf.highs = fps > 56 ? perf.highs + 1 : 0; if (perf.highs >= 3 && perf.flips < 3) to = 'high'; }
   if (to) {
     perf.lows = perf.highs = 0; perf.flips++;
