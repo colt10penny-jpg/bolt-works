@@ -993,6 +993,10 @@ function vaultTip() {
   if (!pendingVaultTip || current || launching) return;
   pendingVaultTip = false;
   if (game.vault() < 1) return;
+  // the pointer only the first time: after that the coin over headquarters is enough
+  const tips = game.s.tutorial.tips ||= {};
+  if (tips.vault) return;
+  tips.vault = true; save();
   tutorial.tip({
     say: () => `Welcome back! Your managers collected <b>$${fmt(game.vault())}</b> while you were away. Collect it at your <b>${def('hq').name}</b>.`,
     lot: lotOf('hq'),

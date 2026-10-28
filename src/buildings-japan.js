@@ -33,9 +33,16 @@ const JAPAN = {
   satetsu(color) {
     const g = new THREE.Group(), c = core(g, S);
     const sx = -0.75, sz = -0.75;
-    const top = hall(c, { x: sx, z: sz, w: 2.0, d: 1.6, h: 1.0, wall: 0xefe6d6, frame: VERM, bay: 0.66 });
-    redLattice(c, 'z', sx - 0.45, 0.42, sz + 0.8, 0.8, 0.65); redLattice(c, 'x', sz, 0.62, sx + 1.0, 1.2, 0.35);
-    engawa(c, { axis: 'x', a: sz, f: sx + 1.0, len: 1.7, depth: 0.3, y: 0.32, rail: VERM, posts: false });
+    const top = hall(c, { x: sx, z: sz, w: 2.0, d: 1.6, h: 1.0, wall: 0x9a7650, frame: WOOD_D, base: 0x8a7f6c, bay: 0.66 });
+    koshi(c, 'z', sx - 0.45, 0.42, sz + 0.8, 0.8, 0.65); koshi(c, 'x', sz, 0.62, sx + 1.0, 1.2, 0.35);
+    // straw rain capes and a woven basket hung by the door, a lean-to of split logs
+    for (const e of [0.25, 0.65]) { const cape = mesh(new THREE.ConeGeometry(0.16, 0.45, 8), 0xb8975a, { roughness: 1 }); cape.position.set(sx + 1.02, 0.85, sz + e - 0.5); c.add(cape); }
+    for (let k = 0; k < 6; k++) { const lg = cyl(0.07, 0.07, 0.9, 0x8a6a45, sx - 1.08, 0.22 + (k % 3) * 0.14, sz - 0.4 + Math.floor(k / 3) * 0.16, 6); lg.rotation.x = Math.PI / 2; c.add(lg); }
+    // a rough timber lookout ladder up the hillside behind, with a bell to call the shifts
+    for (const e of [-0.15, 0.15]) c.add(box(0.06, 2.1, 0.06, WOOD_D, -1.55 + e, 0.15, -1.6));
+    for (let k = 0; k < 6; k++) c.add(box(0.36, 0.04, 0.04, WOOD_L, -1.55, 0.45 + k * 0.3, -1.6));
+    c.add(box(0.5, 0.05, 0.5, WOOD, -1.55, 2.25, -1.6)); roof(c, { x: -1.55, y: 2.55, z: -1.6, w: 0.75, d: 0.75, h: 0.35, kind: 'thatch' });
+    c.add(cyl(0.07, 0.1, 0.16, 0x8a6a3a, -1.55, 2.3, -1.6, 10, { metalness: 0.7 }));
     c.add(onWall('z', sx + 0.45, 0.37, sz + 0.8, 0.6, 0.85, 0.03, 0x1e1612)); noren(c, 'z', sx + 0.45, 1.2, sz + 0.82, 0.62, color);
     roof(c, { x: sx, y: top, z: sz, w: 2.7, d: 2.2, h: 1.15, kind: 'thatch' });
     plaque(c, 'z', sx - 0.45, 1.1, sz + 0.86, 0.22, 0.5, '砂鉄');
@@ -78,7 +85,7 @@ const JAPAN = {
     c.add(box(0.12, 0.12, d, VERM, hx + w / 2 - 0.1, 0.3 + H - 0.12, hz), box(0.12, 0.12, d, VERM, hx - w / 2 + 0.1, 0.3 + H - 0.12, hz));
     c.add(box(w - 0.2, 0.9, 0.08, PLASTER, hx, 0.3, hz - d / 2 + 0.1), box(w, 0.12, 0.12, VERM, hx, 0.3 + H - 0.12, hz - d / 2 + 0.1), box(w, 0.12, 0.12, VERM, hx, 0.3 + H - 0.12, hz + d / 2 - 0.1), box(w, 0.08, 0.1, VERM, hx, 0.3 + H * 0.55, hz + d / 2 - 0.1));
     redLattice(c, 'z', hx, 0.3 + 0.95, hz - d / 2 + 0.15, w - 0.4, 0.45);
-    const rt = roof(c, { x: hx, y: 0.3 + H, z: hz, w: w + 0.8, d: d + 0.7, h: 1.45, lift: 0.4, phoenix: true });
+    const rt = roof(c, { x: hx, y: 0.3 + H, z: hz, w: w + 0.8, d: d + 0.7, h: 1.55, kind: 'thatch', color: 0x6a4630 });   // a thick roof of cypress bark
     roof(c, { x: hx, y: rt - 0.15, z: hz, w: 1.1, d: 0.6, h: 0.3, lift: 0.08 });     // the smoke vent on the ridge
     c.add(box(0.9, 0.18, 0.4, 0x2a1e18, hx, rt - 0.3, hz));
     // the furnace: a long clay box with a glowing top, and slag running out of the tap holes
@@ -112,9 +119,15 @@ const JAPAN = {
   kajiba(color) {
     const g = new THREE.Group(), c = core(g, S);
     const sx = -0.35, sz = -0.6, w = 2.7, d = 2.0;
-    const top = redHall(c, { x: sx, z: sz, w, d, h: 1.55, wall: 0xf2ece0, bay: 0.68, rail: false, doors: false, skirt: true });
-    c.add(onWall('x', sz, 0.4, sx + w / 2, d, 0.45, 0.03, 0x4a3426));   // a dark boarded dado down the side
-    roof(c, { x: sx, y: top, z: sz, w: w + 0.7, d: d + 0.65, h: 1.05, lift: 0.3, phoenix: true });
+    // charred cedar boards (yakisugi) below, a band of white plaster under the eaves
+    const top = hall(c, { x: sx, z: sz, w, d, h: 1.5, wall: 0x2a2624, frame: 0x161312, base: 0x6e6a62, bay: 0.5 });
+    for (const [axis, f, len] of [['z', sz + d / 2, w], ['x', sx + w / 2, d]]) {
+      c.add(onWall(axis, axis === 'z' ? sx : sz, 0.37 + 1.08, f, len, 0.32, 0.02, PLASTER));
+      for (let k = 0; k < Math.round(len / 0.12); k++) c.add(onWall(axis, (axis === 'z' ? sx : sz) - len / 2 + 0.06 + k * 0.12, 0.37, f, 0.015, 1.05, 0.025, 0x3a3532));
+    }
+    roof(c, { x: sx, y: top, z: sz, w: w + 0.7, d: d + 0.65, h: 1.05, lift: 0.18, color: 0x3c3f46 });
+    // the forge's own tall stone chimney rising through the roof
+    c.add(box(0.5, 2.6, 0.5, 0x8a867c, sx - 0.65, 0.37, sz + 0.15, { flatShading: true }), box(0.62, 0.12, 0.62, 0x5a5650, sx - 0.65, 2.97, sz + 0.15));
     // the open front with the forge glowing inside
     c.add(onWall('z', sx - 0.35, 0.37, sz + d / 2, 1.3, 1.05, 0.03, 0x140e0a));
     const forge = box(0.55, 0.3, 0.3, 0xffa040, sx - 0.65, 0.4, sz + d / 2 - 0.2, glowOpt(0xff6a10, 1.8)); forge.material = forge.material.clone(); c.add(forge);
@@ -135,9 +148,11 @@ const JAPAN = {
     c.add(box(0.06, 0.8, 0.06, WOOD_D, 1.15, 0.15, 1.5), box(0.06, 0.8, 0.06, WOOD_D, 1.75, 0.15, 1.5), box(0.7, 0.05, 0.08, WOOD_D, 1.45, 0.75, 1.5), box(0.7, 0.05, 0.08, WOOD_D, 1.45, 0.5, 1.5));
     for (let k = 0; k < 3; k++) { const sw = box(0.62, 0.035, 0.03, k === 1 ? 0x2a2420 : 0xd8dde4, 1.45, 0.58 + k * 0.08, 1.54, { metalness: 0.8, roughness: 0.25 }); sw.rotation.z = 0.06; c.add(sw); }
     c.add(box(0.36, 1.0, 0.36, 0x8a7a6a, sx + 0.9, top + 0.4, sz - 0.4), box(0.44, 0.08, 0.44, 0x3a3d44, sx + 0.9, top + 1.4, sz - 0.4));
+    // a sign board of finished blades hung by the door
+    c.add(box(0.06, 0.06, 0.5, WOOD_D, sx + w / 2 + 0.05, 1.45, sz + d / 2 - 0.3), box(0.02, 0.5, 0.36, 0xd8dde4, sx + w / 2 + 0.06, 0.9, sz + d / 2 - 0.3, { metalness: 0.8, roughness: 0.25 }));
     plaque(c, 'z', sx + 0.85, 0.75, sz + d / 2 + 0.01, 0.22, 0.6, '刀匠');
     pine(g, -3.5, 3.5, 0.85, 0.15, 7); lantern(g, 3.5, 3.55, 0.9); bamboo(g, -3.5, -3.5, 0.9, 0.15, 6, 3);
-    return { group: g, top: top + 2.0, smoke: [new THREE.Vector3(sx + 0.9, top + 1.6, sz - 0.4)], anim(t) {
+    return { group: g, top: top + 2.0, smoke: [new THREE.Vector3(sx + 0.9, top + 1.6, sz - 0.4), new THREE.Vector3(sx - 0.65, 3.2, sz + 0.15)], anim(t) {
       const p = (t * 1.1) % 1, k = p < 0.7 ? -1.2 + p / 0.7 * 1.0 : -0.2 - (p - 0.7) / 0.3 * 1.0;
       arm.rotation.z = -k - 0.4;
       const hit = p > 0.92 || p < 0.05;
@@ -158,9 +173,18 @@ const JAPAN = {
     koshi(c, 'x', z - 0.3, 0.42, x + w / 2, 1.4, 0.8);
     roof(c, { x, y: t1, z: z + d / 2 + 0.1, w: w + 0.4, d: 0.75, h: 0.22, lift: 0.08, ridge: false });     // the pent roof over the street front
     // the upper floor, set back, plaster with slatted windows, under the main roof
-    const t2 = redHall(c, { x, z: z - 0.25, w: w - 0.4, d: d - 0.6, h: 1.05, y0: t1, wall: PLASTER, bay: 0.7, baseH: 0.05, rail: false, doors: false });
-    engawa(c, { axis: 'x', a: z - 0.25, f: x + (w - 0.4) / 2, len: d - 0.5, depth: 0.32, y: t1 + 0.1, rail: VERM, posts: false });
-    roof(c, { x, y: t2, z: z - 0.25, w: w + 0.3, d: d + 0.1, h: 0.95, lift: 0.25, phoenix: true });
+    const t2 = hall(c, { x, z: z - 0.25, w: w - 0.4, d: d - 0.6, h: 1.0, y0: t1, wall: 0xe8dcc4, frame: WOOD_D, bay: 0.7, baseH: 0.05 });
+    engawa(c, { axis: 'x', a: z - 0.25, f: x + (w - 0.4) / 2, len: d - 0.5, depth: 0.3, y: t1 + 0.1, rail: WOOD_D, posts: false });
+    const rt2 = roof(c, { x, y: t2, z: z - 0.25, w: w + 0.3, d: d + 0.1, h: 0.95, lift: 0.18 });
+    // the clock turret on the roof: a little lookout with a bronze bell that strikes the hours
+    const tx = x + 0.75, tz2 = z - 0.25;
+    c.add(box(0.62, 0.1, 0.62, WOOD_D, tx, rt2 - 0.25, tz2));
+    for (const [dx, dz] of [[-0.26, -0.26], [0.26, -0.26], [-0.26, 0.26], [0.26, 0.26]]) c.add(box(0.06, 0.6, 0.06, WOOD_D, tx + dx, rt2 - 0.15, tz2 + dz));
+    c.add(box(0.56, 0.18, 0.02, 0x1e1612, tx, rt2 + 0.24, tz2 + 0.27));
+    const bellC = cyl(0.11, 0.15, 0.24, 0x8a6a3a, tx, rt2 + 0.05, tz2, 12, { metalness: 0.8, roughness: 0.3 }); c.add(bellC);
+    roof(c, { x: tx, y: rt2 + 0.45, z: tz2, w: 0.95, d: 0.95, h: 0.45, lift: 0.12 });
+    // curved bamboo fences (inuyarai) along the foot of the street front
+    for (const e of [-1.3, 0.95]) { const f = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.5, 12, 1, true, 0, Math.PI / 2), 0x9a8a5a, { side: THREE.DoubleSide }); f.rotation.z = Math.PI / 2; f.rotation.y = Math.PI / 2; f.position.set(x + e, 0.15, z + d / 2 + 0.02); f.scale.set(0.55, 1, 1); c.add(f); }
     koshi(c, 'z', x + 0.85, t1 + 0.35, z - 0.25 + (d - 0.6) / 2, 0.6, 0.4);
     // the big clock and its gears
     const cy = t1 + 0.55, cz = z - 0.25 + (d - 0.6) / 2 + 0.03;
@@ -194,9 +218,14 @@ const JAPAN = {
   shinkansen(color) {
     const g = new THREE.Group(), c = core(g, S);
     const sx = 0.0, sz = -1.05, w = 3.5, d = 1.5;
-    const top = redHall(c, { x: sx, z: sz, w, d, h: 1.5, wall: PLASTER, bay: 0.7, rail: false, doors: false, skirt: true });
+    const top = hall(c, { x: sx, z: sz, w, d, h: 1.5, wall: 0xf4f4f0, frame: 0x8a929c, base: 0xb8b4aa, bay: 0.58 });
+    for (const [axis, f, len] of [['z', sz + d / 2, w], ['x', sx + w / 2, d]]) { c.add(onWall(axis, axis === 'z' ? sx : sz, 0.37 + 0.95, f, len, 0.42, 0.03, 0x9fd6ff, { roughness: 0.1, metalness: 0.4 })); c.add(onWall(axis, axis === 'z' ? sx : sz, 0.37 + 0.62, f, len, 0.12, 0.035, color)); }
+    // a long canopy over the platform on slender steel columns, and a station clock
+    for (let k = 0; k < 4; k++) c.add(cyl(0.035, 0.035, 1.25, 0x8a929c, -1.2 + k * 0.8, 0.27, 0.12, 8));
+    roof(c, { x: 0, y: 1.52, z: 0.12, w: 3.0, d: 0.62, h: 0.16, lift: 0.04, color: 0x5f9a86, ridge: false });
+    const clk = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.05, 20), 0xf6f6f2); clk.rotation.x = Math.PI / 2; clk.position.set(-0.8, 1.3, 0.12); c.add(clk, box(0.02, 0.12, 0.01, 0x1c2430, -0.8, 1.27, 0.15), box(0.09, 0.02, 0.01, 0x1c2430, -0.77, 1.3, 0.15));
     c.add(box(w + 0.02, 0.12, d + 0.02, color, sx, 0.9, sz));
-    roof(c, { x: sx, y: top, z: sz, w: w + 0.6, d: d + 0.6, h: 0.75, lift: 0.22 });
+    roof(c, { x: sx, y: top, z: sz, w: w + 0.6, d: d + 0.6, h: 0.8, lift: 0.22, color: 0x5f9a86 });   // weathered copper, gone green
     c.add(onWall('z', sx - 0.4, 0.37, sz + d / 2, 2.2, 0.95, 0.03, 0x24262c));
     plaque(c, 'z', sx + 1.3, 0.6, sz + d / 2 + 0.01, 0.6, 0.24, '新幹線', { bg: 0xf6f6f2, ink: 0x1f4f9a, frame: 0x5a5f66 });
     // the platform and the track
@@ -240,6 +269,13 @@ const JAPAN = {
     const x = 0.35, z = -0.55, w = 2.9, d = 2.2;
     const top = redHall(c, { x, z, w, d, h: 1.75, wall: PLASTER, bay: 0.72, rail: false, doors: false, skirt: true });
     roof(c, { x, y: top, z, w: w + 0.6, d: d + 0.6, h: 0.95, lift: 0.28, phoenix: true });
+    // like the Phoenix Hall: a raised side gallery ending in a little corner tower, and a
+    // pond in front that the hall looks out over
+    const gt = redHall(c, { x: -1.5, z: -1.15, w: 0.7, d: 0.95, h: 0.95, bay: 0.35, baseH: 0.12, rail: false, doors: false });
+    roof(c, { x: -1.5, y: gt, z: -1.15, w: 1.05, d: 1.3, h: 0.35, lift: 0.14, ridge: false });
+    c.add(box(0.42, 0.32, 0.42, VERM, -1.5, gt + 0.2, -1.15)); redLattice(c, 'z', -1.5, gt + 0.25, -1.15 + 0.21, 0.32, 0.2);
+    roof(c, { x: -1.5, y: gt + 0.52, z: -1.15, w: 0.75, d: 0.75, h: 0.36, lift: 0.12 });
+    koiPond(c, 1.2, 1.25, 0.55, 0.42); lantern(c, 0.55, 1.6, 0.6);
     c.add(onWall('z', x + 0.1, 0.45, z + d / 2, 2.4, 1.05, 0.04, 0x9fd6ff, { transparent: true, opacity: 0.4, roughness: 0.05, metalness: 0.3 }));
     c.add(onWall('z', x + 0.1, 0.42, z + d / 2 - 0.5, 2.4, 1.1, 0.04, 0xe8ecf0));
     const arms = [];
@@ -309,9 +345,12 @@ const JAPAN = {
   waterwheel(color) {
     const g = new THREE.Group(), c = core(g, S);
     const mx = 0.55, mz = -0.35;
-    const top = hall(c, { x: mx, z: mz, w: 1.9, d: 1.5, h: 1.15, wall: 0xf2ece0, frame: VERM, bay: 0.62 });
-    shoji(c, 'z', mx + 0.3, 0.55, mz + 0.75, 0.8, 0.6); redLattice(c, 'x', mz, 0.5, mx + 0.95, 0.9, 0.6);
-    engawa(c, { axis: 'x', a: mz, f: mx + 0.95, len: 1.6, depth: 0.32, y: 0.34, rail: VERM, posts: false });
+    const top = hall(c, { x: mx, z: mz, w: 1.9, d: 1.5, h: 1.15, wall: 0xb08a5e, frame: WOOD_D, bay: 0.62 });
+    shoji(c, 'z', mx + 0.3, 0.55, mz + 0.75, 0.8, 0.6); koshi(c, 'x', mz, 0.5, mx + 0.95, 0.9, 0.6);
+    engawa(c, { axis: 'x', a: mz, f: mx + 0.95, len: 1.6, depth: 0.32, y: 0.34, rail: null, posts: false });
+    // rice sacks and a stone millstone leaning by the door
+    for (const [ox, oz] of [[1.2, 0.75], [1.4, 0.95], [1.25, 1.1]]) c.add(cyl(0.15, 0.17, 0.32, 0xd8c08a, mx + ox - 0.2, 0.15, mz + oz, 8));
+    { const ms = cyl(0.3, 0.3, 0.1, 0x9a968c, mx - 0.25, 0.45, mz + 0.95, 16); ms.rotation.x = 1.2; c.add(ms); }
     roof(c, { x: mx, y: top, z: mz, w: 2.6, d: 2.2, h: 1.2, kind: 'thatch' });
     plaque(c, 'z', mx - 0.5, 0.6, mz + 0.76, 0.22, 0.5, '水車');
     // the pond behind, the flume on its trestles and the great wheel
