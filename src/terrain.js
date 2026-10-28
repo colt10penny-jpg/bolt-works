@@ -319,6 +319,43 @@ const LAKE = { x: 66, z: 64, r: 15 };
 // Sakura Valley: Fuji far behind town, and an island in the lake
 const FUJI = { x: -100, z: -86, r: 80, h: 70 };
 const ISLE = { x: 69, z: 67, r: 3.6 };
+// Sakura Valley's rivers and streams: down out of the mountains, round the town and into
+// the lake. Each is a smooth curve through these points, w its half width (from source
+// to mouth) and b0 the height of its bed at the source (it drops to the lake's level).
+const RIVERS = [
+  { pts: [[-150, -70], [-100, -42], [-64, -22], [-47, 4], [-43, 30], [-31, 52], [-6, 63], [24, 63], [42, 71], [55, 71]], w: [1.3, 2.5], b0: 9 },
+  { pts: [[62, -140], [55, -86], [47, -50], [60, -16], [82, 8], [86, 32], [74, 53]], w: [0.8, 1.5], b0: 12 },
+  { pts: [[-136, 30], [-102, 47], [-72, 61], [-41, 55]], w: [0.7, 1.05], b0: 6 },
+].map(R => {
+  const c = new THREE.CatmullRomCurve3(R.pts.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+  const N = Math.ceil(c.getLength() / 1.5), P = c.getSpacedPoints(N);
+  return { ...R, P, N };
+});
+const riverW = (R, t) => R.w[0] + (R.w[1] - R.w[0]) * t;
+const riverBed = (R, t) => -1.25 + (R.b0 + 1.25) * Math.max(0, 1 - t / 0.3) ** 2;   // down out of the hills, then level to the lake
+// the river segments in a coarse grid, so finding the nearest one is quick
+const RGRID = new Map(), RCELL = 16, RREACH = 34;
+RIVERS.forEach((R, ri) => { for (let i = 0; i < R.N; i++) {
+  const a = R.P[i], b = R.P[i + 1];
+  for (let gx = Math.floor((Math.min(a.x, b.x) - RREACH) / RCELL); gx <= Math.floor((Math.max(a.x, b.x) + RREACH) / RCELL); gx++)
+    for (let gz = Math.floor((Math.min(a.z, b.z) - RREACH) / RCELL); gz <= Math.floor((Math.max(a.z, b.z) + RREACH) / RCELL); gz++) {
+      const k = gx + ',' + gz; if (!RGRID.has(k)) RGRID.set(k, []); RGRID.get(k).push(ri * 100000 + i);
+    }
+} });
+// the nearest river to a point: { d (to its middle), w (half width there), bed, t, R } or null
+function riverAt(x, z) {
+  const list = RGRID.get(Math.floor(x / RCELL) + ',' + Math.floor(z / RCELL));
+  if (!list) return null;
+  let best = null, bs = Infinity;
+  for (const id of list) {
+    const R = RIVERS[Math.floor(id / 100000)], i = id % 100000, a = R.P[i], b = R.P[i + 1];
+    const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz;
+    const u = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / L2));
+    const d = Math.hypot(x - a.x - dx * u, z - a.z - dz * u), t = (i + u) / R.N, w = riverW(R, t);
+    if (d - w < bs) { bs = d - w; best = { d, w, t, R, bed: riverBed(R, t) }; }
+  }
+  return best;
+}
 // farm fields near the lake (Colorado): [x, z, width, depth, colour]
 const FIELDS = [[50, 104, 18, 14, 0xd9b45a], [104, 50, 14, 18, 0x8fbf4d], [100, 100, 24, 18, 0xc2a24a], [120, 72, 12, 24, 0xa7c95a]];
 
@@ -392,6 +429,12 @@ function rawHeight(name, x, z) {
     else if (dl < LAKE.r + 18) h = Math.max(h, 0.5) + (h - Math.max(h, 0.5)) * smooth(LAKE.r + 12, LAKE.r + 18, dl);
     const di = Math.hypot(x - ISLE.x, z - ISLE.z);
     if (di < ISLE.r + 2) h = Math.max(h, -1.8 + smooth(ISLE.r + 2, ISLE.r - 1, di) * 2.4);
+    // the rivers: a channel cut down to the river bed, in a valley as deep as it needs
+    const rv = riverAt(x, z);
+    if (rv) {
+      const bank = rv.w + 2.2 + Math.max(0, h - rv.bed) * 0.9;
+      if (rv.d < bank) h = Math.min(h, rv.bed + (h - rv.bed) * smooth(rv.w * 0.7, bank, rv.d + (fbm(x / 5, z / 5, 2, 71) - 0.5) * 0.8));
+    }
     // rice paddies and tea rows lie flat
     for (const [fx, fz, w, d] of FIELDS) {
       const e = Math.max(Math.abs(x - fx) - w / 2, Math.abs(z - fz) - d / 2);
@@ -699,6 +742,7 @@ export function buildLand(name, T, blocks) {
     dock.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     if (name !== 'japan') ground.add(dock);
     const sm = new THREE.Group(); shore.build(sm, { cast: true }); ground.add(...sm.children);
+    if (name === 'japan') ground.add(...rivers(H, water).children);
   }
 
   const HW = ROAD_W / 2, SW = 0.7;
@@ -713,7 +757,8 @@ export function buildLand(name, T, blocks) {
     if (roadDist(x, z) < HW + SW + pad) return true;
     if ((name === 'colorado' || name === 'japan') && (H(x, z) < -0.3 && Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 20 || Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 9 || FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 1.5 && Math.abs(z - fz) < d / 2 + 1.5))) return true;   // not in the lake, on its beach or on the fields
     if (name !== 'colorado' && Math.hypot(x - 40, z - 40) < 4 + pad * 2) return true;
-    if (name === 'japan' && Math.hypot(x - FUJI.x, z - FUJI.z) < FUJI.r * 0.85 && H(x, z) > 14) return true;   // Fuji's bare upper slopes   // the landing spot for the rocket you arrive in (world.js LANDER_AT)
+    if (name === 'japan' && Math.hypot(x - FUJI.x, z - FUJI.z) < FUJI.r * 0.85 && H(x, z) > 14) return true;
+    if (name === 'japan') { const rv = riverAt(x, z); if (rv && rv.d < rv.w + 1.2 + pad) return true; }   // not in a river   // Fuji's bare upper slopes   // the landing spot for the rocket you arrive in (world.js LANDER_AT)
     return townDist(x, z) < 0.5 + pad * 0.3;
   };
   const SPAN = 270, NEAR = 60;
@@ -780,6 +825,11 @@ export function buildLand(name, T, blocks) {
     place(1300, (r, h) => S.tuft(r, h, [0x5f9e3c, 0x6fae44, 0x4f8c36, 0x86b84c]), { pad: 0.1, blob: 0, span: 180, maxH: 10, tiny: true });
     place(380, S.flowers, { pad: 0.6, blob: 0, maxH: 6, tiny: true });
     place(140, r => S.rock(r, 0, 0x8f8c84), { pad: 1.3, blob: 0.7 });
+    // along the riverbanks: mossy boulders, reeds and irises, and weeping willows
+    const bank = (lo, hi) => (x, z) => { const rv = riverAt(x, z); return rv && rv.d > rv.w + lo && rv.d < rv.w + hi; };
+    for (const [cnt, make, lo, hi, o] of [[520, r => S.rock(r, 0, r() < 0.5 ? 0x8f8c84 : 0x6f7a62), 1.0, 2.6, { pad: 0, blob: 0.5 }], [700, (r, h) => S.tuft(r, h, [0x5f9e3c, 0x4f8c36, 0x6f8a3a]), 1.1, 2.4, { pad: 0, blob: 0, tiny: true }],
+      [260, JK.iris, 1.1, 2.2, { pad: 0, blob: 0, tiny: true }], [90, JK.willow, 2.0, 4.5, { pad: 0, blob: 1 }]])
+      place(cnt, make, { ...o, span: 300, maxH: 30, where: bank(lo, hi), minH: -2 });
     const inField = (x, z) => FIELDS.some(([fx, fz, w, d]) => Math.abs(x - fx) < w / 2 + 2 && Math.abs(z - fz) < d / 2 + 2);
     const woods = (x, z) => { const d = townDist(x, z); return d > 15 && !inField(x, z) && r() < Math.min(0.95, (d - 15) / 18) * (0.7 + 0.5 * fbm(x / 14, z / 14, 2, 77)); };
     place(2600, JK.sugi, { where: woods, span: 250, maxH: 60, pad: 0.4, blob: 0.9 });
@@ -1257,6 +1307,57 @@ function isle(H, da) {
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
+// the water of the rivers (a ribbon down each, sloping with its bed and dropping out of
+// sight under the roads), little rapids where it runs steep, and red-railed bridges
+// where a road crosses
+function rivers(H, water) {
+  const g = new THREE.Group(), HW = ROAD_W / 2, SW = 0.7;
+  const flatAt = (x, z) => smooth(3.2, 9, roadDist(x, z)) * smooth(1, 9, townDist(x, z));
+  const foamM = std(0xffffff, { transparent: true, opacity: 0.5, depthWrite: false, roughness: 0.6 });
+  for (const R of RIVERS) {
+    const pos = [], uv = [], idx = [], foam = [];
+    for (let i = 0; i <= R.N; i++) {
+      const p = R.P[i], q = R.P[Math.min(R.N, i + 1)], o = R.P[Math.max(0, i - 1)];
+      let tx = q.x - o.x, tz = q.z - o.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+      const t = i / R.N, w = riverW(R, t) + 1.1, f = flatAt(p.x, p.z);
+      const y = H(p.x, p.z) + 0.6 * f - 0.18 * (1 - f);
+      for (const sd of [-1, 1]) { const x = p.x - tz * w * sd, z = p.z + tx * w * sd; pos.push(x, y, z); uv.push(x / 19, z / 19); }
+      if (i < R.N) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+      // white water where it drops fast
+      if (i > 0 && i < R.N && (riverBed(R, (i - 1) / R.N) - riverBed(R, (i + 1) / R.N)) > 0.12 && i % 2 === 0) {
+        const fg = new THREE.PlaneGeometry(riverW(R, t) * 1.6, 0.5); fg.rotateX(-Math.PI / 2); fg.rotateY(-Math.atan2(tz, tx) + Math.PI / 2); fg.translate(p.x, y + 0.03, p.z); foam.push(fg);
+      }
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const wm = new THREE.Mesh(geo, water); wm.receiveShadow = true; g.add(wm);
+    if (foam.length) g.add(new THREE.Mesh(mergeGeometries(foam), foamM));
+    // bridges: wherever the river passes under a road
+    let was = false;
+    for (let i = 0; i <= R.N; i++) {
+      const p = R.P[i], on = roadDist(p.x, p.z) < HW;
+      if (on && !was) {
+        const alongX = roadDist(p.x + 4, p.z) < HW + 0.5 && roadDist(p.x - 4, p.z) < HW + 0.5;
+        // the road's centre line here
+        let best = 0, bd = Infinity; for (let k = -30; k <= 30; k++) { const o = k * 0.1, d = alongX ? roadDist(p.x, p.z + o) : roadDist(p.x + o, p.z); if (d < bd) { bd = d; best = o; } }
+        const cx = alongX ? p.x : p.x + best, cz = alongX ? p.z + best : p.z, L = riverW(R, i / R.N) * 2 + 5;
+        const br = new THREE.Group();
+        for (const sd of [-1, 1]) {
+          const off = sd * (HW + SW + 0.12);
+          const n = Math.round(L / 0.7);
+          for (let k = 0; k <= n; k++) { const a = -L / 2 + (L * k) / n; br.add(jBox(0.1, 0.75, 0.1, J.VERM, a, 0.14, off)); if (k === 0 || k === n) br.add(jAt(new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), std(J.GOLD, { metalness: 0.8, roughness: 0.3 })), a, 0.98, off)); }
+          br.add(jBox(L, 0.08, 0.12, J.VERM, 0, 0.82, off), jBox(L, 0.05, 0.08, J.VERM, 0, 0.5, off));
+          for (const e of [-1, 1]) br.add(jBox(0.8, 0.45, 0.6, J.STONE, e * (L / 2 + 0.35), -0.2, off));
+          br.add(jBox(L, 0.3, 0.25, J.STONE_D, 0, -0.18, off));
+        }
+        br.position.set(cx, 0, cz); br.rotation.y = alongX ? 0 : Math.PI / 2;
+        br.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        g.add(br);
+      }
+      was = on;
+    }
+  }
+  return g;
+}
 function japanKit() {
   const M = new Map();
   const m = (color, o = {}, sway = 0) => {
@@ -1311,6 +1412,17 @@ function japanKit() {
         const lf = mesh(new THREE.IcosahedronGeometry(0.45, 0), m(0x6aa040, {}, 1), px, h, pz); lf.scale.set(1.2, 0.6, 1.2); g.add(lf);
       }
       g.userData.r = 1.4; return g;
+    },
+    // a clump of purple iris by the water
+    iris(r) { const g = new THREE.Group(); for (let k = 0; k < 5; k++) { const lf = mesh(new THREE.ConeGeometry(0.04, 0.6, 3, 1, true), m(0x4f8f3a, {}, 1), (r() - 0.5) * 0.3, 0.3, (r() - 0.5) * 0.3); lf.rotation.z = (r() - 0.5) * 0.4; g.add(lf); if (k % 2 === 0) g.add(mesh(new THREE.IcosahedronGeometry(0.07, 0), m(r() < 0.7 ? 0x6a4fc0 : 0xf2f0ea), lf.position.x, 0.62, lf.position.z)); } return g; },
+    // a weeping willow leaning over the river
+    willow(r) {
+      const g = new THREE.Group(), s = 0.9 + r() * 0.5;
+      g.add(mesh(new THREE.CylinderGeometry(0.12 * s, 0.2 * s, 1.8 * s, 6, 1, true), m(0x5a4a3a), 0, 0.9 * s, 0));
+      const lm = m(r() < 0.5 ? 0x8fbf5a : 0x7fb04e, {}, 1);
+      for (let k = 0; k < 9; k++) { const a = k / 9 * 6.28 + r(), d = (0.4 + r() * 0.5) * s; const f = mesh(new THREE.ConeGeometry(0.32 * s, (1.4 + r() * 0.8) * s, 5, 1, true), lm, Math.cos(a) * d, (1.6 + r() * 0.3) * s, Math.sin(a) * d); f.rotation.x = Math.PI; g.add(f); }
+      g.add(mesh(new THREE.IcosahedronGeometry(0.75 * s, 0), lm, 0, 2.3 * s, 0));
+      g.userData.r = s * 1.3; return g;
     },
     // a thatched farmhouse with white walls, dark timbers and a veranda
     minka(r) { const g = new THREE.Group(); const t = jHall(g, { w: 3.2, d: 2.4, h: 1.3, y0: 0, wall: J.PLASTER, frame: J.WOOD_D, bay: 0.6, baseH: 0.25 }); jShoji(g, 'z', 0.3, 0.4, 1.2, 1.8, 0.75); jEngawa(g, { axis: 'z', a: 0.3, f: 1.2, len: 2.4, depth: 0.45, y: 0.36, rail: null, posts: false }); jRoof(g, { y: t, w: 4.1, d: 3.4, h: 1.9, kind: 'thatch' }); jShrub(g, -1.9, 1.5, 1, 0, 0xd8579a); g.userData.r = 2.2; return keep(g); },

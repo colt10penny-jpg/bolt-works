@@ -288,7 +288,7 @@ export class World {
     const T = THEME[name] || THEME.colorado;
     this.T = T;
     const info = this.roadInfo();
-    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.75 : 2.6);
+    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.9 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     for (const g of [this.groundGroup, this.sceneryGroup]) {
@@ -398,7 +398,7 @@ export class World {
   // roads were fixed or built: update the network, the road meshes and the loading bays
   roadsChanged() {
     const info = this.roadInfo();
-    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.75 : 2.6);
+    setBayIn(this.themeName === 'desert' ? 3.85 : this.themeName === 'japan' ? 3.9 : 2.6);
     setNetwork(Object.values(this.P), info.good, info.exits);
     DRIVEWAYS.length = 0; DRIVEWAYS.push(...lotDriveways(Object.values(this.P)));
     this.#roads();
@@ -791,7 +791,7 @@ export class World {
         for (const [a0, a1] of runs) {
           const len = a1 - a0, mid = (a0 + a1) / 2, wl = new THREE.Group();
           wl.add(box(len, 0.22, 0.3, 0x8a867c, 0, 0, 0), box(len, 0.62, 0.2, 0xf2ece0, 0, 0.22, 0));
-          for (let k = 1; k < Math.round(len / 1.1); k++) wl.add(box(0.06, 0.62, 0.22, 0x5a4030, -len / 2 + k * len / Math.round(len / 1.1), 0.22, 0));
+          for (let k = 1; k < Math.round(len / 1.1); k++) wl.add(box(0.07, 0.62, 0.22, 0xc8402a, -len / 2 + k * len / Math.round(len / 1.1), 0.22, 0));
           jRoof(wl, { y: 0.84, w: len + 0.08, d: 0.36, h: 0.1, lift: 0.015, ridge: false });
           if (axis === 'x') wl.position.set(mid, 0.15, f); else { wl.position.set(f, 0.15, mid); wl.rotation.y = Math.PI / 2; }
           ex.add(wl);
@@ -1191,11 +1191,11 @@ export class World {
     const path = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.3, 2.3), mat(0x9a968c)); path.rotation.x = -Math.PI / 2; path.position.set(0, 0.012, -0.85); g.add(path);
     for (let k = 0; k < 6; k++) g.add(box(W - 0.3, 0.012, 0.025, 0x6e6a62, 0, 0.0, -1.9 + k * 0.4));
     for (const x of [-W / 2, W / 2]) {
-      g.add(box(0.18, H, 0.18, 0x3e2a1e, x, 0, 0), box(0.28, 0.14, 0.28, 0x8a867c, x, 0, 0));
-      g.add(box(0.1, H - 0.4, 0.1, 0x3e2a1e, x, 0, -0.45), box(0.06, 0.06, 0.45, 0x3e2a1e, x, H - 0.45, -0.22));   // the back posts
+      g.add(box(0.18, H, 0.18, 0xd2452c, x, 0, 0), box(0.28, 0.14, 0.28, 0x8a867c, x, 0, 0));
+      g.add(box(0.1, H - 0.4, 0.1, 0xd2452c, x, 0, -0.45), box(0.06, 0.06, 0.45, 0x3e2a1e, x, H - 0.45, -0.22));   // the back posts
       chochin(g, x * 0.85, H - 0.6, 0.18, color, 1.3);
     }
-    g.add(box(W + 0.3, 0.14, 0.2, 0x3e2a1e, 0, H - 0.14, 0), box(W + 0.1, 0.09, 0.12, 0x3e2a1e, 0, H - 0.5, 0));
+    g.add(box(W + 0.3, 0.14, 0.2, 0xd2452c, 0, H - 0.14, 0), box(W + 0.1, 0.09, 0.12, 0xd2452c, 0, H - 0.5, 0));
     jRoof(g, { y: H, z: -0.2, w: W + 0.6, d: 1.1, h: 0.36, lift: 0.1 });
     // the two doors, swung open against the inside of the wall
     for (const sd of [-1, 1]) { const d = box(0.06, H - 0.35, W / 2 - 0.1, 0x6b4a30, sd * (W / 2 - 0.05), 0.1, -W / 4 - 0.15); g.add(d); for (let r = 0; r < 3; r++) g.add(box(0.08, 0.04, W / 2 - 0.1, 0x2a2420, sd * (W / 2 - 0.05), 0.4 + r * 0.45, -W / 4 - 0.15)); }

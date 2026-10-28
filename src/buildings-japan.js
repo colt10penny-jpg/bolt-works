@@ -8,13 +8,13 @@
 import * as THREE from 'three';
 import { buildRocket } from './rockets.js';
 import { BUILDERS, box, cyl } from './models.js';
-import { J, mesh, at, rod, shade, roof, gable, onWall, hall, engawa, shoji, koshi, noren, plaque, lantern, sakura, maple, pine, bamboo, shrub, rocks, koiPond, swimKoi, torii, chochin } from './japan-kit.js';
+import { J, mesh, at, rod, shade, roof, gable, onWall, hall, redHall, redLattice, engawa, shoji, koshi, noren, plaque, lantern, sakura, maple, pine, bamboo, shrub, rocks, koiPond, swimKoi, torii, chochin } from './japan-kit.js';
 
 const { PLASTER, WOOD, WOOD_D, WOOD_L, VERM, VERM_D, STONE, STONE_D, MOSS, GOLD } = J;
 // Every building stands big in its lot, filling it out to its garden wall: the main
 // building (its 'core') is drawn at a modest size and scaled up by S. (The wings, gates and
 // garden pieces that come with upgrades fill the corners and the middle of each side.)
-const S = 1.4;
+const S = 1.5;
 function core(g, s = 1) { const c = new THREE.Group(); c.scale.setScalar(s); c.userData.core = true; g.add(c); return c; }
 const glowOpt = (e, k = 1.4) => ({ emissive: e, emissiveIntensity: k });
 // a gear facing +z (spin it about z)
@@ -33,8 +33,9 @@ const JAPAN = {
   satetsu(color) {
     const g = new THREE.Group(), c = core(g, S);
     const sx = -0.75, sz = -0.75;
-    const top = hall(c, { x: sx, z: sz, w: 2.0, d: 1.6, h: 1.0, wall: 0x9a7650, frame: WOOD_D, bay: 0.66 });
-    koshi(c, 'z', sx - 0.45, 0.42, sz + 0.8, 0.8, 0.65);
+    const top = hall(c, { x: sx, z: sz, w: 2.0, d: 1.6, h: 1.0, wall: 0xefe6d6, frame: VERM, bay: 0.66 });
+    redLattice(c, 'z', sx - 0.45, 0.42, sz + 0.8, 0.8, 0.65); redLattice(c, 'x', sz, 0.62, sx + 1.0, 1.2, 0.35);
+    engawa(c, { axis: 'x', a: sz, f: sx + 1.0, len: 1.7, depth: 0.3, y: 0.32, rail: VERM, posts: false });
     c.add(onWall('z', sx + 0.45, 0.37, sz + 0.8, 0.6, 0.85, 0.03, 0x1e1612)); noren(c, 'z', sx + 0.45, 1.2, sz + 0.82, 0.62, color);
     roof(c, { x: sx, y: top, z: sz, w: 2.7, d: 2.2, h: 1.15, kind: 'thatch' });
     plaque(c, 'z', sx - 0.45, 1.1, sz + 0.86, 0.22, 0.5, '砂鉄');
@@ -70,10 +71,14 @@ const JAPAN = {
     const g = new THREE.Group(), c = core(g, S);
     const hx = -0.1, hz = -0.3, w = 3.2, d = 2.8, H = 1.85;
     c.add(box(w + 0.2, 0.15, d + 0.2, STONE, hx, 0.15, hz));
-    for (let i = 0; i < 4; i++) for (const zz of [hz - d / 2 + 0.1, hz + d / 2 - 0.1]) c.add(box(0.14, H, 0.14, WOOD_D, hx - w / 2 + 0.1 + i * (w - 0.2) / 3, 0.3, zz));
-    for (const xx of [hx - w / 2 + 0.1, hx + w / 2 - 0.1]) c.add(box(0.14, H, 0.14, WOOD_D, xx, 0.3, hz));
-    c.add(box(w - 0.2, 0.9, 0.08, PLASTER, hx, 0.3, hz - d / 2 + 0.1), box(w, 0.12, 0.12, WOOD_D, hx, 0.3 + H - 0.12, hz - d / 2 + 0.1), box(w, 0.12, 0.12, WOOD_D, hx, 0.3 + H - 0.12, hz + d / 2 - 0.1));
-    const rt = roof(c, { x: hx, y: 0.3 + H, z: hz, w: w + 0.8, d: d + 0.7, h: 1.45, lift: 0.4 });
+    for (let i = 0; i < 4; i++) for (const zz of [hz - d / 2 + 0.1, hz + d / 2 - 0.1]) c.add(box(0.16, H, 0.16, VERM, hx - w / 2 + 0.1 + i * (w - 0.2) / 3, 0.3, zz));
+    for (const xx of [hx - w / 2 + 0.1, hx + w / 2 - 0.1]) c.add(box(0.16, H, 0.16, VERM, xx, 0.3, hz));
+    // a red tie beam and gold-tipped brackets all round under the eaves
+    for (const zz of [hz - d / 2 + 0.1, hz + d / 2 - 0.1]) for (let k = 0; k <= 8; k++) c.add(box(0.1, 0.1, 0.22, k % 2 ? GOLD : VERM, hx - w / 2 + 0.1 + k * (w - 0.2) / 8, 0.3 + H - 0.08, zz));
+    c.add(box(0.12, 0.12, d, VERM, hx + w / 2 - 0.1, 0.3 + H - 0.12, hz), box(0.12, 0.12, d, VERM, hx - w / 2 + 0.1, 0.3 + H - 0.12, hz));
+    c.add(box(w - 0.2, 0.9, 0.08, PLASTER, hx, 0.3, hz - d / 2 + 0.1), box(w, 0.12, 0.12, VERM, hx, 0.3 + H - 0.12, hz - d / 2 + 0.1), box(w, 0.12, 0.12, VERM, hx, 0.3 + H - 0.12, hz + d / 2 - 0.1), box(w, 0.08, 0.1, VERM, hx, 0.3 + H * 0.55, hz + d / 2 - 0.1));
+    redLattice(c, 'z', hx, 0.3 + 0.95, hz - d / 2 + 0.15, w - 0.4, 0.45);
+    const rt = roof(c, { x: hx, y: 0.3 + H, z: hz, w: w + 0.8, d: d + 0.7, h: 1.45, lift: 0.4, phoenix: true });
     roof(c, { x: hx, y: rt - 0.15, z: hz, w: 1.1, d: 0.6, h: 0.3, lift: 0.08 });     // the smoke vent on the ridge
     c.add(box(0.9, 0.18, 0.4, 0x2a1e18, hx, rt - 0.3, hz));
     // the furnace: a long clay box with a glowing top, and slag running out of the tap holes
@@ -107,8 +112,9 @@ const JAPAN = {
   kajiba(color) {
     const g = new THREE.Group(), c = core(g, S);
     const sx = -0.35, sz = -0.6, w = 2.7, d = 2.0;
-    const top = hall(c, { x: sx, z: sz, w, d, h: 1.35, wall: 0x5a4030, frame: 0x2e2018, bay: 0.68 });
-    roof(c, { x: sx, y: top, z: sz, w: w + 0.7, d: d + 0.65, h: 1.0, lift: 0.3 });
+    const top = redHall(c, { x: sx, z: sz, w, d, h: 1.55, wall: 0xf2ece0, bay: 0.68, rail: false, doors: false, skirt: true });
+    c.add(onWall('x', sz, 0.4, sx + w / 2, d, 0.45, 0.03, 0x4a3426));   // a dark boarded dado down the side
+    roof(c, { x: sx, y: top, z: sz, w: w + 0.7, d: d + 0.65, h: 1.05, lift: 0.3, phoenix: true });
     // the open front with the forge glowing inside
     c.add(onWall('z', sx - 0.35, 0.37, sz + d / 2, 1.3, 1.05, 0.03, 0x140e0a));
     const forge = box(0.55, 0.3, 0.3, 0xffa040, sx - 0.65, 0.4, sz + d / 2 - 0.2, glowOpt(0xff6a10, 1.8)); forge.material = forge.material.clone(); c.add(forge);
@@ -152,8 +158,9 @@ const JAPAN = {
     koshi(c, 'x', z - 0.3, 0.42, x + w / 2, 1.4, 0.8);
     roof(c, { x, y: t1, z: z + d / 2 + 0.1, w: w + 0.4, d: 0.75, h: 0.22, lift: 0.08, ridge: false });     // the pent roof over the street front
     // the upper floor, set back, plaster with slatted windows, under the main roof
-    const t2 = hall(c, { x, z: z - 0.25, w: w - 0.4, d: d - 0.6, h: 0.95, y0: t1, wall: PLASTER, frame: WOOD_D, bay: 0.7, baseH: 0.05 });
-    roof(c, { x, y: t2, z: z - 0.25, w: w + 0.3, d: d + 0.1, h: 0.95, lift: 0.25 });
+    const t2 = redHall(c, { x, z: z - 0.25, w: w - 0.4, d: d - 0.6, h: 1.05, y0: t1, wall: PLASTER, bay: 0.7, baseH: 0.05, rail: false, doors: false });
+    engawa(c, { axis: 'x', a: z - 0.25, f: x + (w - 0.4) / 2, len: d - 0.5, depth: 0.32, y: t1 + 0.1, rail: VERM, posts: false });
+    roof(c, { x, y: t2, z: z - 0.25, w: w + 0.3, d: d + 0.1, h: 0.95, lift: 0.25, phoenix: true });
     koshi(c, 'z', x + 0.85, t1 + 0.35, z - 0.25 + (d - 0.6) / 2, 0.6, 0.4);
     // the big clock and its gears
     const cy = t1 + 0.55, cz = z - 0.25 + (d - 0.6) / 2 + 0.03;
@@ -187,7 +194,7 @@ const JAPAN = {
   shinkansen(color) {
     const g = new THREE.Group(), c = core(g, S);
     const sx = 0.0, sz = -1.05, w = 3.5, d = 1.5;
-    const top = hall(c, { x: sx, z: sz, w, d, h: 1.3, wall: PLASTER, frame: 0x5a5f66, bay: 0.88 });
+    const top = redHall(c, { x: sx, z: sz, w, d, h: 1.5, wall: PLASTER, bay: 0.7, rail: false, doors: false, skirt: true });
     c.add(box(w + 0.02, 0.12, d + 0.02, color, sx, 0.9, sz));
     roof(c, { x: sx, y: top, z: sz, w: w + 0.6, d: d + 0.6, h: 0.75, lift: 0.22 });
     c.add(onWall('z', sx - 0.4, 0.37, sz + d / 2, 2.2, 0.95, 0.03, 0x24262c));
@@ -231,8 +238,8 @@ const JAPAN = {
   robotics(color) {
     const g = new THREE.Group(), c = core(g, S);
     const x = 0.35, z = -0.55, w = 2.9, d = 2.2;
-    const top = hall(c, { x, z, w, d, h: 1.55, wall: PLASTER, frame: 0x6a6e76, bay: 0.95 });
-    roof(c, { x, y: top, z, w: w + 0.6, d: d + 0.6, h: 0.9, lift: 0.25 });
+    const top = redHall(c, { x, z, w, d, h: 1.75, wall: PLASTER, bay: 0.72, rail: false, doors: false, skirt: true });
+    roof(c, { x, y: top, z, w: w + 0.6, d: d + 0.6, h: 0.95, lift: 0.28, phoenix: true });
     c.add(onWall('z', x + 0.1, 0.45, z + d / 2, 2.4, 1.05, 0.04, 0x9fd6ff, { transparent: true, opacity: 0.4, roughness: 0.05, metalness: 0.3 }));
     c.add(onWall('z', x + 0.1, 0.42, z + d / 2 - 0.5, 2.4, 1.1, 0.04, 0xe8ecf0));
     const arms = [];
@@ -302,12 +309,13 @@ const JAPAN = {
   waterwheel(color) {
     const g = new THREE.Group(), c = core(g, S);
     const mx = 0.55, mz = -0.35;
-    const top = hall(c, { x: mx, z: mz, w: 1.9, d: 1.5, h: 1.15, wall: 0xa07a52, frame: WOOD_D, bay: 0.62 });
-    shoji(c, 'z', mx + 0.3, 0.55, mz + 0.75, 0.8, 0.6); koshi(c, 'x', mz, 0.5, mx + 0.95, 0.9, 0.6);
+    const top = hall(c, { x: mx, z: mz, w: 1.9, d: 1.5, h: 1.15, wall: 0xf2ece0, frame: VERM, bay: 0.62 });
+    shoji(c, 'z', mx + 0.3, 0.55, mz + 0.75, 0.8, 0.6); redLattice(c, 'x', mz, 0.5, mx + 0.95, 0.9, 0.6);
+    engawa(c, { axis: 'x', a: mz, f: mx + 0.95, len: 1.6, depth: 0.32, y: 0.34, rail: VERM, posts: false });
     roof(c, { x: mx, y: top, z: mz, w: 2.6, d: 2.2, h: 1.2, kind: 'thatch' });
     plaque(c, 'z', mx - 0.5, 0.6, mz + 0.76, 0.22, 0.5, '水車');
     // the pond behind, the flume on its trestles and the great wheel
-    const fish = koiPond(c, -0.85, -1.55, 0.95, 0.55);
+    const fish = koiPond(c, -0.95, -1.4, 0.8, 0.45);
     const wx = -0.5, wz = -0.15, R = 1.0;
     const wheelOf = (r, n) => {
       const w = new THREE.Group();
@@ -346,15 +354,16 @@ const JAPAN = {
     const lights = [];
     for (let i = 0; i < 5; i++) {
       const w = 1.55 - i * 0.18, h = i === 0 ? 0.62 : 0.5;
-      c.add(box(w, h, w, PLASTER, 0, y, 0));
+      c.add(box(w, h, w, VERM, 0, y, 0), box(w + 0.01, h * 0.18, w + 0.01, PLASTER, 0, y + h * 0.62, 0));
       for (const [axis, f] of [['z', w / 2], ['x', w / 2], ['z', -w / 2], ['x', -w / 2]]) {
         for (const e of [-w / 2 + 0.05, -w / 6, w / 6, w / 2 - 0.05]) c.add(onWall(axis, e, y, f, 0.08, h, 0.04, VERM));
         c.add(onWall(axis, 0, y + h - 0.08, f, w, 0.08, 0.045, VERM));
-        if (f > 0) c.add(onWall(axis, 0, y + 0.08, f, w * 0.3, h * 0.6, 0.03, VERM_D));
+        if (f > 0) { redLattice(c, axis, 0, y + 0.08, f + 0.01, w * 0.3, h * 0.6); for (const e of [-w / 3, w / 3]) redLattice(c, axis, e, y + h * 0.45, f + 0.01, w * 0.18, h * 0.3); }
       }
       // the servers' glow between the storeys
       const band = box(w + 0.04, 0.05, w + 0.04, 0x7fe0ff, 0, y + h * 0.5, 0, { emissive: 0x3fb8ff, emissiveIntensity: 0.8 }); band.material = band.material.clone(); c.add(band); lights.push(band);
       if (i === 0) engawa(c, { axis: 'z', a: 0, f: w / 2, len: w + 0.3, depth: 0.25, y: y + 0.08, posts: false });
+      else for (const ax of ['z', 'x']) engawa(c, { axis: ax, a: 0, f: w / 2, len: w + 0.1, depth: 0.16, y: y + 0.04, rail: VERM, posts: false });
       const rw = w + 0.95 - i * 0.04;
       roof(c, { y: y + h, w: rw, d: rw, h: 0.38, lift: 0.26, ridge: false });
       for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) c.add(box(0.04, 0.14, 0.04, GOLD, dx * rw / 2 * 0.98, y + h + 0.05, dz * rw / 2 * 0.98, { metalness: 0.7, roughness: 0.3 }));

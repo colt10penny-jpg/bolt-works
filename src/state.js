@@ -767,18 +767,21 @@ export class Game {
     const pick = builtIds[Math.max(0, builtIds.length - 1 - Math.floor(Math.random() * Math.min(2, builtIds.length)))];
     const d = FACTORIES.find(f => f.id === pick);
     // How hard an order is depends only on how much money you've made in this world. From
-    // that we work out the income a town that has earned that much usually has (playtesting
-    // shows income grows roughly with the square root of what's been earned), and compare it
+    // that we work out the income a town that has earned that much usually has (a playtest
+    // bot that upgrades steadily shows income growing with about the 0.62 power of what's
+    // been earned, the same in every world once prices are allowed for), and compare it
     // with your town's real income. A town that's ahead of that finds orders easy; one that
     // has been holding back upgrades finds them hard. Waiting for an order to come along
     // before upgrading never helps: the order only gets easier once you've upgraded.
     // The order is sized in the factory's own goods: k x (expected / actual income) of
-    // what it makes in the time, so a normal town needs about 70% of the time.
+    // what it makes in the time, so a normal town needs about 90% of the time: it gets
+    // there if it keeps the factory running, with little to spare. (It used to be 70%,
+    // and a town well ahead could need as little as a quarter of the time: too easy.)
     const minutes = [5, 8, 10, 15][Math.floor(Math.random() * 4)];
     const rate = this.typeInfo(pick).made;
-    const expected = 3.2 * Math.sqrt(Math.max(0, this.run.runEarned) * priceOf(this.world));
+    const pr = priceOf(this.world), expected = 0.32 * Math.pow(Math.max(0, this.run.runEarned) / pr, 0.62) * pr;
     const actual = Math.max(1e-9, this.totalRate());
-    const hardness = 0.7 * Math.max(0.35, Math.min(1.6, expected / actual)) * (0.9 + Math.random() * 0.2);
+    const hardness = 0.9 * Math.max(0.7, Math.min(1.25, expected / actual)) * (0.92 + Math.random() * 0.14);
     const target = Math.max(5, Math.ceil(rate * minutes * 60 * hardness / 5) * 5);
     const base = Math.max(50, this.totalRate() * minutes * 60 * 1.5);   // one and a half times what the town makes in the time
     const reward = base;

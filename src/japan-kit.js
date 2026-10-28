@@ -82,6 +82,12 @@ const koshiTex = () => TEX.koshi ||= canvas(64, 64, (g, w, h) => {
   for (let x = 0; x < w; x += 8) { g.fillStyle = '#5e4230'; g.fillRect(x, 0, 5, h); g.fillStyle = '#7a5840'; g.fillRect(x, 0, 1, h); }
   g.fillStyle = '#4a3426'; g.fillRect(0, 0, w, 4); g.fillRect(0, h - 4, w, 4);
 });
+// red-lacquered lattice (for transom windows and doors): a fine vermilion grid over shadow
+const redLatTex = () => TEX.redlat ||= canvas(64, 64, (g, w, h) => {
+  g.fillStyle = '#2a1410'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#c8402a'; for (let x = 0; x < w; x += 8) g.fillRect(x, 0, 3, h); for (let y = 0; y < h; y += 8) g.fillRect(0, y, w, 3);
+  g.fillStyle = '#9a2e1e'; g.fillRect(0, 0, w, 4); g.fillRect(0, h - 4, w, 4); g.fillRect(0, 0, 4, h); g.fillRect(w - 4, 0, 4, h);
+});
 // raked gravel in straight lines
 export const gravelTex = () => TEX.gravel ||= canvas(128, 128, (g, w, h) => {
   g.fillStyle = '#dedad0'; g.fillRect(0, 0, w, h);
@@ -94,6 +100,7 @@ function texMat(key, make) { if (!MATS.has(key)) MATS.set(key, make()); return M
 const tileMat = color => texMat('tile' + color, () => new THREE.MeshStandardMaterial({ color, map: tileTex(), bumpMap: tileTex(), bumpScale: 2.2, roughness: 0.6, metalness: 0.12, side: THREE.DoubleSide }));
 const thatchMat = color => texMat('th' + color, () => new THREE.MeshStandardMaterial({ color, map: thatchTex(), bumpMap: thatchTex(), bumpScale: 3, roughness: 1, side: THREE.DoubleSide }));
 const shojiMat = () => texMat('shoji', () => { const m = new THREE.MeshStandardMaterial({ map: shojiTex(), emissive: 0xffc070, emissiveMap: shojiTex(), emissiveIntensity: 0, roughness: 0.9 }); m.userData.night = 0.9; GLOW.night.push(m); return m; });
+const redLatMat = () => texMat('redlat', () => { const m = new THREE.MeshStandardMaterial({ map: redLatTex(), emissive: 0xffa060, emissiveMap: redLatTex(), emissiveIntensity: 0, roughness: 0.6 }); m.userData.night = 0.35; GLOW.night.push(m); return m; });
 const koshiMat = () => texMat('koshi', () => new THREE.MeshStandardMaterial({ map: koshiTex(), roughness: 0.85 }));
 
 // ---------- roofs ----------
@@ -157,7 +164,7 @@ const plainGeo = g => { const n = g.index ? g.toNonIndexed() : g; for (const k o
 // end tile where each meets the eave, a row of round tile ends along the eaves, a ridge
 // with end tiles (onigawara), and a white-edged fascia under the eaves. A thatched roof
 // gets a thick, trimmed eave and a straw ridge pinned by crossed timbers.
-export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, under = WOOD, ridge = true, rot = 0 }) {
+export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, under = WOOD, ridge = true, rot = 0, phoenix = false }) {
   const th = kind === 'thatch', TS = 0.9;
   const thick = th ? Math.min(0.32, 0.12 + Math.min(w, d) * 0.06) : 0.11;
   const R = roofGeo(w / 2, d / 2, h, { lift: lift ?? (th ? 0.05 : Math.min(w, d) * 0.12), pow: th ? 1.15 : 1.7, thick, tile: th ? 1.4 : TS });
@@ -209,6 +216,19 @@ export function roof(g, { x = 0, y, z = 0, w, d, h, kind = 'tile', color, lift, 
     trim.forEach(t => t.dispose());
   }
   if (th && ridge) { const rr2 = Math.max(0, Math.max(w, d) / 2 - Math.min(w, d) / 2), along = w >= d; if (rr2 > 0.05) grp.add(box(along ? rr2 * 2 + 0.25 : 0.4, 0.2, along ? 0.4 : rr2 * 2 + 0.25, dark, 0, h - 0.06, 0)); }
+  if (phoenix && !th) {
+    // a pair of golden phoenixes on the ridge ends, wings up, tails streaming behind
+    const rr2 = Math.max(0.1, Math.max(w, d) / 2 - Math.min(w, d) / 2), along = w >= d, gm = { metalness: 0.85, roughness: 0.25, emissive: 0x6a4a10, emissiveIntensity: 0.25 };
+    for (const e of [-1, 1]) {
+      const b = new THREE.Group();
+      b.add(at(mesh(new THREE.ConeGeometry(0.07, 0.3, 6), GOLD, gm), 0, 0.15, 0));
+      const hd = mesh(new THREE.SphereGeometry(0.05, 8, 6), GOLD, gm); hd.position.set(0, 0.32, 0.04); b.add(hd);
+      for (const sd of [-1, 1]) { const wg = box(0.26, 0.03, 0.12, GOLD, sd * 0.13, 0.2, -0.02, gm); wg.rotation.z = sd * 0.7; b.add(wg); }
+      const tail = box(0.06, 0.03, 0.34, GOLD, 0, 0.12, -0.2, gm); tail.rotation.x = -0.6; b.add(tail);
+      b.position.set(along ? e * (rr2 + 0.05) : 0, h + 0.2, along ? 0 : e * (rr2 + 0.05)); b.rotation.y = along ? (e > 0 ? Math.PI / 2 : -Math.PI / 2) : (e > 0 ? 0 : Math.PI);
+      grp.add(b);
+    }
+  }
   grp.position.set(x, y, z); grp.rotation.y = rot;
   g.add(grp);
   return y + h;
@@ -238,6 +258,7 @@ function plane(axis, a, y, f, w, h, material) {
 }
 export const shoji = (g, axis, a, y, f, w, h) => { g.add(plane(axis, a, y, f, w, h, shojiMat())); g.add(onWall(axis, a, y - 0.04, f, w + 0.08, 0.05, 0.03, WOOD_D)); };
 export const koshi = (g, axis, a, y, f, w, h) => g.add(plane(axis, a, y, f, w, h, koshiMat()));
+export const redLattice = (g, axis, a, y, f, w, h) => g.add(plane(axis, a, y, f, w, h, redLatMat()));
 // a walled hall: plaster between dark posts and beams, on a stone base. The camera sees
 // the +z and +x faces, so those get the posts. Returns the wall top.
 export function hall(g, { x = 0, z = 0, w, d, h, y0 = 0.15, wall = PLASTER, frame = WOOD_D, base = STONE, bay = 0.9, baseH = 0.22 }) {
@@ -250,6 +271,32 @@ export function hall(g, { x = 0, z = 0, w, d, h, y0 = 0.15, wall = PLASTER, fram
     g.add(onWall(axis, c, y + h - 0.12, f, len, 0.1, 0.045, frame), onWall(axis, c, y + 0.04, f, len, 0.08, 0.045, frame));
   }
   return y + h;
+}
+// A temple hall in the style of the Phoenix Hall: vermilion posts and beams framing white
+// plaster, red lattice transoms in every bay, red lattice doors in the middle of the front,
+// a row of bracket blocks under the eaves, a raised veranda with a red railing along the
+// front (and the right side), and optionally a skirt roof part way up (mokoshi), so the
+// hall reads as two storeys. Returns the wall top.
+export function redHall(g, { x = 0, z = 0, w, d, h, y0 = 0.15, wall = PLASTER, base = STONE, bay = 0.7, baseH = 0.26, rail = true, side = true, skirt = false, doors = true }) {
+  const top = hall(g, { x, z, w, d, h, y0, wall, frame: VERM, base, bay, baseH });
+  const y = y0 + baseH;
+  for (const [axis, len, f, c] of [['z', w, z + d / 2, x], ['x', d, x + w / 2, z]]) {
+    const n = Math.max(1, Math.round(len / bay)), bw = len / n;
+    for (let i = 0; i < n; i++) {
+      const a = c - len / 2 + bw * (i + 0.5);
+      redLattice(g, axis, a, y + h * 0.66, f, bw - 0.14, h * 0.2);
+      g.add(onWall(axis, a, y + h * 0.62, f, bw - 0.1, 0.05, 0.05, VERM));
+    }
+    // bracket blocks under the eaves
+    for (let i = 0; i <= n * 2; i++) { const a = c - len / 2 + (len * i) / (n * 2); g.add(onWall(axis, a, y + h - 0.02, f, 0.09, 0.08, 0.14, i % 2 ? GOLD : VERM)); }
+  }
+  if (doors) { const dw = Math.min(0.8, w * 0.28); redLattice(g, 'z', x, y + 0.05, z + d / 2 + 0.01, dw, h * 0.5); g.add(onWall('z', x, y + 0.05 + h * 0.25, z + d / 2 + 0.02, 0.03, h * 0.5, 0.02, 0x7a2416)); }
+  if (rail) {
+    engawa(g, { axis: 'z', a: x, f: z + d / 2, len: w + 0.1, depth: 0.42, y: y0 + baseH * 0.8, rail: VERM, posts: false });
+    if (side) engawa(g, { axis: 'x', a: z, f: x + w / 2, len: d + 0.1, depth: 0.42, y: y0 + baseH * 0.8, rail: VERM, posts: false });
+  }
+  if (skirt) roof(g, { x, y: y + h * 0.5, z, w: w + 0.8, d: d + 0.8, h: 0.24, lift: 0.1, ridge: false });
+  return top;
 }
 // a veranda (engawa) along the +z side (or +x), with posts and a red railing
 export function engawa(g, { axis = 'z', a = 0, f, len, depth = 0.55, y = 0.32, rail = VERM, posts = true }) {
