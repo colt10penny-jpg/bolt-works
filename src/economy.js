@@ -172,7 +172,7 @@ export const PRICE_STEP = 0.15;   // no longer used for prices; kept for old imp
 // a world sends needs 1.9x more than that world's last one (each world counts its own): 1,500,
 // 2,850, 5,415... Upgrading the bay is how you keep up. It holds one finished rocket at a
 // time, so you can't stock up.
-export const ROCKET_BASE = 1500, ROCKET_GROWTH = 1.9;
+export const ROCKET_BASE = 1750, ROCKET_GROWTH = 2.2;
 export const rocketNeed = (sent, world) => ROCKET_BASE * (world?.rocketScale || 1) * Math.pow(ROCKET_GROWTH, Math.max(0, sent || 0));
 export const THEMES = ['colorado', 'moon', 'mars', 'desert', 'japan'];   // the order you reach them
 
@@ -192,7 +192,7 @@ export const WORLDS = [
 // fast, so its 2x is really the same as here), and buildings take a little longer to put up.
 // (Before this, a world only cost 15% more than the last, and with the trade bonus and
 // the Moon's fast rocket bay, playtesters got through the Moon faster than the first world.)
-const WORLD_PRICE = [1, 1.4, 2.0, 2.8, 3.9], WORLD_ROCKET = [1, 2.0, 1.6, 2.0, 2.4];
+const WORLD_PRICE = [1, 1.42, 2.04, 2.85, 3.98], WORLD_ROCKET = [1, 2.0, 1.6, 2.0, 2.4];
 WORLDS.forEach((w, i) => { w.price = WORLD_PRICE[i] ?? WORLD_PRICE[WORLD_PRICE.length - 1] * Math.pow(1.7, i - WORLD_PRICE.length + 1); w.rocketScale = WORLD_ROCKET[i] ?? 3.2; w.buildScale = 1 + 0.2 * i; });
 // a building's numbers in a given world: every cost scales by the world's price
 export function inWorld(def, world) {

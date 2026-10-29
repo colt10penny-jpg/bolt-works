@@ -653,7 +653,7 @@ function openLaunch() {
     </div>`).join('');
   const newWorld = unlocks ? `<div class="w-card new">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[next.id] || ''}</span>
-      <span class="w-info"><b>${next.name}</b><small>A new world! Start a town there with an Ore Mine and no money (prices ${next.price}×), and open a trade route with ${worldById(here).short}. ${next.perk}</small></span>
+      <span class="w-info"><b>${next.name}</b><small>A new world! Start a town there with an Ore Mine and no money, and open a trade route with ${worldById(here).short}. ${next.perk}</small></span>
       <button class="btn small red" data-act="send:${next.id}">Go</button>
     </div>` : '';
   openModal(`
@@ -723,7 +723,6 @@ async function doLaunch(to, levels = 1) {
       <div class="big-icon red">${ICON.rocket}</div>
       <h2>Welcome to ${nw.name}!</h2>
       <p>A fresh start: an Ore Mine and an empty wallet. ${nw.perk}</p>
-      <p class="small">Everything here costs <b>${nw.price}×</b> what it does in ${WORLDS[0].short}. Trade routes with your other worlds make up for it.</p>
       <p class="small">Your rocket carried ${good(from)} here, opening a trade route: ${routeLine(from, nw.id)}.</p>
       <button class="btn green" data-act="start">Start building</button>
       <p class="small">${game.townName(from)} and its money are saved in ${worldById(from).short}, and it keeps earning. Go back any time with the map button.</p>`,
@@ -755,7 +754,7 @@ function openMap() {
     const status = here ? '<span class="w-here">Here</span>' : `<button class="btn small green" data-act="travel" data-world="${w.id}">Travel</button>`;
     return `<div class="w-card ${here ? 'here' : ''} w-${w.id}">
       <span class="w-swatch" aria-hidden="true">${WORLD_ART[w.id] || ''}</span>
-      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${game.tradeMult(w.id) > 1 ? ` · trade +${Math.round((game.tradeMult(w.id) - 1) * 100)}%` : ''}${w.price > 1 ? ` · prices ${w.price}×` : ''}</small></span>
+      <span class="w-info"><b>${game.townName(w.id)}</b><small>${w.name} · $${fmt(game.cashIn(w.id))} in the bank${game.tradeMult(w.id) > 1 ? ` · trade +${Math.round((game.tradeMult(w.id) - 1) * 100)}%` : ''}</small></span>
       ${status}
     </div>`;
   }).join('');
