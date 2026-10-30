@@ -187,7 +187,28 @@ function textures() {
       d[i] = v * 255; d[i + 1] = v * 250; d[i + 2] = v * 238; d[i + 3] = 255;
     }
   });
-  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex, setts, gravel };
+  // a meadow seen from above: thousands of short blades in light and dark greens over a
+  // darker base, with a few clover leaves and bare specks (a white-ish map: the ground's
+  // own colours tint it)
+  const grass = (() => {
+    const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgb(185,192,178)'; g.fillRect(0, 0, N, N);
+    let sd = 7; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    // soft clumps, lighter and darker
+    for (let i = 0; i < 160; i++) { const x = r() * N, y = r() * N, rr = 8 + r() * 26, v = 180 + r() * 70; const gr = g.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, `rgba(${v},${v + 8},${v - 12},0.55)`); gr.addColorStop(1, `rgba(${v},${v + 8},${v - 12},0)`); g.fillStyle = gr; for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) { g.save(); g.translate(ox, oy); g.fillRect(x - rr, y - rr, 2 * rr, 2 * rr); g.restore(); } }
+    // the blades: short strokes leaning every way, wrapping round the edges so it tiles
+    g.lineCap = 'round';
+    for (let i = 0; i < 12000; i++) {
+      const x = r() * N, y = r() * N, len = 4 + r() * 8, a = -Math.PI / 2 + (r() - 0.5) * 1.6, v = 115 + r() * 140;
+      g.strokeStyle = `rgb(${v - 10},${v},${v - 25})`; g.lineWidth = 0.8 + r() * 1.1;
+      for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) { if (x + ox < -10 || x + ox > N + 10 || y + oy < -10 || y + oy > N + 10) continue; g.beginPath(); g.moveTo(x + ox, y + oy); g.lineTo(x + ox + Math.cos(a) * len, y + oy + Math.sin(a) * len); g.stroke(); }
+    }
+    for (let i = 0; i < 240; i++) { const x = r() * N, y = r() * N; g.fillStyle = r() < 0.7 ? 'rgba(235,240,225,0.7)' : 'rgba(120,110,90,0.5)'; g.beginPath(); g.arc(x, y, 0.8 + r() * 1.4, 0, 7); g.fill(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  })();
+  TEX = { asphalt, concrete, cloud, blob, ripples, rows, plates, grate, hazard, hex, setts, gravel, grass };
   SHARED.cloudTex.value = cloud;
   return TEX;
 }
@@ -547,8 +568,12 @@ const MARS_CRATERS = (() => {
 
 export function makeHeight(name) {
   return (x, z) => {
-    const flat = smooth(3.2, 9, roadDist(x, z)) * smooth(1, 9, townDist(x, z));
-    return rawHeight(name, x, z) * flat;
+    const rd = roadDist(x, z), td = townDist(x, z);
+    const flat = smooth(3.2, 9, rd) * smooth(1, 9, td);
+    // Sakura Valley: even the level ground round the town has a gentle roll to it, not a
+    // table top (kept off the roads and the lots)
+    const roll = name === 'japan' ? (fbm(x / 6, z / 6, 2, 141) - 0.5) * 0.55 * smooth(1.2, 5, td) * smooth(ROAD_W / 2 + 1, 6, rd) : 0;
+    return rawHeight(name, x, z) * flat + roll;
   };
 }
 
@@ -612,7 +637,7 @@ export function buildLand(name, T, blocks) {
         const near = smooth(26, 6, td);
         c.lerp(c2.setHex(0x5a8a3c), smooth(0.52, 0.66, fbm(x / 6, z / 6, 3, 91)) * 0.7 * near);
         c.lerp(c2.setHex(0xa8946a), smooth(0.7, 0.8, fbm(x / 4 + 9, z / 13, 2, 93)) * 0.55 * near);
-        c.lerp(c2.setHex(0xe6d24a), smooth(0.74, 0.82, fbm(x / 9 - 4, z / 9, 2, 95)) * 0.6 * near);
+        c.lerp(c2.setHex(0xa8b848), smooth(0.74, 0.82, fbm(x / 9 - 4, z / 9, 2, 95)) * 0.3 * near);
         c.lerp(c2.setHex(0xb88ac8), smooth(0.76, 0.84, fbm(x / 7 + 3, z / 7 - 8, 2, 97)) * 0.45 * near);
       }
     }
@@ -700,7 +725,10 @@ export function buildLand(name, T, blocks) {
   }
   tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
   tg.computeVertexNormals();
-  const terrain = new THREE.Mesh(tg, withClouds(std(0xffffff, { vertexColors: true, flatShading: true, roughness: name === 'moon' ? 0.95 : 0.9 })));
+  // (Sakura Valley's ground has grass drawn into it: a map that repeats every 5 m)
+  const grassMap = name === 'japan' ? (() => { const t = tx.grass.clone(); t.repeat.set(SIZE / 3.5, SIZE / 3.5); t.needsUpdate = true; return t; })() : null;
+  if (grassMap) { const col2 = tg.attributes.color.array; for (let i = 0; i < col2.length; i++) col2[i] = Math.min(1, col2[i] * 1.12); }   // (the map darkens a little; make up for it)
+  const terrain = new THREE.Mesh(tg, withClouds(std(0xffffff, { vertexColors: true, flatShading: !grassMap, map: grassMap, roughness: name === 'moon' ? 0.95 : 0.9 })));
   terrain.receiveShadow = true;
   ground.add(terrain);
   if (patchBox.length) {
@@ -736,10 +764,12 @@ export function buildLand(name, T, blocks) {
     // The banks of the rivers and Fuji get fine, smooth ground of their own (the land is
     // coarse, which made the river banks jagged and Fuji's snow blocky): a strip following
     // each river, and a disc over Fuji's upper slopes.
-    const soft = withClouds(std(0xffffff, { vertexColors: true, roughness: 0.92 }));
+    const gm = tx.grass.clone(); gm.needsUpdate = true;
+    const soft = withClouds(std(0xffffff, { vertexColors: true, roughness: 0.92, map: gm }));
     const finish = (geo) => {
-      const pp = geo.attributes.position, pc = new Float32Array(pp.count * 3);
-      for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), z = pp.getZ(i), h = H(x, z); pp.setY(i, h - 0.01); shade(x, z, h); pc[i * 3] = c.r; pc[i * 3 + 1] = c.g; pc[i * 3 + 2] = c.b; }
+      const pp = geo.attributes.position, pc = new Float32Array(pp.count * 3), uv = new Float32Array(pp.count * 2);
+      for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), z = pp.getZ(i), h = H(x, z); pp.setY(i, h - 0.01); shade(x, z, h); pc[i * 3] = Math.min(1, c.r * 1.12); pc[i * 3 + 1] = Math.min(1, c.g * 1.12); pc[i * 3 + 2] = Math.min(1, c.b * 1.12); uv[i * 2] = x / 3.5; uv[i * 2 + 1] = z / 3.5; }
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
       geo.setAttribute('color', new THREE.BufferAttribute(pc, 3)); geo.computeVertexNormals();
       let up = 0; for (let i = 0; i < pp.count; i += 7) up += geo.attributes.normal.getY(i);
       if (up < 0) { const ix = geo.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } geo.index.needsUpdate = true; geo.computeVertexNormals(); }
@@ -908,6 +938,14 @@ export function buildLand(name, T, blocks) {
     place(140, JK.bamboo, { where: (x, z) => wild(x, z) && fbm(x / 16, z / 16, 2, 51) > 0.56, maxH: 10, pad: 0.8 });
     place(280, JK.kasa, { where: wild, maxH: 18 });
     place(1300, (r, h) => S.tuft(r, h, [0x5f9e3c, 0x6fae44, 0x4f8c36, 0x86b84c]), { pad: 0.1, blob: 0, span: 180, maxH: 10, tiny: true });
+    // round the town the grass grows thick: tufts everywhere, longer grass along the road
+    // edges and the foot of the garden walls, clover and wildflowers, and clumps of
+    // feathery pampas grass (susuki)
+    const nearTown = (lo, hi) => (x, z) => { const t = townDist(x, z); return t > lo && t < hi; };
+    place(4200, (r, h) => S.tuft(r, h, [0x5f9e3c, 0x6fae44, 0x4f8c36, 0x86b84c, 0x7aa84a]), { pad: 0.05, blob: 0, span: 130, maxH: 6, where: nearTown(0.6, 34), tiny: true });
+    place(900, (r, h) => S.tuft(r, h, [0x6f9a3c, 0x5f8a34, 0x8aa84a]), { pad: 0.02, blob: 0, span: 130, maxH: 6, where: (x, z) => { const d = roadDist(x, z); return d < HW + SW + 0.9 && townDist(x, z) > 0.4; }, tiny: true });
+    place(550, S.flowers, { pad: 0.2, blob: 0, span: 120, maxH: 6, where: nearTown(1, 30), tiny: true });
+    place(160, JK.susuki, { pad: 0.4, blob: 0.3, span: 140, maxH: 8, where: nearTown(3, 40) });
     place(380, S.flowers, { pad: 0.6, blob: 0, maxH: 6, tiny: true });
     place(140, r => S.rock(r, 0, 0x8f8c84), { pad: 1.3, blob: 0.7 });
     // along the riverbanks: mossy boulders, reeds and irises, and weeping willows
@@ -1794,6 +1832,16 @@ function japanKit() {
       for (const e of [-W / 2 + 0.05, W / 2 - 0.05]) g.add(mesh(new THREE.BoxGeometry(0.07, 1.1, 0.07), m(0x3e2a1e), e, 0.6, -0.22));
       jRoof(g, { y: 1.12, z: 0, w: W + 0.4, d: 0.9, h: 0.25, lift: 0.04, trim: false });
       g.userData.r = W * 0.5; return g;
+    },
+    // a clump of pampas grass (susuki): tall arching blades and pale feathery plumes
+    susuki(r) {
+      const g = new THREE.Group(), n = 7 + Math.floor(r() * 6), bm = m(r() < 0.5 ? 0x7a9a4a : 0x8aa458, {}, 1), pm = m(r() < 0.5 ? 0xe8dcc0 : 0xd8c8a8, {}, 1);
+      for (let k = 0; k < n; k++) {
+        const a = r() * 6.3, lean = 0.15 + r() * 0.35, h = 0.9 + r() * 0.7;
+        const b = mesh(new THREE.ConeGeometry(0.03, h, 3, 1, true), bm, Math.cos(a) * lean * 0.5, h / 2, Math.sin(a) * lean * 0.5); b.rotation.set(Math.sin(a) * lean, 0, -Math.cos(a) * lean); g.add(b);
+        if (k % 2 === 0) { const p = mesh(new THREE.ConeGeometry(0.06, 0.35, 4, 1, true), pm, Math.cos(a) * lean * (h + 0.1), h + 0.05, Math.sin(a) * lean * (h + 0.1)); p.rotation.set(Math.sin(a) * lean * 1.3 + Math.PI, 0, -Math.cos(a) * lean * 1.3); g.add(p); }
+      }
+      g.userData.r = 0.5; return g;
     },
     // a clump of purple iris by the water
     iris(r) { const g = new THREE.Group(); for (let k = 0; k < 5; k++) { const lf = mesh(new THREE.ConeGeometry(0.04, 0.6, 3, 1, true), m(0x4f8f3a, {}, 1), (r() - 0.5) * 0.3, 0.3, (r() - 0.5) * 0.3); lf.rotation.z = (r() - 0.5) * 0.4; g.add(lf); if (k % 2 === 0) g.add(mesh(new THREE.IcosahedronGeometry(0.07, 0), m(r() < 0.7 ? 0x6a4fc0 : 0xf2f0ea), lf.position.x, 0.62, lf.position.z)); } return g; },
