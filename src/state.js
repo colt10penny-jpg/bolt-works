@@ -358,6 +358,14 @@ export class Game {
       this.invalidate();
     }
   }
+  // take over a save from elsewhere (iCloud): stored as this device's save, then loaded
+  // the usual way, so older saves are brought forward just like on start-up
+  async adopt(saved, quiet = false) {
+    await storage.save(GAME.saveKey, saved);
+    await this.load();
+    if (!quiet) this.emit('change');
+  }
+  get saveVersion() { return SAVE_VERSION; }
   async save() {
     this.s.lastSeen = Date.now();
     await storage.save(GAME.saveKey, this.s);

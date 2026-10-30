@@ -17,6 +17,7 @@ import { PACK_ART } from './shopArt.js';
 import { WORLD_ART } from './worldArt.js';
 import { ACHIEVEMENTS, checkAchievements } from './achievements.js';
 import { createTutorial } from './tutorial.js';
+import * as services from './services.js';
 
 if (import.meta.env.MODE === 'artifact') {
   const l = document.createElement('link');
@@ -834,6 +835,7 @@ function openMenu() {
       <button class="menu-row" data-act="shop"><span class="m-ic gold">$</span><span class="m-t"><b>Shop</b><small>Get more cash</small></span>${ICON.chev}</button>
       <button class="menu-row" data-act="ach"><span class="m-ic gold">${ICON.trophy}</span><span class="m-t"><b>Achievements</b><small>${n} of ${ACHIEVEMENTS.length} earned</small></span>${fresh ? '<span class="m-new">New</span>' : ''}${ICON.chev}</button>
       ${game.unlockedWorlds().length > 1 ? `<button class="menu-row" data-act="worlds"><span class="m-ic blue">${ICON.map}</span><span class="m-t"><b>Your worlds</b><small>You're in ${game.world.short}</small></span>${ICON.chev}</button>` : ''}
+      ${services.gameCenter() ? `<button class="menu-row" data-act="boards"><span class="m-ic blue">${ICON.trophy}</span><span class="m-t"><b>Leaderboards</b><small>Game Center</small></span>${ICON.chev}</button>` : ''}
       <button class="menu-row" data-act="settings"><span class="m-ic">${ICON.gear}</span><span class="m-t"><b>Settings</b><small>Sound, stats, start over</small></span>${ICON.chev}</button>
     </div>
     <button class="btn plain" data-act="dismiss">Close</button>`, act => {
@@ -841,6 +843,7 @@ function openMenu() {
     if (act === 'ach') openAchievements();
     if (act === 'worlds') openMap();
     if (act === 'settings') openSettings();
+    if (act === 'boards') services.showGameCenter('leaderboards');
   });
 }
 // ---------- shop ----------
@@ -895,7 +898,8 @@ function openAchievements() {
     <h2>Achievements</h2>
     <p class="small">${achCount()} of ${ACHIEVEMENTS.length} earned</p>
     <div class="ach-list">${list}</div>
-    <button class="btn plain" data-act="back">Back</button>`, act => { if (act === 'back') openMenu(); });
+    ${services.gameCenter() ? '<button class="btn plain toggle" data-act="gc">See them in Game Center</button>' : ''}
+    <button class="btn plain" data-act="back">Back</button>`, act => { if (act === 'back') openMenu(); if (act === 'gc') services.showGameCenter('achievements'); });
 }
 function openSettings() {
   openModal(`
@@ -905,6 +909,7 @@ function openSettings() {
     <button class="btn plain toggle" data-act="gfx" aria-pressed="${world.look.quality === 'high'}">Graphics: <b>${(game.s.settings.graphics || 'auto') === 'auto' ? `Automatic (${world.look.quality === 'high' ? 'high' : 'battery saver'})` : world.look.quality === 'high' ? 'High' : 'Battery saver'}</b></button>
     <button class="btn plain toggle" data-act="style">Look: <b>${{ plain: 'Standard', mini: 'Miniature', ink: 'Illustrated' }[world.look.style || 'plain']}</b></button>
     <button class="btn plain toggle" data-act="daynight" aria-pressed="${game.s.settings.daynight !== false}">Day and night: <b>${game.s.settings.daynight !== false ? 'On' : 'Off'}</b></button>
+    ${services.available ? `<p class="small">Your game is saved to iCloud, so it follows you to your other devices.${services.gameCenter() ? ` Signed in to Game Center as <b>${services.gameCenter().name}</b>.` : ''}</p>` : ''}
     <p>Rockets launched: <b>${game.s.launches}</b> · Trade bonus here: <b>+${Math.round((game.tradeMult() - 1) * 100)}%</b><br>Orders filled: <b>${game.s.contractsDone}</b> · Total earned: <b>$${fmt(game.s.totalEarned)}</b></p>
     <p class="small">${ads.isSimulated ? 'Browser version: ads are simulated.' : 'Ads by Google AdMob.'} The game sends anonymous play stats (no names or contact info) so we can improve it. Your player ID: <b class="pid">${String(game.s.playerId).slice(0, 13)}</b></p>
     <button class="btn plain toggle" data-act="privacy">Privacy policy</button>
@@ -942,7 +947,7 @@ function openSettings() {
       openModal(`<h2>Start over?</h2><p>This wipes every town, your rockets, trade routes and achievements. It can’t be undone.</p>
         <button class="btn danger" data-act="reset-yes">Yes, start over</button>
         <button class="btn plain" data-act="dismiss">Keep my town</button>`, async a => {
-        if (a === 'reset-yes') { world.select(null); await game.reset(); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); syncLander(); seenAch = 0; track('reset'); showTown(); tutorial.start(); }
+        if (a === 'reset-yes') { world.select(null); await game.reset(); services.cloudSave(game.s, true); world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); syncLander(); seenAch = 0; track('reset'); showTown(); tutorial.start(); }
       });
     }
   });
@@ -966,6 +971,7 @@ function achievementTick(silent = false) {
   if (silent) { seenAch = achCount(); return; }
   if (!fresh.length) return;
   for (const a of fresh) track('achievement', { id: a.id });
+  services.reportAchievements(fresh.map(a => a.id));
   sfx.milestone();
   toast(fresh.length > 1 ? `${fresh.length} achievements earned!` : `Achievement: ${fresh[0].name}`);
   $('menu-dot').hidden = false;
@@ -1135,7 +1141,38 @@ game.on('roads', () => world.roadsChanged());
 
 // ---------- save ----------
 let saving = false;
-async function save() { if (saving) return; saving = true; await game.save(); saving = false; }
+async function save() { if (saving) return; saving = true; await game.save(); saving = false; services.cloudSave(game.s); services.submitScores(game.s); }
+// ---------- iCloud ----------
+// A copy of the save lives in the player's iCloud (services.js). If iCloud has a save that
+// is further along than this device's (from another phone or an iPad, or from before the
+// game was deleted and put back), the game picks it up: straight away if this device has
+// nothing yet, otherwise it asks first.
+const cloudUsable = c => c && c.v === game.saveVersion && c.worlds && services.progressOf(c) > services.progressOf(game.s) + 1;
+async function adoptCloud(c) {
+  world.select(null);
+  await game.adopt(c);
+  world.clearDeliveries(); world.themeName = null; world.setTheme(game.theme()); syncBuilt(); syncLander(); seenAch = 0; achievementTick(true);
+  showTown(); save(); track('icloud_restore', {});
+  toast('Your towns are back from iCloud');
+}
+let askingCloud = false;
+function offerCloud(c) {
+  if (!cloudUsable(c) || askingCloud) return;
+  askingCloud = true;
+  const towns = Object.keys(c.worlds).map(w => c.worlds[w].name || worldById(w).short).join(', ');
+  openModal(`
+    <div class="big-icon">${ICON.globe}</div>
+    <h2>Progress in iCloud</h2>
+    <p>There's a game in your iCloud that's further along than this one: <b>${towns}</b>, $${fmt(c.totalEarned || 0)} earned and ${c.launches || 0} rocket${c.launches === 1 ? '' : 's'} launched.</p>
+    <button class="btn green" data-act="cloud-use">Continue from iCloud</button>
+    <button class="btn plain" data-act="cloud-keep">Keep this device's game</button>
+    <p class="small">The game you don't pick is replaced.</p>`, async act => {
+    askingCloud = false;
+    if (act === 'cloud-use') await adoptCloud(c);
+    if (act === 'cloud-keep') { services.cloudSave(game.s, true); track('icloud_keep_local', {}); }
+  }, () => { askingCloud = false; });
+}
+services.onCloudChange(async () => { if (!document.hidden && !current) offerCloud(await services.cloudLoad()); });
 setInterval(save, 5000);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { save(); flush(); }
@@ -1179,7 +1216,7 @@ document.addEventListener('visibilitychange', () => {
 }
 if (Capacitor.isNativePlatform()) {
   import('@capacitor/app').then(({ App }) => {
-    App.addListener('appStateChange', ({ isActive }) => { if (!isActive) save(); else if (world.contextLost || world.renderer.getContext().isContextLost?.()) world.renderer.domElement.dispatchEvent(new Event('gfxcheck')); });
+    App.addListener('appStateChange', async ({ isActive }) => { if (!isActive) { await save(); services.cloudSave(game.s, true); return; } if (!current) services.cloudLoad().then(offerCloud); if (world.contextLost || world.renderer.getContext().isContextLost?.()) world.renderer.domElement.dispatchEvent(new Event('gfxcheck')); });
     App.addListener('backButton', () => {
       if (current) closeModal(true);
       else if (world.selected) world.select(null);
@@ -1284,6 +1321,13 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
 (async function start() {
   step('loading save');
   await withTimeout(game.load(), 4000, 'loading the save');
+  // a new phone (or the game reinstalled): pick the towns up from iCloud
+  if (services.available) {
+    step('checking iCloud');
+    const c = await withTimeout(services.cloudLoad(), 3000, 'checking iCloud');
+    if (cloudUsable(c) && game.s.totalEarned === 0) { await game.adopt(c, true); setTimeout(() => toast('Welcome back! Your towns are back from iCloud'), 1500); }
+    else if (cloudUsable(c)) setTimeout(() => offerCloud(c), 2500);
+  }
   initAnalytics(game.s.playerId);
   sfx.setEnabled(game.s.settings.sound);
   step('building town');
@@ -1317,6 +1361,8 @@ const step = s => { try { console.log('[boot] ' + s); } catch {} };
   step('starting loop');
   ads.init();
   requestAnimationFrame(loop);
+  // Game Center: usually signs in quietly; then post scores and any achievements already earned
+  services.signIn().then(p => { if (!p) return; services.submitScores(game.s); services.reportAchievements(Object.keys(game.s.achievements || {})); });
 })().catch(e => window.__bootError?.('Start failed: ' + (e.stack || e.message || e)));
 
 function withTimeout(p, ms, what) {

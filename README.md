@@ -30,3 +30,27 @@ npm run dev        # play in a browser
 npm run build      # build for the phone apps
 npx cap sync       # copy the build into android/ and ios/
 ```
+
+## iCloud saves and Game Center (iPhone/iPad)
+
+The app's own plugin `ios/App/App/GameServicesPlugin.swift` (registered in
+`GameViewController.swift`) keeps a copy of the save in iCloud key-value storage and talks to
+Game Center; `src/services.js` is the game's side of it. On the web and Android it does nothing.
+
+One-time setup before building:
+
+1. **Apple Developer > Identifiers > com.boltworks.idlefactory**: turn on **iCloud** (it's the
+   key-value storage; no containers needed) and **Game Center**. Then regenerate/refresh the
+   provisioning profile (Xcode does this itself with automatic signing).
+2. **Xcode > App target > Signing & Capabilities**: the entitlements file `App/App.entitlements`
+   is already set; check that **iCloud** (Key-value storage ticked) and **Game Center** both show.
+3. **App Store Connect > the app > Services > Game Center**: turn Game Center on, then add:
+   - Leaderboards (classic, high score, integer, sort high to low):
+     `ee.empire_score` "Empire Score", `ee.rockets` "Rockets Launched", `ee.orders` "Orders Filled"
+   - Achievements (100 points spread as you like), id = `ee.` + the game's id:
+     ee.first_cash, ee.chain3, ee.chain7, ee.hq, ee.manager1, ee.manager7, ee.land1, ee.land5,
+     ee.power, ee.compute, ee.lv10, ee.lv20, ee.lv250, ee.order1, ee.order10, ee.million,
+     ee.billion, ee.trillion, ee.launch1, ee.launch5, ee.moon, ee.mars, ee.desert, ee.japan, ee.streak7
+     (names and descriptions as in `src/achievements.js`; each needs an image, 512x512 or 1024x1024).
+   - Add Game Center to the app version you submit.
+4. Test with a sandbox Game Center account on a real device (Settings > Game Center).
