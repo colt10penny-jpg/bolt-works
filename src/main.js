@@ -2,7 +2,7 @@ import './style.css';
 import { Capacitor } from '@capacitor/core';
 import {
   FACTORIES, ALL, BUILDINGS, SUPPORT, isPlot, isSupport, speedFromCompute, capacity, FACTS, WORLDS, worldById, MILESTONES, fmt, fmtCost, fmtRate, fmtTime, upgradeCost, maxAffordable, lookTier,
-  nextMilestone, milestoneCount, LEVEL_CAP, TRADE_STEP, TRADE_MAX, rocketNeed, ROCKET_GROWTH, themeFor, THEME_NAMES, vaultHours,
+  nextMilestone, milestoneCount, LEVEL_CAP, capOf, TRADE_STEP, TRADE_MAX, rocketNeed, ROCKET_GROWTH, themeFor, THEME_NAMES, vaultHours,
 } from './economy.js';
 import { Game } from './state.js';
 import { World } from './world.js';
@@ -133,7 +133,7 @@ const sheet = $('sheet');
 let sheetKey = '';
 // how many levels the buy button buys, never past the top level
 // (always one level at a time: each upgrade is its own step)
-const buyCount = (d, lv) => Math.max(0, Math.min(LEVEL_CAP - lv, 1));
+const buyCount = (d, lv) => Math.max(0, Math.min(capOf(d) - lv, 1));
 const go = (id, label) => lotOf(id) ? `<button class="link" data-goto="${lotOf(id)}">${label}</button>` : '';
 const one = u => /ss$/.test(u) ? u : /ies$/.test(u) ? u.replace(/ies$/, 'y') : u.replace(/s$/, '');
 
@@ -203,12 +203,12 @@ function buildingSheet(d, id) {
 }
 function buyRow(d, lv) {
   if (game.jobOf(d.id)) return jobRow(d.id);
-  if (lv >= LEVEL_CAP) return `<div class="sh-maxed">Max level reached: Lv ${LEVEL_CAP.toLocaleString('en-US')}</div>`;
+  if (lv >= capOf(d)) return `<div class="sh-maxed">${d.id === 'hq' ? `Fully upgraded: Lv ${capOf(d)} holds the full 8 hours` : `Max level reached: Lv ${capOf(d).toLocaleString('en-US')}`}</div>`;
   const n = buyCount(d, lv);
   const cost = upgradeCost(d, lv, n);
   const afford = game.canAfford(cost);
   // Max: as many levels as the cash on hand pays for, in one go
-  const most = afford ? maxAffordable(d, lv, game.cash) : 0;
+  const most = afford ? maxAffordable(d, lv, game.cash, capOf(d) - lv) : 0;
   const max = most >= 2 ? `<button class="btn gold sh-max" data-act="upgrade-max" aria-label="Upgrade ${most} levels to Lv ${lv + most} for $${fmtCost(upgradeCost(d, lv, most))}">Max · Lv ${lv + most}<small>$${fmtCost(upgradeCost(d, lv, most))}</small></button>` : '';
   return `<div class="sh-buy">
       ${max}<button class="btn green" data-act="upgrade" ${afford ? '' : 'disabled'}>Upgrade to Lv ${lv + n} · $${fmtCost(cost)}</button>
@@ -394,7 +394,7 @@ sheet.addEventListener('click', async e => {
     if (game.buyLevels(id, buyCount(d, lv))) world.bounce(lot);
   }
   if (act === 'upgrade-max' && id) {
-    const d = def(id), lv = game.level(id), n = maxAffordable(d, lv, game.cash);
+    const d = def(id), lv = game.level(id), n = maxAffordable(d, lv, game.cash, capOf(d) - lv);
     if (n > 0 && game.buyLevels(id, n)) { world.bounce(lot); track('upgrade_max', { levels: n }); }
   }
   if (act === 'develop' && game.develop(lot)) { sfx.build(); toast('Land cleared and roads fixed! Now build something on it.'); track('land_developed', { plots: Object.keys(game.run.land).length }); }

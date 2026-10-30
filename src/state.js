@@ -2,7 +2,7 @@
 // launches, and the per-frame tick.
 import {
   FACTORIES, ALL, BUILDINGS, flow, upgradeCost, TRADE_STEP, TRADE_MAX, rocketNeed, WORLDS, worldById, BIN_SECONDS, hireCost, vaultHours, inWorld, priceOf,
-  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, buildSecs,
+  isPlot, landCost, roadCost, EXTRA_BUILD, EXTRA_UPGRADE, capacity, totalCap, supplyEff, LEVEL_CAP, capOf, buildSecs,
 } from './economy.js';
 import { blocksApart, plotsOf, plotIds, START_PLOT, PLOT_FOR, EXITS } from './layout.js';
 import { townSegments, blockSides, segKey } from './traffic.js';
@@ -665,7 +665,7 @@ export class Game {
   buyLevels(id, n) {
     const def = this.slotDef(id);
     const lv = this.level(id);
-    if (!def || n <= 0 || lv <= 0 || lv + n > LEVEL_CAP || this.jobOf(id)) return false;
+    if (!def || n <= 0 || lv <= 0 || lv + n > capOf(def) || this.jobOf(id)) return false;
     const cost = upgradeCost(def, lv, n);
     if (!this.canAfford(cost)) return false;
     this.run.cash -= cost;

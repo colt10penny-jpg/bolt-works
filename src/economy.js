@@ -73,6 +73,10 @@ export const nextMilestone = level => MILESTONES.find(m => level < m) ?? null;
 const LOOK_AT = [0, 2, 4, 6, 7, 8, 9];
 export const lookTier = level => level > 0 ? LOOK_AT[milestoneCount(level)] : 0;
 export const LEVEL_CAP = 10000;   // only to keep numbers finite
+// Headquarters stops at the level where its vault holds the full 8 hours (see vaultHours):
+// past that, upgrading it would do nothing
+export const HQ_CAP = 226;
+export const capOf = d => d?.id === 'hq' ? HQ_CAP : LEVEL_CAP;
 
 // Units per second a building makes at a level (before the compute boost).
 export function capacity(def, level) {
@@ -213,7 +217,9 @@ export const BIN_SECONDS = 180;   // a factory's storage holds 3 minutes of what
 // up to 54 minutes for the Rocket Bay. Each later world takes 20% longer (buildScale).
 // (An ad finishes any building straight away.)
 export const BUILD_SECS = { mine: 8, furnace: 30, hq: 100, press: 150, gear: 270, engine: 540, power: 720, datacenter: 1080, turbine: 1620, rocket: 3240 };
-export const buildSecs = (type, world) => Math.round((BUILD_SECS[type] || 60) * (world?.buildScale || 1));
+// the first world's first few buildings go up quicker, so a new player gets going sooner
+const FIRST_WORLD_SECS = { furnace: 12, hq: 50, press: 75, gear: 180 };
+export const buildSecs = (type, world) => (!world || world.id === 'colorado') && FIRST_WORLD_SECS[type] ? FIRST_WORLD_SECS[type] : Math.round((BUILD_SECS[type] || 60) * (world?.buildScale || 1));
 // A manager collects automatically for one building.
 export const managerCost = def => def.unlock ? def.unlock * 10 : 150;
 export const THEME_NAMES = { colorado: 'Timberline Valley', desert: 'Tumbleweed Gulch', moon: 'Tranquility Base', mars: 'Jezero Colony', japan: 'Sakura Valley' };

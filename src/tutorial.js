@@ -68,13 +68,15 @@ export function createTutorial(ctx) {
     },
     {
       id: 'upgrade',
-      say: () => world.selected === mineLot() ? `Now <b>upgrade</b> it to make more money.` : `Tap the <b>mine</b> and upgrade it to make more money.`,
+      say: () => world.selected === mineLot()
+        ? `Tap the green <b>Upgrade</b> button! Every level makes the mine dig faster and <b>earn more money</b>.`
+        : `Buildings can be <b>upgraded</b> to make more money. Tap your <b>mine</b> to upgrade it.`,
       point: () => world.selected === mineLot() ? document.querySelector('#sheet [data-act=upgrade]') : { lot: mineLot() },
       done: () => game.level('mine') >= 2,
     },
     {
       id: 'expand', next: 'Got it',
-      say: () => `Nice! Save up, then tap a <b>+</b> to clear land and build <b>more factories</b>. Each new one makes something worth more.`,
+      say: () => `Nice, it's faster already! <b>Keep upgrading</b> your buildings whenever you can, and save up to tap a <b>+</b> and build <b>more factories</b>. Each new one makes something worth more.`,
       enter: () => world.select(null),
       point: () => ({ lot: 'q1' }),
     },
@@ -93,7 +95,7 @@ export function createTutorial(ctx) {
   }
   function hide() {
     if (!guide.hidden) { guide.hidden = true; lastHtml = ''; }
-    finger.hidden = true;
+    finger.hidden = true; glowing?.classList.remove('tut-glow'); glowing = null;
   }
   guide.addEventListener('click', e => {
     if (!e.target.closest('.guide-next')) return;
@@ -114,11 +116,14 @@ export function createTutorial(ctx) {
 
   // the bouncing arrow: above an element, or above a building in the world; it points up
   // from below instead when the bubble is in the way
+  let glowing = null;
   function pointAt(target) {
     let x, top, bottom;
-    if (!target) { finger.hidden = true; return; }
+    if (!target) { finger.hidden = true; glowing?.classList.remove('tut-glow'); glowing = null; return; }
     if (target.lot) { const p = world.screenOf(target.lot); if (!p) { finger.hidden = true; return; } x = p.x; top = p.y - 6; bottom = p.y + 26; }
     else { if (!visible(target)) { finger.hidden = true; return; } const r = target.getBoundingClientRect(); x = r.left + r.width / 2; top = r.top - 4; bottom = r.bottom + 4; }
+    // the button it points at glows and pulses, so it can't be missed
+    if (glowing !== (target.lot ? null : target)) { glowing?.classList.remove('tut-glow'); glowing = target.lot ? null : target; glowing?.classList.add('tut-glow'); }
     const box = guide.hidden ? null : bubble.getBoundingClientRect();
     const up = box && top - 48 < box.bottom && top > box.top - 10 && x > box.left - 20 && x < box.right + 20;
     finger.hidden = false;
