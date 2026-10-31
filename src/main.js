@@ -52,7 +52,7 @@ world.lotsOf = type => game.slotsOf(type).filter(s => game.jobOf(s)?.kind !== 'b
 world.workOf = lot => { const s = slotAt(lot); return s && game.jobOf(s) ? game.jobProgress(s) : null; };
 world.roadInfo = () => ({ good: new Set(Object.keys(game.run.roads)), exits: game.exitsOf(game.s.current), state: k => game.roadState(k) });
 const typeOf = id => game.typeOf(id);
-if (location.search.includes('debug')) Promise.all([import('./traffic.js'), import('three'), import('./models.js'), import('./layout.js')]).then(([m, T, M, Lay]) => Object.assign(window, { __game: game, __world: world, __net: m.NET, __tm: m, __THREE: T, __BUILDERS: M.BUILDERS, __layout: Lay }));
+if (location.search.includes('debug')) Promise.all([import('./traffic.js'), import('three'), import('./models.js'), import('./layout.js'), import('./world.js')]).then(([m, T, M, Lay, W]) => Object.assign(window, { __bake: W.bakeModel, __game: game, __world: world, __net: m.NET, __tm: m, __THREE: T, __BUILDERS: M.BUILDERS, __layout: Lay }));
 const idx = id => FACTORIES.findIndex(f => f.id === id);
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 const tint = d => hex([0xe8e4da, 0xd8d2c4, 0xcfd3da, 0xd8d4c8].includes(d.color) ? 0x8a8f99 : d.color);

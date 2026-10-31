@@ -89,10 +89,81 @@ function paintMat(mt) {
   }
   return p;
 }
+// Boxes whose faces lie in the same plane (a window frame flush with its wall, a post
+// flush with a beam) flicker in front of and behind each other as the camera moves.
+// Where two different finishes share a plane and overlap, the smaller face (the detail)
+// is pushed forward a hair, so it always wins. Too small to see; repeated a few times
+// so stacked layers (wall, glass, frame) each end up in front of the one below.
+const AXES = ['x', 'y', 'z'];
+function unflush(geos) {
+  const EPS = 0.0025, PUSH = 0.007, Q = 1 / 0.004;
+  const boxes = [];
+  for (const [o, geo, mx] of geos) {
+    const t = o.geometry.type;
+    if (t !== 'BoxGeometry' && t !== 'RoundedBoxGeometry') continue;
+    const e = mx.elements;   // only boxes that stay square to the axes
+    let ok = true;
+    for (let c = 0; c < 3 && ok; c++) { let nz = 0; for (let r = 0; r < 3; r++) if (Math.abs(e[c * 4 + r]) > 1e-5) nz++; ok = nz === 1; }
+    if (!ok) continue;
+    const m = o.material, c = m.color ? m.color.getHex() : 0;
+    geo.computeBoundingBox();
+    boxes.push({ geo, bb: geo.boundingBox, key: c + '|' + (m.map ? m.map.id : 0) + '|' + m.id * +(!paintable(m)) });
+  }
+  if (boxes.length < 2) return;
+  for (let pass = 0; pass < 8; pass++) {
+    const planes = new Map();
+    boxes.forEach((b, i) => {
+      for (let a = 0; a < 3; a++) for (const side of [0, 1]) {
+        const v = side ? b.bb.max[AXES[a]] : b.bb.min[AXES[a]];
+        const k = a * 2 + side + ':' + Math.round(v * Q);
+        if (!planes.has(k)) planes.set(k, []);
+        planes.get(k).push(i);
+      }
+    });
+    const push = new Map();
+    for (const [k, list] of planes) {
+      const [as, q] = k.split(':'), a = +as >> 1, side = +as & 1;
+      const near = [...list, ...(planes.get(as + ':' + (+q + 1)) || [])];
+      if (near.length < 2) continue;
+      const ax = AXES[a], u = AXES[(a + 1) % 3], w = AXES[(a + 2) % 3];
+      for (let i = 0; i < list.length; i++) for (let j = 0; j < near.length; j++) {
+        const A = boxes[list[i]], B = boxes[near[j]];
+        if (A === B || A.key === B.key) continue;
+        const va = side ? A.bb.max[ax] : A.bb.min[ax], vb = side ? B.bb.max[ax] : B.bb.min[ax];
+        if (Math.abs(va - vb) > EPS) continue;
+        const ou = Math.min(A.bb.max[u], B.bb.max[u]) - Math.max(A.bb.min[u], B.bb.min[u]);
+        const ow = Math.min(A.bb.max[w], B.bb.max[w]) - Math.max(A.bb.min[w], B.bb.min[w]);
+        if (ou <= 0.005 || ow <= 0.005) continue;
+        const area = b => (b.bb.max[u] - b.bb.min[u]) * (b.bb.max[w] - b.bb.min[w]);
+        const small = area(A) <= area(B) ? A : B;
+        push.set(small.geo, [...(push.get(small.geo) || []), [a, side]]);
+      }
+    }
+    if (globalThis.__unflush) globalThis.__unflush.push(push.size);
+    if (!push.size) break;
+    for (const [geo, list] of push) {
+      const seen = new Set();
+      const bb = geo.boundingBox, pos = geo.attributes.position;
+      for (const [a, side] of list) {
+        if (seen.has(a * 2 + side)) continue; seen.add(a * 2 + side);
+        const lo = bb.min.getComponent(a), hi = bb.max.getComponent(a), size = hi - lo;
+        if (size <= 0) continue;
+        // stretch the box away from its opposite face, so rounded edges keep their shape
+        for (let i = 0; i < pos.count; i++) {
+          const v = pos.getComponent(i, a);
+          pos.setComponent(i, a, side ? lo + (v - lo) * (size + PUSH) / size : hi - (hi - v) * (size + PUSH) / size);
+        }
+      }
+      pos.needsUpdate = true;
+      geo.computeBoundingBox();
+    }
+    for (const b of boxes) b.bb = b.geo.boundingBox;
+  }
+}
 // Merge every part of a building that never moves into one mesh per material
 // (far fewer draw calls). Parts the animation moves are found by running it a few
 // times and seeing what changed.
-function bakeModel(m) {
+export function bakeModel(m) {
   const g = m.group;
   const snap = new Map();
   g.traverse(o => snap.set(o, [o.position.clone(), o.quaternion.clone(), o.scale.clone(), o.visible]));
@@ -107,12 +178,18 @@ function bakeModel(m) {
   const byMat = new Map();
   const statics = [];
   g.traverse(o => { if (o.isMesh && !dynamic(o)) statics.push(o); });
+  const geos = [];
   for (const o of statics) {
     const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
     for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
     geo.morphAttributes = {};
     if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
-    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    const mx = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+    geo.applyMatrix4(mx);
+    geos.push([o, geo, mx]);
+  }
+  unflush(geos);
+  for (const [o, geo] of geos) {
     let target = o.material;
     if (paintable(o.material)) {
       const c = o.material.color, n = geo.attributes.position.count, col = new Float32Array(n * 3);
@@ -151,13 +228,18 @@ function mergeWithin(root, moving) {
   if (list.length < 3) return;
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const groups = new Map();
+  const groups = new Map(), built = [];
   for (const o of list) {
     const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
     for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
     geo.morphAttributes = {};
     if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
-    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    const mx = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+    geo.applyMatrix4(mx);
+    built.push([o, geo, mx]);
+  }
+  unflush(built);
+  for (const [o, geo] of built) {
     let target = o.material;
     if (paintable(o.material)) {
       const c = o.material.color, n = geo.attributes.position.count, col = new Float32Array(n * 3);
